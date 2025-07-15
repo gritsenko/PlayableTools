@@ -1,3 +1,9 @@
+nav a.disabled {
+  color: #bdbdbd;
+  background: transparent;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
 nav-menu {
     width: 100%;
 }
