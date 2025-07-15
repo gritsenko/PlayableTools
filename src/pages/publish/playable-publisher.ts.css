@@ -8,7 +8,6 @@
   border: 1px solid #ddd;
   padding: 1rem;
   border-radius: 4px;
-  background-color: #fafafa;
 }
 
 .form-row {
@@ -127,4 +126,32 @@ button:first-of-type:hover:not(:disabled) {
   height: 20px;
   background-color: #0078d4;
   transition: width 0.3s ease;
+}
+
+/* Playable Publisher styles */
+.playable-publisher {
+  display: block;
+  padding: 1rem;
+}
+.playable-publisher .dropzone {
+  border: 2px dashed #888;
+  border-radius: 8px;
+  padding: 2rem;
+  margin-bottom: 8px;
+  text-align: center;
+  color: #666;
+  background: #fafafa;
+  transition: border-color 0.2s;
+}
+.playable-publisher .dropzone.dragover {
+  border-color: #0078d4;
+  background: #f0f8ff;
+}
+.playable-publisher input[type="file"] {
+  display: none;
+}
+.playable-publisher label {
+  color: #666;
+  border-radius: 4px;
+  cursor: pointer;
 }

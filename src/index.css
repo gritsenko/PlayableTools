@@ -1,36 +1,7 @@
 html {
   font-size: 15px;
 }
-/* Playable Publisher styles */
-.playable-publisher {
-  display: block;
-  padding: 1rem;
-}
-.playable-publisher .dropzone {
-  border: 2px dashed #888;
-  border-radius: 8px;
-  padding: 2rem;
-  text-align: center;
-  color: #666;
-  background: #fafafa;
-  transition: border-color 0.2s;
-}
-.playable-publisher .dropzone.dragover {
-  border-color: #0078d4;
-  background: #f0f8ff;
-}
-.playable-publisher input[type="file"] {
-  display: none;
-}
-.playable-publisher label {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  background: #0078d4;
-  color: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 1rem;
-}
+
 /* Modern UI Kit: Simple CSS for layout and card */
 html,
 body {

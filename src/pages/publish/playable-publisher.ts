@@ -40,79 +40,6 @@ export class PlayablePublisher extends ComponentBase {
           </small>
         </div>
 
-        <!-- Form inputs -->
-        <div class="form-section" style="margin-bottom: 1.5rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="margin: 0;">Playable Configuration</h3>
-            <div style="display: flex; align-items: center; gap: 1rem;">
-              <small style="color: #666; font-style: italic;">Data is saved automatically</small>
-              <button @click=${this._clearStoredData} class="clear-button" type="button">
-                Clear Saved Data
-              </button>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <label>
-              Playable Title:
-              <input
-                type="text"
-                .value=${this.playableTitle}
-                @input=${(e: Event) => {
-                  this.updateField('playableTitle', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="e.g., GoH_PBCustomHero3D"
-                style="width: 300px; margin-left: 10px;"
-              />
-            </label>
-          </div>
-          
-          <div class="form-row">
-            <label>
-              Google Play URL:
-              <input
-                type="url"
-                .value=${this.googlePlayUrl}
-                @input=${(e: Event) => {
-                  this.updateField('googlePlayUrl', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="https://play.google.com/store/apps/details?id=..."
-                style="width: 400px; margin-left: 10px;"
-              />
-            </label>
-          </div>
-          
-          <div class="form-row">
-            <label>
-              App Store URL:
-              <input
-                type="url"
-                .value=${this.appStoreUrl}
-                @input=${(e: Event) => {
-                  this.updateField('appStoreUrl', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="https://apps.apple.com/app/..."
-                style="width: 400px; margin-left: 10px;"
-              />
-            </label>
-          </div>
-          
-          <div class="form-row">
-            <label>
-              Custom Suffix:
-              <input
-                type="text"
-                .value=${this.customSuffix}
-                @input=${(e: Event) => {
-                  this.updateField('customSuffix', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="EN"
-                style="width: 100px; margin-left: 10px;"
-              />
-            </label>
-          </div>
-        </div>
-
         ${!this.loadedFile
           ? html`
               <div
@@ -122,7 +49,7 @@ export class PlayablePublisher extends ComponentBase {
                 @drop=${this._onDrop}
               >
                 <p>Drop your .html file here or</p>
-                <label>
+                <label style="background: #0078d4; color: white;">
                   Select file
                   <input
                     type="file"
@@ -149,16 +76,89 @@ export class PlayablePublisher extends ComponentBase {
                         </div>
                       </div>
                     `
-                  : html`
-                      <div>
-                        <button @click=${this._publishPlayable} ?disabled=${!this.playableTitle}>
-                          Publish
-                        </button>
-                        <button @click=${this._resetFile}>Cancel</button>
-                      </div>
-                    `}
+                  : null}
               </div>
             `}
+
+        <!-- Form inputs: only show when file is loaded -->
+        ${this.loadedFile ? html`
+          <div class="form-section compact-form" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h3 style="margin: 0; font-size: 1.1rem;">Playable Configuration</h3>
+            </div>
+            <div class="form-row compact-row">
+              <label for="playableTitle">Playable Title:</label>
+              <input
+                id="playableTitle"
+                type="text"
+                .value=${this.playableTitle}
+                @input=${(e: Event) => {
+                  this.updateField('playableTitle', (e.target as HTMLInputElement).value);
+                }}
+                placeholder="e.g., GoH_PBCustomHero3D"
+                style="margin-left: 8px;"
+              />
+            </div>
+            <div class="form-row compact-row">
+              <label for="googlePlayUrl">Google Play URL:</label>
+              <input
+                id="googlePlayUrl"
+                type="url"
+                .value=${this.googlePlayUrl}
+                @input=${(e: Event) => {
+                  this.updateField('googlePlayUrl', (e.target as HTMLInputElement).value);
+                }}
+                placeholder="https://play.google.com/store/apps/details?id=..."
+                style="margin-left: 8px;"
+              />
+            </div>
+            <div class="form-row compact-row">
+              <label for="appStoreUrl">App Store URL:</label>
+              <input
+                id="appStoreUrl"
+                type="url"
+                .value=${this.appStoreUrl}
+                @input=${(e: Event) => {
+                  this.updateField('appStoreUrl', (e.target as HTMLInputElement).value);
+                }}
+                placeholder="https://apps.apple.com/app/..."
+                style="margin-left: 8px;"
+              />
+            </div>
+            <div class="form-row compact-row">
+              <label for="customSuffix">Custom Suffix:</label>
+              <input
+                id="customSuffix"
+                type="text"
+                .value=${this.customSuffix}
+                @input=${(e: Event) => {
+                  this.updateField('customSuffix', (e.target as HTMLInputElement).value);
+                }}
+                placeholder="EN"
+                style="width: 60px; margin-left: 8px;"
+              />
+            </div>
+          </div>
+        ` : null}
+
+        <!-- Publish/Cancel buttons below the form -->
+        <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; justify-content: center;">
+          ${this.loadedFile && this.playableTitle && !this.isPublishing ? html`
+            <button 
+              @click=${this._publishPlayable}
+              style="margin-right: 0.5rem;"
+            >
+              Publish
+            </button>
+          ` : null}
+          ${this.loadedFile && !this.isPublishing ? html`
+            <button 
+              @click=${this._resetFile}
+            >
+              Cancel
+            </button>
+          ` : null}
+        </div>
       </div>
     `;
   }
