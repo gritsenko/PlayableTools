@@ -1,17 +1,4 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
-import { Inject } from './di';
-import { route } from './router';
-
-export {
-    html,
-    css,
-    customElement,
-    property,
-    state,
-    Inject,
-    route
-};
+import { LitElement } from 'lit';
 
 export class ComponentBase extends LitElement {
     protected static useShadowDom = false;

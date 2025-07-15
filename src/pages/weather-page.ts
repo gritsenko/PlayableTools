@@ -1,4 +1,4 @@
-import { ComponentBase, html, Inject, route, customElement, state } from 'fw';
+import { ComponentBase, html, inject, route, customElement, state } from 'fw';
 import { WeatherForecast, WeatherForecastService } from '../services/WeatherForecastService';
 
 @customElement('weather-page')
@@ -39,7 +39,7 @@ export class WeatherPage extends ComponentBase {
     //@property({ type: Array }) routeParams = [];
     @state() forecasts: WeatherForecast[] | undefined = undefined;
 
-    @Inject(WeatherForecastService) weatherService!: WeatherForecastService;
+    @inject(WeatherForecastService) weatherService!: WeatherForecastService;
 
     async connectedCallback() {
         super.connectedCallback();

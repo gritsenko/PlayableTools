@@ -68,7 +68,7 @@ export class ServiceContainer {
 }
 
 // Service decorator (similar to @Injectable in Blazor)
-export function Injectable(lifetime: ServiceLifetime = ServiceLifetime.Singleton) {
+export function injectable(lifetime: ServiceLifetime = ServiceLifetime.Singleton) {
     return function (target: any) {
         const container = ServiceContainer.getInstance();
         const token = container.getOrCreateToken(target);
@@ -77,11 +77,18 @@ export function Injectable(lifetime: ServiceLifetime = ServiceLifetime.Singleton
     };
 }
 
-// Inject decorator (similar to [Inject] in Blazor)
-export function Inject(serviceType: any) {
+// Inject decorator (auto-detects type if not provided)
+import "reflect-metadata";
+
+export function inject(serviceType?: any) {
     return function (target: any, propertyKey: string) {
+        // If no explicit type, use reflect-metadata to get the property type
+        const type = serviceType || Reflect.getMetadata("design:type", target, propertyKey);
+        if (!type) {
+            throw new Error(`Cannot resolve type for property '${propertyKey}'. Make sure emitDecoratorMetadata is enabled.`);
+        }
         const container = ServiceContainer.getInstance();
-        const token = container.getOrCreateToken(serviceType);
+        const token = container.getOrCreateToken(type);
         const descriptor = {
             get: function (this: any) {
                 return container.getService(token);

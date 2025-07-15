@@ -1,5 +1,7 @@
+import { injectable, ServiceLifetime } from 'fw';
 import type { PlatformConfig, PlayableProcessOptions } from './types';
 
+@injectable(ServiceLifetime.Singleton)
 export class PlayablePublishService {
   private config: PlatformConfig[] = [];
 

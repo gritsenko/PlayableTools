@@ -1,8 +1,7 @@
-
-import { ComponentBase, html } from '../../fw/component-base';
+import { ComponentBase, html, inject } from "fw";
+import { PlayablePublishService } from "../../services/PlayablePublishService";
 
 export class PlayablePublisher extends ComponentBase {
-
   dragActive = false;
   loadedFile: File | null = null;
 
@@ -12,32 +11,45 @@ export class PlayablePublisher extends ComponentBase {
         <div style="margin-bottom:1.5rem">
           <strong>Publish Playable Ad</strong><br />
           <small>
-            Use this tool to upload your playable ad HTML file and prepare it for different platforms.<br />
+            Use this tool to upload your playable ad HTML file and prepare it
+            for different platforms.<br />
             Drop your .html file below or select it manually.
           </small>
         </div>
-        ${!this.loadedFile ? html`
-          <div
-            class="dropzone ${this.dragActive ? 'dragover' : ''}"
-            @dragover=${this._onDragOver}
-            @dragleave=${this._onDragLeave}
-            @drop=${this._onDrop}
-          >
-            <p>Drop your .html file here or</p>
-            <label>
-              Select file
-              <input type="file" accept=".html" @change=${this._onFileChange} />
-            </label>
-          </div>
-        ` : html`
-          <div style="margin-top:1rem;color:#0078d4">
-            <strong>File loaded:</strong> ${this.loadedFile.name} (${(this.loadedFile.size/1024).toFixed(2)} KB)
-            <button @click=${this._resetFile}>Cancel</button>
-          </div>
-        `}
+        ${!this.loadedFile
+          ? html`
+              <div
+                class="dropzone ${this.dragActive ? "dragover" : ""}"
+                @dragover=${this._onDragOver}
+                @dragleave=${this._onDragLeave}
+                @drop=${this._onDrop}
+              >
+                <p>Drop your .html file here or</p>
+                <label>
+                  Select file
+                  <input
+                    type="file"
+                    accept=".html"
+                    @change=${this._onFileChange}
+                  />
+                </label>
+              </div>
+            `
+          : html`
+              <div style="margin-top:1rem;color:#0078d4">
+                <strong>File loaded:</strong> ${this.loadedFile.name}
+                (${(this.loadedFile.size / 1024).toFixed(2)} KB)
+
+                <div>
+                  <button @click=${this._publishPlayable}>Publish</button>
+                  <button @click=${this._resetFile}>Cancel</button>
+                </div>
+              </div>
+            `}
       </div>
     `;
   }
+  @inject(PlayablePublishService) playablePublishService!: PlayablePublishService;
 
   _onDragOver(e: DragEvent) {
     e.preventDefault();
@@ -70,13 +82,13 @@ export class PlayablePublisher extends ComponentBase {
   }
 
   _processFile(file: File) {
-    if (file && file.name.endsWith('.html')) {
+    if (file && file.name.endsWith(".html")) {
       this.loadedFile = file;
       this.requestUpdate();
-      const event = new CustomEvent('file-selected', { detail: file });
+      const event = new CustomEvent("file-selected", { detail: file });
       this.dispatchEvent(event);
     } else {
-      alert('Please select a valid .html file.');
+      alert("Please select a valid .html file.");
     }
   }
 
@@ -84,6 +96,8 @@ export class PlayablePublisher extends ComponentBase {
     this.loadedFile = null;
     this.requestUpdate();
   }
+
+  _publishPlayable() {}
 }
 
-customElements.define('playable-publisher', PlayablePublisher);
+customElements.define("playable-publisher", PlayablePublisher);

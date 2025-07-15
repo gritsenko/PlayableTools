@@ -1,4 +1,4 @@
-import { Injectable, ServiceLifetime } from 'fw';
+import { injectable, ServiceLifetime } from 'fw';
 
 export class WeatherForecast {
     date: Date;
@@ -14,7 +14,7 @@ export class WeatherForecast {
     }
 }
 
-@Injectable(ServiceLifetime.Singleton)
+@injectable(ServiceLifetime.Singleton)
 export class WeatherForecastService {
 
     public async getWeatherForcast(): Promise<WeatherForecast[]> {
