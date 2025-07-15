@@ -236,3 +236,14 @@ body {
     padding: 2rem 3rem;
   }
 }
+
+.feature-list {
+  list-style-type: none;
+  padding-left: 0;
+  text-align: left;
+}
+.feature-list li {
+  margin-bottom: 8px;
+  text-align: left;
+  list-style: disc;
+}

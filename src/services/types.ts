@@ -15,6 +15,6 @@ export interface PlayableProcessOptions {
   appStoreUrl?: string;
   suffix?: string;
   outputDirectory?: FileSystemDirectoryHandle;
-  onProgress?: (progress: number) => void;
+  onProgress?: (progress: number, platform?: string) => void;
   // Add more options as needed
 }

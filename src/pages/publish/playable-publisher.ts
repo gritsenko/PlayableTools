@@ -7,7 +7,10 @@ export class PlayablePublisher extends ComponentBase {
   loadedFile: File | null = null;
   isPublishing = false;
   publishProgress = 0;
-  
+  currentPlatform: string | null = null;
+  publishStartTime: number | null = null;
+  publishElapsed: string | null = null;
+
   // Form inputs
   playableTitle = '';
   googlePlayUrl = '';
@@ -15,17 +18,30 @@ export class PlayablePublisher extends ComponentBase {
   customSuffix = 'EN';
   outputDirectory = '';
 
+  // Platform checklist state
+  availablePlatforms: string[] = [];
+  selectedPlatforms: string[] = [];
+
   // LocalStorage keys
   private readonly STORAGE_KEYS = {
     playableTitle: 'playable-publisher-title',
     googlePlayUrl: 'playable-publisher-google-url',
     appStoreUrl: 'playable-publisher-app-store-url',
-    customSuffix: 'playable-publisher-suffix'
+    customSuffix: 'playable-publisher-suffix',
+    selectedPlatforms: 'playable-publisher-selected-platforms',
   };
 
   connectedCallback() {
     super.connectedCallback();
     this.loadFromLocalStorage();
+    // Load available platforms from service
+    if (this.playablePublishService && typeof this.playablePublishService.getAvailablePlatforms === 'function') {
+      this.availablePlatforms = this.playablePublishService.getAvailablePlatforms();
+      // If no selectedPlatforms loaded, default to all
+      if (!this.selectedPlatforms || this.selectedPlatforms.length === 0) {
+        this.selectedPlatforms = [...this.availablePlatforms];
+      }
+    }
   }
 
   render() {
@@ -67,7 +83,10 @@ export class PlayablePublisher extends ComponentBase {
                 ${this.isPublishing
                   ? html`
                       <div class="progress-container">
-                        <div class="progress-text">Publishing... ${Math.round(this.publishProgress)}%</div>
+                        <div class="progress-text">
+                          Publishing... ${Math.round(this.publishProgress)}%
+                          ${this.currentPlatform ? html`<span style="margin-left:1em;">(${this.currentPlatform})</span>` : ''}
+                        </div>
                         <div class="progress-bar-background">
                           <div 
                             class="progress-bar-fill"
@@ -138,6 +157,30 @@ export class PlayablePublisher extends ComponentBase {
                 style="width: 60px; margin-left: 8px;"
               />
             </div>
+
+            <!-- Platform checklist -->
+            <div class="form-row compact-row" style="margin-top: 1rem;">
+              <label style="vertical-align: top;">Platforms:</label>
+              <div style="display: inline-block; margin-left: 8px;">
+                <div style="margin-bottom: 0.5em;">
+                  <a href="#" @click=${this._selectAllPlatforms} style="margin-right: 1em; font-size: 0.95em;">Select all</a>
+                  <a href="#" @click=${this._clearAllPlatforms} style="font-size: 0.95em;">Clear all</a>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5em; border: 1px solid #ccc; padding: 0.5em; border-radius: 4px; background: #fafbfc;">
+                  ${this.availablePlatforms.map(platform => html`
+                    <label style="flex: 0 0 180px; display: flex; align-items: center; margin-bottom: 0.25em;">
+                      <input
+                        type="checkbox"
+                        .checked=${this.selectedPlatforms.includes(platform)}
+                        @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
+                        style="margin-right: 0.5em;"
+                      />
+                      <span>${platform}</span>
+                    </label>
+                  `)}
+                </div>
+              </div>
+            </div>
           </div>
         ` : null}
 
@@ -147,6 +190,7 @@ export class PlayablePublisher extends ComponentBase {
             <button 
               @click=${this._publishPlayable}
               style="margin-right: 0.5rem;"
+              ?disabled=${!this.selectedPlatforms.length}
             >
               Publish
             </button>
@@ -161,6 +205,41 @@ export class PlayablePublisher extends ComponentBase {
         </div>
       </div>
     `;
+  }
+  /**
+   * Handle platform checkbox change
+   */
+  private _onPlatformCheckboxChange(e: Event, platform: string) {
+    const checked = (e.target as HTMLInputElement).checked;
+    if (checked) {
+      if (!this.selectedPlatforms.includes(platform)) {
+        this.selectedPlatforms = [...this.selectedPlatforms, platform];
+      }
+    } else {
+      this.selectedPlatforms = this.selectedPlatforms.filter(p => p !== platform);
+    }
+    this.saveToLocalStorage();
+    this.requestUpdate();
+  }
+
+  /**
+   * Select all platforms
+   */
+  private _selectAllPlatforms(e: Event) {
+    e.preventDefault();
+    this.selectedPlatforms = [...this.availablePlatforms];
+    this.saveToLocalStorage();
+    this.requestUpdate();
+  }
+
+  /**
+   * Clear all platforms
+   */
+  private _clearAllPlatforms(e: Event) {
+    e.preventDefault();
+    this.selectedPlatforms = [];
+    this.saveToLocalStorage();
+    this.requestUpdate();
   }
   @inject(PlayablePublishService) playablePublishService!: PlayablePublishService;
 
@@ -215,24 +294,31 @@ export class PlayablePublisher extends ComponentBase {
       alert('Please provide a playable title and select a file.');
       return;
     }
+    if (!this.selectedPlatforms || this.selectedPlatforms.length === 0) {
+      alert('Please select at least one platform to publish.');
+      return;
+    }
 
     try {
       this.isPublishing = true;
       this.publishProgress = 0;
+      this.currentPlatform = null;
+      this.publishElapsed = null;
       this.requestUpdate();
 
       // Request output directory
       this.publishProgress = 10;
       this.requestUpdate();
-      
       const outputDir = await this.playablePublishService.requestOutputDirectory();
-      
+
+      // Start elapsed time after user selects folder
+      this.publishStartTime = Date.now();
+
       // Read file content
       this.publishProgress = 20;
       this.requestUpdate();
-      
       const htmlContent = await this._readFileContent(this.loadedFile);
-      
+
       // Prepare options
       const options = {
         name: this.playableTitle,
@@ -241,43 +327,64 @@ export class PlayablePublisher extends ComponentBase {
         appStoreUrl: this.appStoreUrl,
         suffix: this.customSuffix,
         outputDirectory: outputDir,
-        onProgress: (progress: number) => {
+        onProgress: (progress: number, platform?: string) => {
           this.publishProgress = progress;
+          if (platform) this.currentPlatform = platform;
           this.requestUpdate();
-        }
+        },
+        selectedPlatforms: [...this.selectedPlatforms],
       };
 
       this.publishProgress = 30;
       this.requestUpdate();
 
-      // Process all platforms
+      // Process only selected platforms
       await this.playablePublishService.processAllPlatforms(htmlContent, options);
-      
       this.publishProgress = 100;
+      this.currentPlatform = null;
+      // Calculate elapsed time
+      if (this.publishStartTime) {
+        const elapsedMs = Date.now() - this.publishStartTime;
+        this.publishElapsed = this._formatElapsed(elapsedMs);
+      }
       this.requestUpdate();
 
       // Show success message
       setTimeout(() => {
-        alert(`Publishing completed successfully! Files have been saved to the selected directory with subfolders for each platform.`);
+        let msg = `Publishing completed successfully! Files have been saved to the selected directory with subfolders for each platform.`;
+        if (this.publishElapsed) {
+          msg += `\n\nElapsed time: ${this.publishElapsed}`;
+        }
+        alert(msg);
         this.isPublishing = false;
         this.publishProgress = 0;
+        this.publishElapsed = null;
+        this.publishStartTime = null;
         this.requestUpdate();
       }, 500);
-
     } catch (error) {
       console.error('Publishing failed:', error);
       let errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
       // Add browser compatibility hint for File System API errors
       if (errorMessage.includes('File System Access API is not supported')) {
         errorMessage += '\n\nFor best results, please use Chrome 86+, Edge 86+, or another browser that supports the File System Access API.';
       }
-      
       alert(`Publishing failed: ${errorMessage}`);
       this.isPublishing = false;
       this.publishProgress = 0;
       this.requestUpdate();
     }
+  }
+
+  /**
+   * Formats elapsed time in ms to human readable string
+   */
+  private _formatElapsed(ms: number): string {
+    const sec = Math.floor(ms / 1000);
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (min > 0) return `${min}m ${s}s`;
+    return `${s}s`;
   }
 
   private _readFileContent(file: File): Promise<string> {
@@ -304,14 +411,18 @@ export class PlayablePublisher extends ComponentBase {
     this.googlePlayUrl = localStorage.getItem(this.STORAGE_KEYS.googlePlayUrl) || '';
     this.appStoreUrl = localStorage.getItem(this.STORAGE_KEYS.appStoreUrl) || '';
     this.customSuffix = localStorage.getItem(this.STORAGE_KEYS.customSuffix) || 'EN';
-    
-    console.log('PlayablePublisher: Loaded data from localStorage', {
-      playableTitle: this.playableTitle,
-      googlePlayUrl: this.googlePlayUrl,
-      appStoreUrl: this.appStoreUrl,
-      customSuffix: this.customSuffix
-    });
-    
+
+    // Load selected platforms
+    const selectedPlatformsStr = localStorage.getItem(this.STORAGE_KEYS.selectedPlatforms);
+    if (selectedPlatformsStr) {
+      try {
+        const arr = JSON.parse(selectedPlatformsStr);
+        if (Array.isArray(arr)) {
+          this.selectedPlatforms = arr;
+        }
+      } catch {}
+    }
+
     this.requestUpdate();
   }
 
@@ -323,6 +434,7 @@ export class PlayablePublisher extends ComponentBase {
     localStorage.setItem(this.STORAGE_KEYS.googlePlayUrl, this.googlePlayUrl);
     localStorage.setItem(this.STORAGE_KEYS.appStoreUrl, this.appStoreUrl);
     localStorage.setItem(this.STORAGE_KEYS.customSuffix, this.customSuffix);
+    localStorage.setItem(this.STORAGE_KEYS.selectedPlatforms, JSON.stringify(this.selectedPlatforms));
   }
 
   /**

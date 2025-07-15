@@ -31,6 +31,13 @@ export class PlayablePublishService {
   }
 
   /**
+   * Returns the list of available platform names.
+   */
+  getAvailablePlatforms(): string[] {
+    return this.config.map(p => p.Name);
+  }
+
+  /**
    * Processes an uploaded HTML file according to the platform rules.
    * @param htmlContent The HTML file content as string
    * @param platformName The name of the platform to process for
@@ -115,7 +122,14 @@ export class PlayablePublishService {
    * @param options Processing options including output directory and metadata
    * @returns Promise that resolves when processing is complete
    */
-  async processAllPlatforms(htmlContent: string, options: PlayableProcessOptions): Promise<void> {
+  /**
+   * Processes the playable for selected platforms and saves to the specified directory
+   * @param htmlContent The HTML file content as string
+   * @param options Processing options including output directory and metadata
+   * @param options.selectedPlatforms Optional array of platform names to process
+   * @returns Promise that resolves when processing is complete
+   */
+  async processAllPlatforms(htmlContent: string, options: PlayableProcessOptions & { selectedPlatforms?: string[] }): Promise<void> {
     if (!options.outputDirectory) {
       throw new Error('Output directory is required');
     }
@@ -123,17 +137,23 @@ export class PlayablePublishService {
     // Ensure we have default values
     const playableName = options.name || 'Playable';
     const suffix = options.suffix || 'EN';
-    
-    const totalPlatforms = this.config.length;
+
+    // Determine which platforms to process
+    let platformsToProcess = this.config;
+    if (options.selectedPlatforms && Array.isArray(options.selectedPlatforms) && options.selectedPlatforms.length > 0) {
+      platformsToProcess = this.config.filter(p => options.selectedPlatforms!.includes(p.Name));
+    }
+
+    const totalPlatforms = platformsToProcess.length;
     let completedPlatforms = 0;
 
-    for (const platform of this.config) {
+    for (const platform of platformsToProcess) {
       // Create platform subdirectory
       const platformDirHandle = await this.createPlatformDirectory(options.outputDirectory, platform.Name);
 
       const processedHtml = await this.processHtml(htmlContent, platform.Name, options);
       const fileName = this.generateFileName(playableName, platform.Name, suffix, platform);
-      
+
       if (platform.format === 'zip') {
         await this.createZipPackageToDirectory(processedHtml, fileName, platformDirHandle, platform);
       } else {
@@ -142,7 +162,7 @@ export class PlayablePublishService {
 
       completedPlatforms++;
       const progress = 30 + (completedPlatforms / totalPlatforms) * 70; // 30% to 100%
-      options.onProgress?.(progress);
+      options.onProgress?.(progress, platform.Name);
     }
   }
 
