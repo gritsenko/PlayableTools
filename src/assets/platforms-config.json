@@ -1,0 +1,67 @@
+{
+  "platforms": [
+    {
+      "Name": "Facebook",
+      "InjeectScripts": ["cta.Facebook.js"]
+    },
+    {
+      "Name": "Moloco",
+      "InjeectScripts": ["cta.Moloco.js"]
+    },
+    {
+      "Name": "Facebook_Zip",
+      "format": "zip",
+      "ExtractScripts": true,
+      "InjeectScripts": ["cta.Facebook_Zip.js"]
+    },
+    {
+      "Name": "Mintegral",
+      "format": "zip",
+      "OutputIndexHtmlName": "%name%.html",
+      "InjeectScripts": ["cta.Mintegral.js"]
+    },
+    {
+      "Name": "IronSource",
+      "InjeectScripts": ["cta.IronSource.js"]
+    },
+    {
+      "Name": "AdColony",
+      "InjeectScripts": ["cta.AdColony.js"]
+    },
+    {
+      "Name": "Unity",
+      "InjeectScripts": ["cta.Unity.js"]
+    },
+    {
+      "Name": "Applovin",
+      "InjeectScripts": ["cta.Applovin.js"]
+    },
+    {
+      "Name": "Vungle",
+      "OutputIndexHtmlName": "ad.html",
+      "format": "zip",
+      "ExtraFiles": [{ "from": "./Vungle/index.html", "to": "./index.html" }],
+      "InjeectScripts": ["cta.Vungle.js"]
+    },
+    {
+      "Name": "TikTok",
+      "format": "zip",
+      "OutputIndexHtmlName": "index.html",
+      "ExtraFiles": [
+        { "from": "./TikTok/config.json", "to": "./config.json" }
+      ],
+      "InjeectScripts": ["cta.TikTok.js"]
+    },
+    {
+      "Name": "Google",
+      "OutputIndexHtmlName": "index.html",
+      "format": "zip",
+      "Sizes": {
+        "320x480": "width=320,height=480",
+        "480x320": "width=480,height=320",
+        "300x250": "width=300,height=250"
+      },
+      "InjeectScripts": ["cta.Google.js"]
+    }
+  ]
+}

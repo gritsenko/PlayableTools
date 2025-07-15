@@ -30,6 +30,12 @@ export class ServiceContainer {
     // Register a service
     addService(token: symbol, implementation: any, lifetime: ServiceLifetime) {
         this.services.set(token, { token, implementation, lifetime });
+        // Eagerly instantiate singleton
+        if (lifetime === ServiceLifetime.Singleton) {
+            if (!this.singletonInstances.has(token)) {
+                this.singletonInstances.set(token, new implementation());
+            }
+        }
     }
 
     // Retrieve an existing token or create a new one

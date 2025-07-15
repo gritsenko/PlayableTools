@@ -38,7 +38,6 @@ body {
   margin: 0;
   .layout {
     width: 100vw;
-    height: 100vh;
     display: flex;
     flex-direction: column;
     background: linear-gradient(135deg, #e0e7ff 0%, #f0fdfa 100%);
@@ -53,7 +52,7 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    padding: 2rem 0 1rem 0;
+    padding: 6rem 0 1rem 0;
     font-size: 2.5rem;
     font-weight: bold;
     color: #3b82f6;

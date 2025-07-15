@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
+    "@types/jszip": "^3.4.0",
     "fw": "file:./src/fw",
+    "jszip": "^3.10.1",
     "lit": "^3.3.0",
     "reflect-metadata": "^0.2.2"
   },

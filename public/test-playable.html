@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Playable Ad</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+            text-align: center;
+        }
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .play-button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 20px 0;
+        }
+        .play-button:hover {
+            background: #ff5252;
+            transform: scale(1.05);
+        }
+        .score {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎮 Amazing Game</h1>
+        <p>The most exciting mobile game experience!</p>
+        
+        <div class="score" id="score">Score: 0</div>
+        
+        <button class="play-button" onclick="playGame()">
+            PLAY NOW!
+        </button>
+        
+        <p>Tap to increase your score!</p>
+    </div>
+
+    <script>
+        let score = 0;
+        
+        function playGame() {
+            score += 10;
+            document.getElementById('score').textContent = `Score: ${score}`;
+            
+            if (score >= 100) {
+                alert('Congratulations! Download the full game now!');
+                // This is where the CTA script would trigger the store redirect
+                openStore();
+            }
+        }
+        
+        function openStore() {
+            // This will be replaced by platform-specific CTA scripts
+            console.log('Opening app store...');
+        }
+        
+        // Auto-play demo
+        setInterval(() => {
+            if (score < 30) {
+                playGame();
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

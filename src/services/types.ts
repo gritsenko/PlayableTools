@@ -10,5 +10,11 @@ export interface PlatformConfig {
 
 export interface PlayableProcessOptions {
   name?: string;
+  title?: string;
+  googlePlayUrl?: string;
+  appStoreUrl?: string;
+  suffix?: string;
+  outputDirectory?: FileSystemDirectoryHandle;
+  onProgress?: (progress: number) => void;
   // Add more options as needed
 }
