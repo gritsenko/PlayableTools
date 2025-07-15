@@ -17,6 +17,21 @@ export class NavMenu extends ComponentBase {
     return hash;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // Listen for hash changes to update active state
+    window.addEventListener('hashchange', this.handleHashChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('hashchange', this.handleHashChange);
+  }
+
+  private handleHashChange = () => {
+    this.requestUpdate();
+  };
+
   render() {
     return html`
       <nav aria-label="Main menu">
