@@ -7,7 +7,7 @@ export class NavMenu extends ComponentBase {
   private menuItems = [
     { label: "Home", path: "/", disabled: false },
     { label: "Publish", path: "/publish", disabled: false },
-    { label: "Validate", path: "/counter", disabled: true },
+    { label: "Validate", path: "/validate", disabled: false },
     { label: "Compress assets", path: "/weather", disabled: true },
     { label: "FAQ", path: "/faq", disabled: true },
   ];
