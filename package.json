@@ -1,0 +1,21 @@
+{
+  "name": "playable_tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@picocss/pico": "^2.1.1",
+    "fw": "file:./src/fw",
+    "lit": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.13",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

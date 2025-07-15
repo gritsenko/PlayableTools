@@ -1,0 +1,57 @@
+{
+  "platforms": [
+    {
+      "Name": "Facebook",
+      "InjeectScripts": ["cta.Facebook.js"]
+    },
+    {
+      "Name": "Moloco"
+    },
+    {
+      "Name": "Facebook_Zip",
+      "format": "zip",
+      "ExtractScripts": true
+    },
+    {
+      "Name": "Mintegral",
+      "format": "zip",
+      "OutputIndexHtmlName": "%name%.html"
+    },
+    {
+      "Name": "IronSource"
+    },
+    {
+      "Name": "AdColony"
+    },
+    {
+      "Name": "Unity"
+    },
+    {
+      "Name": "Applovin"
+    },
+    {
+      "Name": "Vungle",
+      "OutputIndexHtmlName": "ad.html",
+      "format": "zip",
+      "ExtraFiles": [{ "from": ".\\Vungle\\index.html", "to": ".\\index.html" }]
+    },
+    {
+      "Name": "TikTok",
+      "format": "zip",
+      "OutputIndexHtmlName": "index.html",
+      "ExtraFiles": [
+        { "from": ".\\TikTop\\config.json", "to": ".\\config.json" }
+      ]
+    },
+    {
+      "Name": "Google",
+      "OutputIndexHtmlName": "index.html",
+      "format": "zip",
+      "Sizes": {
+        "320x480": "width=320,height=480",
+        "480x320": "width=480,height=320",
+        "300x250": "width=300,height=250"
+      }
+    }
+  ]
+}
