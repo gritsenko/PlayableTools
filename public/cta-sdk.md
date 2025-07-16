@@ -1,6 +1,6 @@
 ## Unifying Playable Ads: The CTA SDK Bridge
 
-> **Note:** The CTA SDK is used by the Publish Tool provided on this site (see `publish-page`), enabling seamless deployment and integration of HTML5 playables across multiple ad networks.
+> **Note:** The CTA SDK is used by the [Publish Tool](/#publish), enabling seamless deployment and integration of HTML5 playables across multiple ad networks.  
 
 In the world of HTML5 playable ads, a significant challenge for developers is adapting their creative to run on various ad networks like ironSource, Unity Ads, or Google Ads. Each network has its own specific API (SDK) for handling crucial events like opening the app store, tracking user interaction, or managing sound. Writing separate code for each platform is inefficient and increases development time.
 

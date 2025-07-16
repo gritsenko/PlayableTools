@@ -65,7 +65,7 @@ export class PlayablePublisher extends ComponentBase {
                 @drop=${this._onDrop}
               >
                 <p>Drop your .html file here or</p>
-                <label style="background: #0078d4; color: white;">
+                <label class="file-select-button">
                   Select file
                   <input
                     type="file"
@@ -76,7 +76,7 @@ export class PlayablePublisher extends ComponentBase {
               </div>
             `
           : html`
-              <div style="margin-top:1rem;color:#0078d4">
+              <div class="file-loaded-info">
                 <strong>File loaded:</strong> ${this.loadedFile.name}
                 (${(this.loadedFile.size / 1024).toFixed(2)} KB)
 
@@ -159,21 +159,20 @@ export class PlayablePublisher extends ComponentBase {
             </div>
 
             <!-- Platform checklist -->
-            <div class="form-row compact-row" style="margin-top: 1rem;">
-              <label style="vertical-align: top;">Platforms:</label>
-              <div style="display: inline-block; margin-left: 8px;">
-                <div style="margin-bottom: 0.5em;">
-                  <a href="#" @click=${this._selectAllPlatforms} style="margin-right: 1em; font-size: 0.95em;">Select all</a>
-                  <a href="#" @click=${this._clearAllPlatforms} style="font-size: 0.95em;">Clear all</a>
+            <div class="form-row compact-row platform-section">
+              <label class="platform-label">Platforms:</label>
+              <div class="platform-content">
+                <div class="platform-actions">
+                  <a href="#" @click=${this._selectAllPlatforms} class="platform-link">Select all</a>
+                  <a href="#" @click=${this._clearAllPlatforms} class="platform-link">Clear all</a>
                 </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.5em; border: 1px solid #ccc; padding: 0.5em; border-radius: 4px; background: #fafbfc;">
+                <div class="platform-grid">
                   ${this.availablePlatforms.map(platform => html`
-                    <label style="flex: 0 0 180px; display: flex; align-items: center; margin-bottom: 0.25em;">
+                    <label class="platform-checkbox">
                       <input
                         type="checkbox"
                         .checked=${this.selectedPlatforms.includes(platform)}
                         @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
-                        style="margin-right: 0.5em;"
                       />
                       <span>${platform}</span>
                     </label>

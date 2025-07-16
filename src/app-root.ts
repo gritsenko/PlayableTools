@@ -1,7 +1,7 @@
 import "reflect-metadata";
 
 import '@picocss/pico/css/pico.min.css';
-import './index.css';
+import './app-root.css';
 
 import { ComponentBase, customElement, html } from './fw';
 import './Layout/nav-menu';

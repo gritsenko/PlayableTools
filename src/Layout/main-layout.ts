@@ -10,7 +10,7 @@ export class MainLayout extends LayoutComponentBase {
   render() {
     return html`
       <div class="layout">
-        <header class="header">
+        <aside class="sidebar">
           <a href="/" class="header-link">
             <span>
               <div class="subheader">Gritsenko</div>
@@ -20,7 +20,7 @@ export class MainLayout extends LayoutComponentBase {
           <nav class="menu">
             <nav-menu></nav-menu>
           </nav>
-        </header>
+        </aside>
         <main class="main">${this.body}</main>
       </div>
     `;

@@ -1,0 +1,98 @@
+/* Desktop-only layout with sidebar */
+html {
+  font-size: 18px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  width: 100vw;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--pico-background-color);
+  border-right: 1px solid var(--pico-border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.sidebar a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar span {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--pico-color);
+  display: block;
+  line-height: 1.3;
+}
+
+.sidebar .subheader {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  margin-bottom: 0.25rem;
+}
+
+/* Menu */
+.menu {
+  width: 100%;
+}
+
+.menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.menu li {
+  margin: 0;
+}
+
+.menu a {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--pico-color);
+  text-decoration: none;
+  border-radius: var(--pico-border-radius);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.menu a:hover {
+  background: var(--pico-secondary-background);
+}
+
+.menu a.active {
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+}
+
+/* Main content */
+.main {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  height: 100vh;
+}
+
+.main > * {
+  max-width: 800px;
+  margin: 0 auto;
+}

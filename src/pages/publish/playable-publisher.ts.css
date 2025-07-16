@@ -5,9 +5,9 @@
 }
 
 .form-section {
-  border: 1px solid #ddd;
+  border: 1px solid var(--pico-border-color);
   padding: 1rem;
-  border-radius: 4px;
+  border-radius: var(--pico-border-radius);
 }
 
 .form-row {
@@ -29,38 +29,38 @@
 
 .form-row input {
   padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
 }
 
 .dropzone {
-  border: 2px dashed #ccc;
-  border-radius: 8px;
+  border: 2px dashed var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
   padding: 2rem;
   text-align: center;
-  background-color: #fafafa;
+  background-color: var(--pico-background-color);
   transition: border-color 0.3s;
 }
 
 .dropzone.dragover {
-  border-color: #0078d4;
-  background-color: #f0f8ff;
+  border-color: var(--pico-primary);
+  background-color: var(--pico-secondary-background);
 }
 
 .dropzone label {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background-color: #0078d4;
-  color: white;
-  border-radius: 4px;
+  background-color: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  border-radius: var(--pico-border-radius);
   cursor: pointer;
   text-decoration: none;
-  border: 1px solid #0078d4;
+  border: 1px solid var(--pico-primary);
   transition: background-color 0.3s;
 }
 
 .dropzone label:hover {
-  background-color: #106ebe;
+  background-color: var(--pico-primary-hover-background);
 }
 
 .dropzone input[type="file"] {
@@ -70,14 +70,14 @@
 button {
   padding: 0.5rem 1rem;
   margin-right: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background-color: #fff;
+  border: 1px solid var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
+  background-color: var(--pico-background-color);
   cursor: pointer;
 }
 
 button:hover:not(:disabled) {
-  background-color: #f0f0f0;
+  background-color: var(--pico-secondary-background);
 }
 
 button:disabled {
@@ -86,25 +86,25 @@ button:disabled {
 }
 
 button:first-of-type {
-  background-color: #0078d4;
-  color: white;
-  border-color: #0078d4;
+  background-color: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  border-color: var(--pico-primary);
 }
 
 button:first-of-type:hover:not(:disabled) {
-  background-color: #106ebe;
+  background-color: var(--pico-primary-hover-background);
 }
 
 .clear-button {
-  background-color: #f44336;
-  color: white;
-  border-color: #f44336;
+  background-color: var(--pico-del-color);
+  color: var(--pico-primary-inverse);
+  border-color: var(--pico-del-color);
   font-size: 12px;
   padding: 0.3rem 0.6rem;
 }
 
 .clear-button:hover:not(:disabled) {
-  background-color: #d32f2f;
+  background-color: var(--pico-contrast-hover-background);
 }
 
 .progress-container {
@@ -117,14 +117,14 @@ button:first-of-type:hover:not(:disabled) {
 
 .progress-bar-background {
   width: 100%;
-  background-color: #f0f0f0;
-  border-radius: 4px;
+  background-color: var(--pico-secondary-background);
+  border-radius: var(--pico-border-radius);
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 20px;
-  background-color: #0078d4;
+  background-color: var(--pico-primary);
   transition: width 0.3s ease;
 }
 
@@ -133,25 +133,93 @@ button:first-of-type:hover:not(:disabled) {
   display: block;
   padding: 1rem;
 }
+
 .playable-publisher .dropzone {
-  border: 2px dashed #888;
-  border-radius: 8px;
+  border: 2px dashed var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
   padding: 2rem;
   margin-bottom: 8px;
   text-align: center;
-  color: #666;
-  background: #fafafa;
+  color: var(--pico-muted-color);
+  background: var(--pico-background-color);
   transition: border-color 0.2s;
 }
+
 .playable-publisher .dropzone.dragover {
-  border-color: #0078d4;
-  background: #f0f8ff;
+  border-color: var(--pico-primary);
+  background: var(--pico-secondary-background);
 }
+
 .playable-publisher input[type="file"] {
   display: none;
 }
+
 .playable-publisher label {
-  color: #666;
-  border-radius: 4px;
+  color: var(--pico-muted-color);
+  border-radius: var(--pico-border-radius);
   cursor: pointer;
+}
+
+/* Additional component styles */
+.file-select-button {
+  background-color: var(--pico-primary) !important;
+  color: var(--pico-primary-inverse) !important;
+}
+
+.file-loaded-info {
+  margin-top: 1rem;
+  color: var(--pico-primary);
+}
+
+.platform-section {
+  margin-top: 1rem;
+}
+
+.platform-label {
+  vertical-align: top;
+}
+
+.platform-content {
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.platform-actions {
+  margin-bottom: 0.5em;
+}
+
+.platform-link {
+  margin-right: 1em;
+  font-size: 0.95em;
+  color: var(--pico-primary);
+  text-decoration: none;
+}
+
+.platform-link:hover {
+  text-decoration: underline;
+}
+
+.platform-link:last-child {
+  margin-right: 0;
+}
+
+.platform-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  border: 1px solid var(--pico-border-color);
+  padding: 0.5em;
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-background-color);
+}
+
+.platform-checkbox {
+  flex: 0 0 180px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.25em;
+}
+
+.platform-checkbox input {
+  margin-right: 0.5em;
 }
