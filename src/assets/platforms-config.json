@@ -1,4 +1,10 @@
 {
+  "globalDefaults": {
+    "replaceTokens": {
+      "<script type=\"module\" crossorigin>": "<script>"
+    }
+  },
+
   "platforms": [
     {
       "Name": "Facebook",
@@ -6,7 +12,10 @@
     },
     {
       "Name": "Moloco",
-      "InjeectScripts": ["cta.Moloco.js"]
+      "InjeectScripts": ["cta.Moloco.js"],
+      "replaceTokens": {
+        "XMLHttpRequest": "XRQ"
+      }
     },
     {
       "Name": "Facebook_Zip",
@@ -47,9 +56,7 @@
       "Name": "TikTok",
       "format": "zip",
       "OutputIndexHtmlName": "index.html",
-      "ExtraFiles": [
-        { "from": "./TikTok/config.json", "to": "./config.json" }
-      ],
+      "ExtraFiles": [{ "from": "./TikTok/config.json", "to": "./config.json" }],
       "InjeectScripts": ["cta.TikTok.js"]
     },
     {
@@ -61,7 +68,10 @@
         "480x320": "width=480,height=320",
         "300x250": "width=300,height=250"
       },
-      "InjeectScripts": ["cta.Google.js"]
+      "InjeectScripts": ["cta.Google.js"],
+      "replaceTokens": {
+        "</title>": "</title> <meta name=\"ad.size\" content=\"{{ad.size}}\"><meta name=\"ad.orientation\" content=\"landscape\">"
+      }
     }
   ]
 }

@@ -22,5 +22,3 @@ document.CTA = {
         window.console.log("CTA Clicked");
     }
 };
-
-document.XRQ = window["XMLHttp" + "Request"];

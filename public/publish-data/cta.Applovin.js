@@ -13,5 +13,3 @@
         mraid.open(url);
     }
 };
-
-document.XRQ = window["XMLHttp" + "Request"];
