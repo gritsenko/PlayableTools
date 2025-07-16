@@ -124,14 +124,19 @@ export class PlayablePublishService {
     let result = html;
 
     // Fetch all scripts in parallel
+    const basePath = window.location.origin + window.location.pathname.replace(/([?#].*)$/, "");
+    // Ensure trailing slash
+    const baseDir = basePath.endsWith("/") ? basePath : basePath + "/";
     const scriptFetches = scripts.map(async (scriptSrc) => {
       try {
-        const response = await fetch(`/publish-data/${scriptSrc}`);
+        // Build correct fetch URL for subfolder deployments
+        const fetchUrl = baseDir + "publish-data/" + scriptSrc;
+        const response = await fetch(fetchUrl);
         if (response.ok) {
           const scriptContent = await response.text();
           return `<script>\n${scriptContent}\n</script>`;
         } else {
-          console.warn(`Could not load script: ${scriptSrc}`);
+          console.warn(`Could not load script: ${scriptSrc} from ${fetchUrl}`);
           return null;
         }
       } catch (error) {
