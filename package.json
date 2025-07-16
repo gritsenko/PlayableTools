@@ -15,7 +15,8 @@
     "jszip": "^3.10.1",
     "lit": "^3.3.0",
     "marked": "^16.0.0",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "vite-plugin-string": "^1.2.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.13",

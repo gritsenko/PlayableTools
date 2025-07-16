@@ -28,5 +28,5 @@
       "fw/*": ["src/fw/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "src/cta-sdk.md.d.ts"]
 }
