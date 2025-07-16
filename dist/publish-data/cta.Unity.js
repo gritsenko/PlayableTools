@@ -48,8 +48,6 @@ document.CTA = {
     }
 };
 
-document.XRQ = window["XMLHttp" + "Request"];
-
 window.onload = () => {
     try {
         if (mraid && mraid.getState() === 'loading') {

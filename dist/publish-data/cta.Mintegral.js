@@ -24,5 +24,3 @@ function gameStart() {
 function gameClose() {
     console.log("Game closed");
 }
-
-document.XRQ = window["XMLHttp" + "Request"];
