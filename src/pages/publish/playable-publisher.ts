@@ -458,24 +458,6 @@ export class PlayablePublisher extends ComponentBase {
     this.saveToLocalStorage();
     this.requestUpdate();
   }
-
-  /**
-   * Clears all stored form data
-   */
-  private _clearStoredData() {
-    // Clear localStorage
-    Object.values(this.STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    
-    // Reset form fields to defaults
-    this.playableTitle = '';
-    this.googlePlayUrl = '';
-    this.appStoreUrl = '';
-    this.customSuffix = 'EN';
-    
-    this.requestUpdate();
-  }
 }
 
 customElements.define("playable-publisher", PlayablePublisher);
