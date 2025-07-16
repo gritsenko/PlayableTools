@@ -13,7 +13,7 @@ export default function rewriteBaseHrefPlugin(): Plugin {
       const indexPath = path.resolve(process.cwd(), outDir, 'index.html');
       if (fs.existsSync(indexPath)) {
         let html = fs.readFileSync(indexPath, 'utf8');
-        html = html.replace('<base href="./">', '<base href="./PlayableTools/">');
+        html = html.replace('<base href="./">', '<base href="/PlayableTools/">');
         fs.writeFileSync(indexPath, html, 'utf8');
       }
     },
