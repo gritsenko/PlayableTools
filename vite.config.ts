@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import rewriteBaseHrefPlugin from "./vite-plugin-rewrite-base-href";
 import string from "vite-plugin-string";
 import { VitePWA } from "vite-plugin-pwa";
 // Use manifest path string instead of importing
@@ -17,6 +18,7 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [
     string({ include: ["**/*.md"], compress: false }),
+    rewriteBaseHrefPlugin(),
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
