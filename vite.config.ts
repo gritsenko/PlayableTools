@@ -31,18 +31,18 @@ export default defineConfig(({ command }) => ({
         description: "Open-source tools for HTML5 playable ads developers.",
         icons: [
           {
-            src: "/PlayableTools/vite.svg",
+            src: "/PlayableTools/playable-tools.svg",
             sizes: "192x192",
             type: "image/svg+xml"
           },
           {
-            src: "/PlayableTools/vite.svg",
+            src: "/PlayableTools/playable-tools.svg",
             sizes: "512x512",
             type: "image/svg+xml"
           }
         ]
       },
-      includeAssets: ["vite.svg"],
+      includeAssets: ["playable-tools.svg"],
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"]
       },

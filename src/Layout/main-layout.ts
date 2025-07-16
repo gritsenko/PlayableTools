@@ -1,6 +1,7 @@
 import type { HTMLTemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { customElement, html, LayoutComponentBase } from "fw";
+import { UrlUtils } from "../utils/url-utils";
 
 @customElement("main-layout")
 export class MainLayout extends LayoutComponentBase {
@@ -12,7 +13,7 @@ export class MainLayout extends LayoutComponentBase {
       <div class="layout">
         <aside class="sidebar">
           <a href="/" class="header-link" style="display:flex;align-items:center;gap:0.75rem;">
-            <img src="/big-logo.jpg" alt="Logo" style="width:64;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 1px 4px rgba(0,0,0,0.08);" />
+            <img src="${UrlUtils.buildFetchUrl("/", "big-logo.jpg")}" alt="Logo" style="width:64;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 1px 4px rgba(0,0,0,0.08);" />
             <span>
               <div class="subheader">Gritsenko</div>
               Playable Ads Tools

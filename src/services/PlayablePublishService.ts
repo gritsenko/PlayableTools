@@ -1,5 +1,6 @@
 import { injectable, ServiceLifetime } from "fw";
 import type { PlatformConfig, PlayableProcessOptions } from "./types";
+import { UrlUtils } from "../utils/url-utils";
 // @ts-ignore
 import platformsConfig from "../assets/platforms-config.json";
 
@@ -123,14 +124,10 @@ export class PlayablePublishService {
   ): Promise<string> {
     let result = html;
 
-    // Fetch all scripts in parallel
-    const basePath = window.location.origin + window.location.pathname.replace(/([?#].*)$/, "");
-    // Ensure trailing slash
-    const baseDir = basePath.endsWith("/") ? basePath : basePath + "/";
+    // Fetch all scripts in parallel using UrlUtils
     const scriptFetches = scripts.map(async (scriptSrc) => {
       try {
-        // Build correct fetch URL for subfolder deployments
-        const fetchUrl = baseDir + "publish-data/" + scriptSrc;
+        const fetchUrl = UrlUtils.buildFetchUrl("publish-data/", scriptSrc);
         const response = await fetch(fetchUrl);
         if (response.ok) {
           const scriptContent = await response.text();
