@@ -6,6 +6,7 @@ export interface PlatformConfig {
   OutputIndexHtmlName?: string;
   ExtraFiles?: { from: string; to: string }[];
   Sizes?: Record<string, string>;
+  replaceTokens?: Record<string, string>;
 }
 
 export interface PlayableProcessOptions {

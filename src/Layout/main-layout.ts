@@ -1,7 +1,6 @@
 import type { HTMLTemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { customElement, html, LayoutComponentBase } from "fw";
-import "./main-layout.ts.css";
 
 @customElement("main-layout")
 export class MainLayout extends LayoutComponentBase {

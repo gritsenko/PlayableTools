@@ -2,7 +2,6 @@ html {
   font-size: 15px;
 }
 
-/* Modern UI Kit: Simple CSS for layout and card */
 html,
 body {
   height: 100%;
@@ -24,6 +23,7 @@ li {
   padding: 0;
   box-sizing: border-box;
   transition: all 0.3s;
+  position: relative;
 }
 
 .header {
@@ -91,11 +91,12 @@ li {
   background: #e0e7ff;
   color: #1d4ed8;
 }
+
 .main {
-  flex: 1 1 auto;
   display: flex;
+  justify-content: flex-start;
+  flex: 1 1 auto;
   align-items: stretch;
-  justify-content: center;
   min-height: 0;
   min-width: 0;
   padding: 2rem;
@@ -110,14 +111,9 @@ li {
   max-width: 900px;
   width: 100%;
   min-width: 0;
-  text-align: center;
   margin: auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  box-sizing: border-box;
 }
+
 .card h2 {
   color: #0ea5e9;
   font-size: 2rem;

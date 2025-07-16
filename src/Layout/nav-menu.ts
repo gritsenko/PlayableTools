@@ -6,6 +6,7 @@ import "./nav-menu.ts.css";
 export class NavMenu extends ComponentBase {
   private menuItems = [
     { label: "Home", path: "/", disabled: false },
+    { label: "CTA SDK", path: "/cta-sdk", disabled: false },
     { label: "Publish", path: "/publish", disabled: false },
     { label: "Validate", path: "/validate", disabled: false },
     { label: "Compress assets", path: "/weather", disabled: true },
