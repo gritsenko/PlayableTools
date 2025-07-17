@@ -1,24 +1,43 @@
 import type { HTMLTemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { customElement, html, LayoutComponentBase } from "fw";
-import { UrlUtils } from "../utils/url-utils";
+import "./site-logo";
 
 @customElement("main-layout")
 export class MainLayout extends LayoutComponentBase {
   @property({ attribute: false, type: Object })
   body?: HTMLTemplateResult;
 
+  @property({ type: Boolean })
+  sidebarOpen = false;
+
+  private toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  private closeSidebar() {
+    this.sidebarOpen = false;
+  }
+
   render() {
     return html`
+      <!-- Responsive header for mobile -->
+      <header class="main-header">
+        <site-logo></site-logo>
+        <div class="hamburger" @click="${this.toggleSidebar}">
+          <div class="hamburger-icon">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Sidebar overlay for mobile -->
+      <div class="sidebar-overlay${this.sidebarOpen ? ' open' : ''}" @click="${this.closeSidebar}"></div>
       <div class="layout">
-        <aside class="sidebar">
-          <a href="/" class="header-link" style="display:flex;align-items:center;gap:0.75rem;">
-            <img src="${UrlUtils.buildFetchUrl("", "small-logo.jpg")}" alt="Logo" style="width:64;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 1px 4px rgba(0,0,0,0.08);" />
-            <span>
-              <div class="subheader">Gritsenko</div>
-              Playable Ads Tools
-            </span>
-          </a>
+        <aside class="sidebar${this.sidebarOpen ? ' open' : ''}">
+          <site-logo class="sidebar-header"></site-logo>
           <nav class="menu">
             <nav-menu></nav-menu>
           </nav>

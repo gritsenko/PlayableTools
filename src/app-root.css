@@ -96,3 +96,127 @@ body {
   max-width: 800px;
   margin: 0 auto;
 }
+
+/* Main header for mobile */
+.main-header {
+  display: none;
+}
+.main-header .header-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+}
+.main-header img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.main-header .subheader {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  margin-bottom: 0.25rem;
+}
+.main-header .hamburger {
+  margin-left: auto;
+  position: static;
+  top: auto;
+  left: auto;
+}
+
+@media (max-width: 768px) {
+  .main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    background: var(--pico-background-color);
+    border-bottom: 1px solid var(--pico-border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1003;
+  }
+  .main-header .hamburger {
+    display: flex;
+    margin-left: auto;
+    right: 0;
+    left: auto;
+    position: relative;
+  }
+  .sidebar-header {
+    display: none;
+  }
+}
+
+/* Hamburger menu styles for mobile */
+.hamburger {
+  display: none;
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  width: 40px;
+  height: 40px;
+  background: var(--pico-background-color);
+  border: 1px solid var(--pico-border-color);
+  border-radius: 50%;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+  cursor: pointer;
+}
+
+.hamburger-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  position: relative;
+}
+.hamburger-icon span {
+  display: block;
+  height: 3px;
+  width: 100%;
+  background: var(--pico-color);
+  margin: 5px 0;
+  border-radius: 2px;
+}
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.3);
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 260px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1002;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay.open {
+    display: block;
+  }
+  .hamburger {
+    display: flex;
+  }
+}
