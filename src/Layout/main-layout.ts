@@ -79,7 +79,7 @@ export class MainLayout extends LayoutComponentBase {
               <span>GitHub</span>
             </a>
             <button @click="${this.suggestPWAInstall}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--pico-muted-color);text-decoration:none;font-size:1rem;padding:0.5rem 0;border:none;background:none;cursor:pointer;">
-              <img src="./media/pwa.png" width="170" alt="PWA Badge" style="vertical-align:middle;"/>
+              <img src="pwa.png" width="170" alt="PWA Badge" style="vertical-align:middle;"/>
               <span>Install App</span>
             </button>
           </div>
