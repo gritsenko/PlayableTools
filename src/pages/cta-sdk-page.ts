@@ -5,7 +5,10 @@ import { marked } from "marked";
 import markdownContent from "../assets/cta-sdk.md?raw";
 
 @customElement("cta-sdk-page")
-@route("/cta-sdk")
+@route("/cta-sdk", {
+  title: "CTA SDK Documentation",
+  description: "Documentation for the CTA SDK, providing guidance on how to integrate and use the SDK in your playable ads.",
+})
 export class CtaSdkPage extends ComponentBase {
   markdownHtml: string = "";
 

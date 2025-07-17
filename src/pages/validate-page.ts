@@ -1,7 +1,11 @@
 import { ComponentBase, customElement, html, route } from "fw";
 
 @customElement("validate-page")
-@route("/validate")
+@route("/validate", {
+  title: "Ad Network Technical Requirements",
+  description:
+    "A comprehensive guide to the technical requirements for major ad networks, including file size limits and validation tools.",
+})
 export class ValidatePage extends ComponentBase {
   render() {
     return html`

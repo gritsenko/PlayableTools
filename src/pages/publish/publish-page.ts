@@ -1,7 +1,10 @@
 import { ComponentBase, customElement, html, route as route } from "fw";
 
 @customElement("publish-page")
-@route("/publish")
+@route("/publish", {
+  title: "Publish Playable Ads",
+  description: "Publish your playable ads to multiple ad networks with ease. This tool streamlines the process of deploying your ads."
+})
 export class HomePage extends ComponentBase {
   render() {
     return html`

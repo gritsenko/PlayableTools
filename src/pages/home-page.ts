@@ -1,7 +1,11 @@
 import { ComponentBase, customElement, html, route } from "fw";
 
 @customElement("home-page")
-@route("/")
+@route("/", {
+  title: "Playable Tools for HTML5 Ads",
+  description:
+    "A collection of open-source tools for HTML5 playable ads developers, including publishing, asset compression, and validation.",
+})
 export class HomePage extends ComponentBase {
   render() {
     return html`
