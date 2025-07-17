@@ -1,12 +1,17 @@
-# PlayableTools
+# <img src="./media/small-logo.jpg" width="28" style="border-radius:16px;"/> PlayableTools 
 
-Welcome to PlayableTools!
+Welcome to Playable Ads Tools!
 
-This project is a modern web application built with Vite, TypeScript, and Lit components. It provides tools for publishing playable ads across multiple platforms.
+This project is a modern web application built with Vite, TypeScript, and Lit components. It provides tools for publishing HTML5 playable ads across multiple platforms.
+
+**Live Version & PWA:**
+PlayableTools is available online at [https://gritsenko.biz/PlayableTools/](https://gritsenko.biz/PlayableTools/).
+You can install it as a Progressive Web App (PWA) for offline access and a native-like experience. Open the site in your browser and use the "Install App" option.
+
+<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 
 
-
-## Getting Started
+# Build and run locally
 
 1. Install dependencies:
    ```sh
