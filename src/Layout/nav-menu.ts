@@ -9,7 +9,7 @@ export class NavMenu extends ComponentBase {
     { label: "CTA SDK", path: "/cta-sdk", disabled: false },
     { label: "Publish", path: "/publish", disabled: false },
     { label: "Validate", path: "/validate", disabled: false },
-    { label: "Compress assets", path: "/weather", disabled: true },
+    { label: "Compress assets", path: "/compress-assets", disabled: false },
     { label: "FAQ", path: "/faq", disabled: true },
   ];
 

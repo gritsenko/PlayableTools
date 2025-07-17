@@ -6,6 +6,10 @@ This project is a modern web application built with Vite, TypeScript, and Lit co
 
 **Live Version & PWA:**
 PlayableTools is available online at [https://gritsenko.biz/PlayableTools/](https://gritsenko.biz/PlayableTools/).
+
+Join our Telegram group for updates and discussion:
+ [![Telegram](https://img.shields.io/badge/-telegram-red?color=white&logo=telegram&logoColor=blue)](https://t.me/playable_html5)
+
 You can install it as a Progressive Web App (PWA) for offline access and a native-like experience. Open the site in your browser and use the "Install App" option.
 
 <a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
