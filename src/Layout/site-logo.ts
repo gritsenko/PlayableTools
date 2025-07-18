@@ -6,7 +6,7 @@ import "./site-logo.ts.css";
 export class SiteLogo extends ComponentBase {
   render() {
     return html`
-      <a href="/" class="site-logo-link">
+      <a href="${UrlUtils.getBaseDir()}" class="site-logo-link">
         <img
           src="${UrlUtils.buildFetchUrl("", "small-logo.jpg")}"
           alt="Logo"
