@@ -46,6 +46,14 @@
       "InjeectScripts": ["cta.Applovin.js"]
     },
     {
+      "Name": "liftoff",
+      "InjeectScripts": ["cta.Mraid2.js"]
+    },
+    {
+      "Name": "chartboost",
+      "InjeectScripts": ["cta.Mraid2.js"]
+    },
+    {
       "Name": "Vungle",
       "OutputIndexHtmlName": "ad.html",
       "format": "zip",

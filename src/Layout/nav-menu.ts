@@ -10,6 +10,7 @@ export class NavMenu extends ComponentBase {
     { label: "Publish", path: "/publish", disabled: false },
     { label: "Validate", path: "/validate", disabled: false },
     { label: "Compress assets", path: "/compress-assets", disabled: false },
+    { label: "Base64 Converter", path: "/base64", disabled: false },
     { label: "FAQ", path: "/faq", disabled: true },
   ];
 
