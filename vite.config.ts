@@ -1,7 +1,9 @@
+
 import { defineConfig } from "vite";
 import rewriteBaseHrefPlugin from "./vite-plugin-rewrite-base-href";
 import string from "vite-plugin-string";
 import { VitePWA } from "vite-plugin-pwa";
+import yandexMetrikaPlugin from "./vite-plugin-yandex-metrika";
 // Use manifest path string instead of importing
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
@@ -19,6 +21,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     string({ include: ["**/*.md"], compress: false }),
     rewriteBaseHrefPlugin(),
+    yandexMetrikaPlugin(),
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
