@@ -11,10 +11,12 @@
   "dependencies": {
     "@picocss/pico": "^2.1.1",
     "@types/jszip": "^3.4.0",
+    "@types/pako": "^2.0.3",
     "fw": "file:./src/fw",
     "jszip": "^3.10.1",
     "lit": "^3.3.0",
     "marked": "^16.0.0",
+    "pako": "^2.1.0",
     "reflect-metadata": "^0.2.2",
     "vite-plugin-pwa": "^1.0.1",
     "vite-plugin-string": "^1.2.3"
