@@ -335,7 +335,7 @@ export class PlayablePublishService {
     platform: PlatformConfig
   ): Promise<void> {
     try {
-      // Dynamic import of JSZip for creating zip files
+      // Dynamic import of JSZip and use installed Pako for compression
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
@@ -364,9 +364,17 @@ export class PlayablePublishService {
         }
       }
 
-      // Generate zip blob
+      // Generate zip as Uint8Array with quick/good compression
       let tZipStart = performance.now();
-      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipUint8 = await zip.generateAsync({
+        type: "uint8array",
+        compression: "DEFLATE",
+        compressionOptions: { level: 3 } // 1-3 is quick/good, 9 is max
+      });
+      // Use JSZip output directly for Blob (do NOT re-compress with Pako)
+      const zipBlob = new Blob([
+        zipUint8
+      ], { type: "application/zip" });
       let tZipEnd = performance.now();
       console.log(`[PlayablePublishService] Zipping (${fileName}): ${(tZipEnd-tZipStart).toFixed(2)} ms`);
 
