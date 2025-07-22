@@ -9,7 +9,10 @@ import {
 import { PreviewService } from "../../services/PreviewService";
 
 @customElement("preview-page")
-@route("/preview")
+@route("/preview", {
+  title: "Playable Ad Preview | PlayableTools",
+  description: "Preview and share playable ads from GitHub on different devices and orientations.",
+})
 export class PreviewPage extends ComponentBase {
   disconnectedCallback() {
     super.disconnectedCallback?.();
