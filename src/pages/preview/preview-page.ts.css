@@ -1,0 +1,17 @@
+.preview-container {
+  padding: 2rem;
+}
+.preview-controls {
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+.preview-frame {
+  border: 1px solid #ccc;
+  background: #fafafa;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

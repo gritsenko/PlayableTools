@@ -15,8 +15,11 @@ export class RouterOutlet extends LitElement {
         const hash = window.location.hash;
         // Remove leading '#' and ensure leading '/'
         let path = hash ? hash.substring(1) : '';
-        if (!path.startsWith('/')) path = '/' + path;
-        this.currentPath = path;
+        // Separate path and query string
+        const [routePath] = path.split('?');
+        let normalizedPath = routePath;
+        if (!normalizedPath.startsWith('/')) normalizedPath = '/' + normalizedPath;
+        this.currentPath = normalizedPath;
         this.requestUpdate();
     };
 

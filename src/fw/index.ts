@@ -3,6 +3,8 @@ import { inject } from './di';
 import { route } from './router';
 import { html, css } from 'lit';
 
+import {fromQuery} from './from-query';
+
 export * from './component-base';
 export * from './di';
 export * from './router';
@@ -16,5 +18,6 @@ export {
     property,
     state,
     inject,
-    route
+    route,
+    fromQuery
 };

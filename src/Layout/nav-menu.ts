@@ -12,7 +12,8 @@ export class NavMenu extends ComponentBase {
     { label: "Compress assets", path: "/compress-assets", disabled: false },
     { label: "Base64 Converter", path: "/base64", disabled: false },
     { label: "Imba Packer", path: "/imba-packer", disabled: false },
-    { label: "FAQ", path: "/faq", disabled: true },
+    // { label: "FAQ", path: "/faq", disabled: true },
+    { label: "Preview", path: "/preview", disabled: false },
   ];
 
   private get currentPath() {
