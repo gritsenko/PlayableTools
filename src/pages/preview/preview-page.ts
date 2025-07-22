@@ -1,4 +1,11 @@
-import { ComponentBase, customElement, html, route, inject, fromQuery } from "fw";
+import {
+  ComponentBase,
+  customElement,
+  html,
+  route,
+  inject,
+  fromQuery,
+} from "fw";
 import { PreviewService } from "../../services/PreviewService";
 
 @customElement("preview-page")
@@ -14,6 +21,8 @@ export class PreviewPage extends ComponentBase {
   private _encodedUrlFromQuery?: string;
   private _encodedUrlInternal?: string;
   isEncoded: boolean = false;
+  linkCopied: boolean = false;
+  copyTimeout?: number;
 
   connectedCallback() {
     super.connectedCallback();
@@ -22,7 +31,7 @@ export class PreviewPage extends ComponentBase {
     // 1. Check hash-based query param
     const hash = window.location.hash;
     if (hash) {
-      const queryIndex = hash.indexOf('?');
+      const queryIndex = hash.indexOf("?");
       if (queryIndex !== -1) {
         const query = hash.substring(queryIndex + 1);
         const params = new URLSearchParams(query);
@@ -47,7 +56,6 @@ export class PreviewPage extends ComponentBase {
     }
   }
 
-
   handleInput(e: Event) {
     this.decodedUrl = (e.target as HTMLInputElement).value;
     this.requestUpdate();
@@ -60,14 +68,74 @@ export class PreviewPage extends ComponentBase {
     // Update hash-based route with query param
     const params = new URLSearchParams();
     params.set("url", this._encodedUrlInternal);
-    window.history.replaceState({}, "", `${window.location.pathname}#preview?${params.toString()}`);
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}#preview?${params.toString()}`
+    );
     this.requestUpdate();
+  }
+
+  async handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      this.linkCopied = true;
+      this.requestUpdate();
+      if (this.copyTimeout) clearTimeout(this.copyTimeout);
+      this.copyTimeout = window.setTimeout(() => {
+        this.linkCopied = false;
+        this.requestUpdate();
+      }, 3000);
+    } catch (e) {
+      // fallback: do nothing
+    }
   }
 
   render() {
     return html`
       <div class="preview-container">
-        <h2>Playable Ad Preview</h2>
+        <div style="display: flex; align-items: center; gap: 1em;">
+          <h2 style="margin: 0;">Playable Ad Preview</h2>
+          ${this.isEncoded && this.decodedUrl
+            ? html`
+                <button
+                  @click=${this.handleShare.bind(this)}
+                  style="background: none; border: none; color: #1976d2; cursor: pointer; padding: 0; font: inherit; display: flex; align-items: center; gap: 0.5em; text-decoration: underline;"
+                >
+                  ${this.linkCopied ? "Link copied" : "Share"}
+                </button>
+              `
+            : null}
+        </div>
+        ${!this.isEncoded
+          ? html`
+              <div style="margin: 1em 0; color: #555;">
+                <p>
+                  This page lets you share playable ads from a public GitHub repository and preview them on different devices and orientations.<br />
+                </p>
+                <p>
+                  Paste the URL of your playable ad hosted on GitHub below, then click <b>Load</b> to preview and share the link. Use the <b>Share</b> button to copy a direct preview link.
+                </p>
+                <details style="margin-top: 1em;">
+                  <summary style="cursor: pointer; font-weight: bold; color: #1976d2;">Show sample playable URL</summary>
+                  <div style="margin: 0.5em 0 0 1em;">
+                    <div style="display: flex; align-items: center; gap: 0.5em;">
+                      <code style="background: #f5f5f5; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.95em;">https://github.com/gritsenko/playables/blob/main/Customize3d/index.html</code>
+                      <button
+                        style="background: #1976d2; color: #fff; border: none; border-radius: 4px; padding: 0.2em 0.8em; cursor: pointer; font-size: 0.95em;"
+                        @click=${() => {
+                          this.decodedUrl = "https://github.com/gritsenko/playables/blob/main/Customize3d/index.html";
+                          this.handleLoad();
+                        }}
+                      >
+                        Try
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            `
+          : null}
         <div class="preview-controls">
           ${!this.isEncoded
             ? html`
@@ -80,20 +148,16 @@ export class PreviewPage extends ComponentBase {
                 />
                 <button @click=${this.handleLoad.bind(this)}>Load</button>
               `
-            : html`
-                <div>
-                  <label>Shareable Link:</label>
-                  <input type="text" readonly .value=${window.location.href} style="width: 400px;" />
-                </div>
-                <div>
-                  <label>Decoded URL:</label>
-                  <div style="word-break: break-all;">${this.decodedUrl}</div>
-                </div>
-              `}
+            : null}
         </div>
-        <div class="preview-frame">
+        <div
+          class="preview-frame"
+          style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"
+        >
           ${this.isEncoded && this.decodedUrl
-            ? html`<playable-previewer githubUrl="${this.decodedUrl}"></playable-previewer>`
+            ? html`<playable-previewer
+                githubUrl="${this.decodedUrl}"
+              ></playable-previewer>`
             : null}
         </div>
       </div>

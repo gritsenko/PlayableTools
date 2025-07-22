@@ -1,25 +1,43 @@
+
 .phone-simulator {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background: #f5f5f5;
+}
+
+.phone-simulator-bg {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f7f8fa;
+  border-radius: 40px;
+  box-shadow: 0 4px 32px 0 rgba(24, 34, 46, 0.12), 0 0 0 12px #1c2633;
+  border: 0;
+  position: relative;
+  padding: 0;
+  min-width: 320px;
+  min-height: 320px;
+  width: fit-content;
+  height: fit-content;
+  transition: width 0.2s, height 0.2s;
 }
 
 .phone-frame {
-  width: 375px;
-  height: 667px;
-  border: 16px solid #222;
+  background: #f2f2f2;
   border-radius: 40px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-  background: #fff;
+  box-shadow: 0 2px 8px 0 rgba(24, 34, 46, 0.08);
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   position: relative;
+  transition: width 0.2s, height 0.2s;
 }
 
 .playable-iframe {
   width: 100%;
   height: 100%;
   border: none;
-  background: #fff;
+  border-radius: 40px;
+  background: #f2f2f2;
 }
