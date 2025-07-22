@@ -29,3 +29,11 @@
   color: var(--pico-muted-color);
   margin-bottom: 0.25rem;
 }
+
+.site-logo-version {
+  font-size: 0.7rem;
+  color: var(--pico-muted-color);
+  font-weight: normal;
+  margin-top: 0.125rem;
+  opacity: 0.8;
+}

@@ -39,10 +39,20 @@ export class AppRoot extends ComponentBase {
       // Initialize the version service
       await this.versionService.initialize();
       
+      // Log current version to console
+      const currentVersion = this.versionService.getCurrentVersion();
+      if (currentVersion) {
+        console.log(`🚀 Playable Ads Tools v${currentVersion.version}`);
+        console.log(`📅 Build time: ${new Date(currentVersion.buildTime).toLocaleString()}`);
+        console.log(`🔧 Build hash: ${currentVersion.hash}`);
+        console.log(`${this.versionService.isPWAMode() ? '📱 PWA Mode' : '🌐 Browser Mode'}`);
+      }
+      
       // Subscribe to update notifications
       this.versionService.onUpdateAvailable((hasUpdate) => {
         this.updateAvailable = hasUpdate;
         if (hasUpdate) {
+          console.log('🔄 New version available!');
           this.showUpdateNotification();
         }
       });
