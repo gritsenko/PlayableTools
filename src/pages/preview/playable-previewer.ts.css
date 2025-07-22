@@ -1,3 +1,23 @@
+/* Spinner styles for loading state */
+.spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 6px solid #eee;
+  border-top: 6px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
 .phone-simulator {
   display: flex;
@@ -9,7 +29,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #f7f8fa;
+  background: #181818;
   border-radius: 40px;
   box-shadow: 0 4px 32px 0 rgba(24, 34, 46, 0.12), 0 0 0 12px #1c2633;
   border: 0;
@@ -23,7 +43,7 @@
 }
 
 .phone-frame {
-  background: #f2f2f2;
+  background: #161616;
   border-radius: 40px;
   box-shadow: 0 2px 8px 0 rgba(24, 34, 46, 0.08);
   overflow: hidden;
@@ -39,5 +59,5 @@
   height: 100%;
   border: none;
   border-radius: 40px;
-  background: #f2f2f2;
+  background: #1e1e1e;
 }

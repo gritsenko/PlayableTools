@@ -9,7 +9,7 @@ export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
 
   pageContent: string = "";
-  loading: boolean = false;
+  loading: boolean = true;
   error: string = "";
 
   devices = [
@@ -86,7 +86,12 @@ export class PlayablePreviewer extends ComponentBase {
         <div class="phone-simulator-bg">
           <div class="phone-frame" style="width:${width}px; height:${height}px;">
             ${this.loading
-              ? html`<div>Loading...</div>`
+              ? html`
+                  <div class="spinner-container">
+                    <div class="spinner"></div>
+                    <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">Loading playable content...</div>
+                  </div>
+                `
               : this.error
               ? html`<div style="color: red;">${this.error}</div>`
               : html`<iframe

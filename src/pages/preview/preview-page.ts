@@ -11,10 +11,24 @@ import { PreviewService } from "../../services/PreviewService";
 @customElement("preview-page")
 @route("/preview")
 export class PreviewPage extends ComponentBase {
+  disconnectedCallback() {
+    super.disconnectedCallback?.();
+    // On page unload, reload recentUrls for next mount
+    const stored = localStorage.getItem("preview-recent-urls");
+    if (stored) {
+      try {
+        this.recentUrls = JSON.parse(stored);
+      } catch {
+        this.recentUrls = [];
+      }
+    }
+    window.removeEventListener("popstate", this.handlePopState);
+  }
   @inject(PreviewService) previewService!: PreviewService;
 
   urlInput: string = "";
   decodedUrl: string = "";
+  recentUrls: string[] = [];
   @fromQuery("url") get encodedUrl(): string | undefined {
     return this._encodedUrlFromQuery;
   }
@@ -53,7 +67,55 @@ export class PreviewPage extends ComponentBase {
       this._encodedUrlInternal = encoded;
       this.isEncoded = true;
       this.requestUpdate();
+    } else {
+      // Load recent URLs from localStorage
+      const stored = localStorage.getItem("preview-recent-urls");
+      if (stored) {
+        try {
+          this.recentUrls = JSON.parse(stored);
+        } catch {
+          this.recentUrls = [];
+        }
+      }
+      // Clear preview state if no query param
+      this.isEncoded = false;
+      this.decodedUrl = "";
+      this._encodedUrlInternal = undefined;
     }
+    // Listen for browser navigation (back/forward)
+    window.addEventListener("popstate", this.handlePopState);
+  }
+
+  handlePopState = () => {
+    // Re-run connectedCallback logic to update preview on navigation
+    let encoded: string | null | undefined = undefined;
+    const hash = window.location.hash;
+    if (hash) {
+      const queryIndex = hash.indexOf("?");
+      if (queryIndex !== -1) {
+        const query = hash.substring(queryIndex + 1);
+        const params = new URLSearchParams(query);
+        encoded = params.get("url");
+      }
+    }
+    if (!encoded) {
+      const params = new URLSearchParams(window.location.search);
+      encoded = params.get("url");
+    }
+    if (!encoded && this._encodedUrlFromQuery) {
+      encoded = this._encodedUrlFromQuery;
+    }
+    if (encoded) {
+      const decoded = this.previewService.decodeUrl(encoded);
+      this.decodedUrl = decoded;
+      this._encodedUrlInternal = encoded;
+      this.isEncoded = true;
+    } else {
+      this.isEncoded = false;
+      this.decodedUrl = "";
+      this._encodedUrlInternal = undefined;
+    }
+    this.requestUpdate();
   }
 
   handleInput(e: Event) {
@@ -65,10 +127,23 @@ export class PreviewPage extends ComponentBase {
     if (!this.decodedUrl) return;
     this._encodedUrlInternal = this.previewService.encodeUrl(this.decodedUrl);
     this.isEncoded = true;
-    // Update hash-based route with query param
+    // Save to localStorage
+    let urls: string[] = [];
+    const stored = localStorage.getItem("preview-recent-urls");
+    if (stored) {
+      try {
+        urls = JSON.parse(stored);
+      } catch {
+        urls = [];
+      }
+    }
+    // Add new url to front, remove duplicates, keep max 10
+    urls = [this.decodedUrl, ...urls.filter(u => u !== this.decodedUrl)].slice(0, 10);
+    localStorage.setItem("preview-recent-urls", JSON.stringify(urls));
+    // Update hash-based route with query param (push to history)
     const params = new URLSearchParams();
     params.set("url", this._encodedUrlInternal);
-    window.history.replaceState(
+    window.history.pushState(
       {},
       "",
       `${window.location.pathname}#preview?${params.toString()}`
@@ -136,7 +211,7 @@ export class PreviewPage extends ComponentBase {
               </div>
             `
           : null}
-        <div class="preview-controls">
+        <div class="preview-controls" style="margin-bottom: 1.5em;">
           ${!this.isEncoded
             ? html`
                 <input
@@ -146,10 +221,35 @@ export class PreviewPage extends ComponentBase {
                   @input=${this.handleInput.bind(this)}
                   style="width: 400px;"
                 />
-                <button @click=${this.handleLoad.bind(this)}>Load</button>
+                <button @click=${this.handleLoad.bind(this)} style="margin-left: 0.5em;">Load</button>
               `
             : null}
         </div>
+        ${!this.isEncoded && this.recentUrls.length > 0
+          ? html`
+              <div style="margin-top: 0.5em;">
+                <h3 style="margin-bottom: 0.5em; font-size: 1.1em; color: #1976d2;">Recent Playable URLs</h3>
+                <div>
+                  ${this.recentUrls.map(
+                    url => html`
+                      <div style="margin-bottom: 0.5em;">
+                        <button
+                          style="width: 100%; display: flex; align-items: center; justify-content: space-between; background: #f5f5f5; color: #222; border: none; border-radius: 4px; padding: 0.4em 0.8em; font-size: 0.95em; cursor: pointer; text-align: left;"
+                          @click=${() => {
+                            this.decodedUrl = url;
+                            this.handleLoad();
+                          }}
+                        >
+                          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${url}</span>
+                          <span style="margin-left: 1em; color: #1976d2; font-weight: bold;">Preview</span>
+                        </button>
+                      </div>
+                    `
+                  )}
+                </div>
+              </div>
+            `
+          : null}
         <div
           class="preview-frame"
           style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"
