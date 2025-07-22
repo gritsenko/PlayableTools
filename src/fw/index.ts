@@ -10,6 +10,8 @@ export * from './di';
 export * from './router';
 export * from './layout-component-base';
 export * from './image-popup';
+export * from './update-notification';
+export * from './version-checker';
 
 export {
     html,

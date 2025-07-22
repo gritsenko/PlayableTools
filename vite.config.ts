@@ -4,12 +4,17 @@ import rewriteBaseHrefPlugin from "./vite-plugin-rewrite-base-href";
 import string from "vite-plugin-string";
 import { VitePWA } from "vite-plugin-pwa";
 import yandexMetrikaPlugin from "./vite-plugin-yandex-metrika";
+import viteVersionPlugin from "./vite-plugin-version";
+import { readFileSync } from "fs";
 // Use manifest path string instead of importing
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Read version from package.json
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 
 export default defineConfig(({ command }) => ({
   base: command === "serve" ? "/" : "/PlayableTools/",
@@ -22,6 +27,9 @@ export default defineConfig(({ command }) => ({
     string({ include: ["**/*.md"], compress: false }),
     rewriteBaseHrefPlugin(),
     yandexMetrikaPlugin(),
+    viteVersionPlugin({
+      version: packageJson.version
+    }),
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
@@ -47,7 +55,16 @@ export default defineConfig(({ command }) => ({
       },
       includeAssets: ["playable-tools.svg"],
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"]
+        globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
+        // Exclude version.json from caching to ensure fresh checks
+        globIgnores: ["**/version.json"],
+        runtimeCaching: [
+          {
+            // Ensure version.json is never cached
+            urlPattern: /\/version\.json$/,
+            handler: 'NetworkOnly'
+          }
+        ]
       },
       devOptions: {
         enabled: command === "serve"
