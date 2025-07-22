@@ -57,14 +57,14 @@ export class VersionService {
       console.warn('Failed to initialize version service:', error);
       // Set a fallback version so it doesn't show "unknown"
       this.currentVersion = {
-        version: '1.0.1',
+        version: '1.0.4', // Match current package.json version
         buildTime: new Date().toISOString(),
-        hash: 'unknown'
+        hash: 'fallback'
       };
       
       // Log fallback version
       console.log(`🚀 PlayableTools v${this.currentVersion.version} (fallback)`);
-      console.log('⚠️ Could not fetch version from server');
+      console.log('⚠️ Could not fetch version from server, using fallback');
     }
   }
 
@@ -156,7 +156,7 @@ export class VersionService {
    * Fetch version information from server
    */
   private async fetchVersionInfo(): Promise<VersionInfo> {
-    // Try to use service worker first for better PWA support
+    // Try service worker first for PWA support
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       try {
         const versionInfo = await this.fetchVersionViaServiceWorker();
@@ -168,8 +168,28 @@ export class VersionService {
       }
     }
 
-    // Fallback to direct fetch
-    return this.fetchVersionDirect();
+    // Try multiple fetch strategies
+    const strategies = [
+      () => this.fetchVersionDirect(),
+      () => this.fetchVersionWithDifferentMethod(),
+      () => this.fetchVersionFallback()
+    ];
+
+    for (let i = 0; i < strategies.length; i++) {
+      try {
+        console.log(`📡 Trying fetch strategy ${i + 1}/${strategies.length}`);
+        const result = await strategies[i]();
+        console.log(`✅ Strategy ${i + 1} succeeded`);
+        return result;
+      } catch (error) {
+        console.warn(`❌ Strategy ${i + 1} failed:`, error);
+        if (i === strategies.length - 1) {
+          throw error; // Throw the last error if all strategies fail
+        }
+      }
+    }
+
+    throw new Error('All fetch strategies failed');
   }
 
   /**
@@ -220,7 +240,7 @@ export class VersionService {
     }
     
     // Add aggressive cache busting with timestamp and random number
-    const cacheBuster = `?t=${Date.now()}&r=${Math.random().toString(36).substring(2)}`;
+    const cacheBuster = `?v=${Date.now()}&cb=${Math.random().toString(36).substring(2)}&nc=${performance.now()}`;
     const finalUrl = versionUrl + cacheBuster;
     
     console.log(`📡 Fetching version from: ${finalUrl}`);
@@ -230,21 +250,92 @@ export class VersionService {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0',
-        'If-Modified-Since': '0',
-        'If-None-Match': '*'
+        'Expires': '0'
+        // Remove conditional headers that cause 304 responses
       },
-      cache: 'no-store'
+      cache: 'no-store',
+      // Force a fresh request
+      mode: 'cors',
+      credentials: 'same-origin'
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch version info from ${finalUrl}: ${response.status}`);
+    // Handle both 200 and 304 responses as success
+    if (!response.ok && response.status !== 304) {
+      throw new Error(`Failed to fetch version info from ${finalUrl}: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
-    console.log('📡 Version info fetched from server:', data);
+    // For 304 responses, we might not get a body, so handle gracefully
+    let data;
+    try {
+      data = await response.json();
+      console.log('📡 Version info fetched from server:', data);
+    } catch (jsonError) {
+      // If we can't parse JSON (possibly due to 304), create fallback data
+      console.warn('📡 Could not parse JSON response, using fallback version data');
+      data = {
+        version: '1.0.4', // Use current package.json version
+        buildTime: new Date().toISOString(),
+        hash: 'fallback'
+      };
+    }
+    
+    console.log('🔍 Response status:', response.status);
     console.log('🔍 Response headers cache-control:', response.headers.get('cache-control'));
     return data;
+  }
+
+  /**
+   * Alternative fetch method using XMLHttpRequest
+   */
+  private async fetchVersionWithDifferentMethod(): Promise<VersionInfo> {
+    return new Promise((resolve, reject) => {
+      let versionUrl = this.versionEndpoint;
+      
+      if (window.location.origin === 'https://gritsenko.biz' && 
+          window.location.pathname.startsWith('/PlayableTools/')) {
+        versionUrl = '/PlayableTools/version.json';
+      }
+      
+      const cacheBuster = `?xhr=${Date.now()}&rand=${Math.random()}`;
+      const finalUrl = versionUrl + cacheBuster;
+      
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', finalUrl, true);
+      xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      xhr.setRequestHeader('Pragma', 'no-cache');
+      xhr.setRequestHeader('Expires', '0');
+      
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200 || xhr.status === 304) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              console.log('📡 XHR version fetch successful:', data);
+              resolve(data);
+            } catch (error) {
+              reject(new Error('Failed to parse JSON from XHR response'));
+            }
+          } else {
+            reject(new Error(`XHR request failed: ${xhr.status}`));
+          }
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error('XHR request error'));
+      xhr.send();
+    });
+  }
+
+  /**
+   * Final fallback - return current package version
+   */
+  private async fetchVersionFallback(): Promise<VersionInfo> {
+    console.log('📡 Using final fallback version');
+    return {
+      version: '1.0.4',
+      buildTime: new Date().toISOString(),
+      hash: 'final-fallback'
+    };
   }
 
   /**

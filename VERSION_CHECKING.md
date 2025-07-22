@@ -47,10 +47,29 @@ location ~* /version\.json$ {
 }
 ```
 
-### Verification:
-- Console logs show the exact URL being fetched with cache busters
-- Response headers are logged to verify server cache settings
-- Use `versionService.testCacheBusting()` in console to test cache prevention
+## Common Issues & Solutions
+
+### 304 Not Modified Responses:
+**Problem**: Server returns 304 status causing fetch to fail
+**Solution**: 
+- Handle 304 responses as successful (they indicate content hasn't changed)
+- Use multiple fetch strategies (fetch API, XMLHttpRequest, fallback)
+- Enhanced cache-busting with multiple parameters
+
+### Cache Prevention Measures:
+- **Multiple URL Parameters**: `?v=timestamp&cb=random&nc=performance`
+- **Multiple Fetch Methods**: fetch API → XMLHttpRequest → fallback
+- **Status Code Handling**: Treats both 200 and 304 as success
+- **Graceful JSON Parsing**: Handles cases where 304 returns no body
+
+### Debugging Commands:
+```javascript
+// Test version fetching in console
+await window.versionService?.testCacheBusting();
+
+// Manual version check
+await window.versionService?.checkForUpdates();
+```
 
 ## Components
 
