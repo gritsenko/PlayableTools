@@ -117,6 +117,42 @@ export class VersionService {
   }
 
   /**
+   * Test cache busting - useful for debugging
+   */
+  async testCacheBusting(): Promise<void> {
+    console.log('🧪 Testing cache busting...');
+    
+    try {
+      // Make multiple requests to see if we get cached responses
+      const requests = [];
+      for (let i = 0; i < 3; i++) {
+        requests.push(this.fetchVersionInfo());
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+      }
+      
+      const results = await Promise.all(requests);
+      
+      console.log('🧪 Cache busting test results:');
+      results.forEach((result, index) => {
+        console.log(`Request ${index + 1}:`, result);
+      });
+      
+      // Check if all requests returned the same build time (good - means no caching)
+      const buildTimes = results.map(r => r.buildTime);
+      const uniqueBuildTimes = new Set(buildTimes);
+      
+      if (uniqueBuildTimes.size === 1) {
+        console.log('✅ Cache busting working correctly - all requests returned same data');
+      } else {
+        console.log('⚠️ Inconsistent responses - possible caching issues');
+      }
+      
+    } catch (error) {
+      console.error('🧪 Cache busting test failed:', error);
+    }
+  }
+
+  /**
    * Fetch version information from server
    */
   private async fetchVersionInfo(): Promise<VersionInfo> {
@@ -177,28 +213,37 @@ export class VersionService {
     // Build the proper URL for production
     let versionUrl = this.versionEndpoint;
     
-    // If running on https://gritsenko.biz/PlayableTools, ensure proper path
+    // If running on https://gritsenko.biz/PlayableTools/, ensure proper path
     if (window.location.origin === 'https://gritsenko.biz' && 
-        window.location.pathname.startsWith('/PlayableTools')) {
+        window.location.pathname.startsWith('/PlayableTools/')) {
       versionUrl = '/PlayableTools/version.json';
     }
     
-    const response = await fetch(versionUrl, {
+    // Add aggressive cache busting with timestamp and random number
+    const cacheBuster = `?t=${Date.now()}&r=${Math.random().toString(36).substring(2)}`;
+    const finalUrl = versionUrl + cacheBuster;
+    
+    console.log(`📡 Fetching version from: ${finalUrl}`);
+    
+    const response = await fetch(finalUrl, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'If-Modified-Since': '0',
+        'If-None-Match': '*'
       },
       cache: 'no-store'
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch version info from ${versionUrl}: ${response.status}`);
+      throw new Error(`Failed to fetch version info from ${finalUrl}: ${response.status}`);
     }
 
     const data = await response.json();
     console.log('📡 Version info fetched from server:', data);
+    console.log('🔍 Response headers cache-control:', response.headers.get('cache-control'));
     return data;
   }
 

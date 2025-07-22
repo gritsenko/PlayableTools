@@ -18,19 +18,39 @@ This implementation provides automatic version checking and app reload functiona
 4. **Update Banner**: If an update is detected, shows a full-width blue banner at the top
 5. **One-Click Reload**: User clicks "Reload App" button to get the latest version with cache clearing
 
-## User Experience
+## Cache Prevention Measures
 
-### Update Banner:
-- Appears at the top of the screen when updates are available
-- Blue gradient background with clear messaging
-- Single "Reload App" button for immediate action
-- Responsive design for mobile devices
-- Non-intrusive but clearly visible
+### Client-Side Cache Busting:
+- **Timestamp Parameters**: Adds `?t=timestamp&r=random` to version.json requests
+- **Aggressive Headers**: Multiple no-cache headers in fetch requests
+- **Service Worker Bypass**: Service worker intercepts and bypasses cache for version.json
+- **Browser Cache API**: Excluded from all cache storage mechanisms
 
-### Version Detection:
-- Shows proper version number (e.g., "v1.0.0") instead of "unknown"
-- Handles network failures gracefully with fallback version
-- Works correctly in both browser and PWA installed modes
+### Server-Side Configuration:
+For optimal cache prevention, configure your server:
+
+**Apache (.htaccess):**
+```apache
+<Files "version.json">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</Files>
+```
+
+**Nginx:**
+```nginx
+location ~* /version\.json$ {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    add_header Pragma "no-cache" always;
+    add_header Expires "0" always;
+}
+```
+
+### Verification:
+- Console logs show the exact URL being fetched with cache busters
+- Response headers are logged to verify server cache settings
+- Use `versionService.testCacheBusting()` in console to test cache prevention
 
 ## Components
 

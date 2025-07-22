@@ -1,0 +1,16 @@
+# Nginx configuration to prevent caching of version.json
+# Add this to your server block or location block
+
+location ~* /version\.json$ {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    add_header Pragma "no-cache" always;
+    add_header Expires "0" always;
+    add_header ETag "" always;
+    
+    # Remove any existing ETag or Last-Modified headers
+    more_clear_headers "ETag";
+    more_clear_headers "Last-Modified";
+    
+    # Ensure the file is served with proper MIME type
+    add_header Content-Type "application/json" always;
+}

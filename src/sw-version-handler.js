@@ -40,17 +40,29 @@ async function handleClearCache() {
 
 async function handleVersionCheck(event) {
   try {
+    // Add cache busting parameters
+    const cacheBuster = `?t=${Date.now()}&r=${Math.random().toString(36).substring(2)}`;
+    const versionUrl = `./version.json${cacheBuster}`;
+    
+    console.log(`SW: Fetching version from: ${versionUrl}`);
+    
     // Fetch version.json bypassing cache
-    const response = await fetch('./version.json', {
+    const response = await fetch(versionUrl, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'If-Modified-Since': '0',
+        'If-None-Match': '*'
       }
     });
     
     if (response.ok) {
       const versionInfo = await response.json();
+      console.log('SW: Version info fetched:', versionInfo);
+      console.log('SW: Response cache headers:', response.headers.get('cache-control'));
+      
       // Send version info back to main thread
       event.ports[0]?.postMessage({
         type: 'VERSION_INFO',
@@ -76,15 +88,33 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Never cache version.json
-  if (url.pathname.endsWith('/version.json')) {
+  // Never cache version.json - match any request containing version.json
+  if (url.pathname.includes('/version.json') || url.pathname.endsWith('/version.json')) {
+    console.log('SW: Intercepting version.json request, bypassing cache');
+    
     event.respondWith(
       fetch(event.request, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'If-Modified-Since': '0',
+          'If-None-Match': '*'
         }
+      }).then(response => {
+        // Clone the response and add no-cache headers
+        const newResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: {
+            ...Object.fromEntries(response.headers.entries()),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        return newResponse;
       })
     );
   }

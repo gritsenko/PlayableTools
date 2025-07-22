@@ -1,0 +1,17 @@
+# Prevent caching of version.json file
+<Files "version.json">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+    Header set ETag ""
+    Header unset Last-Modified
+</Files>
+
+# Alternative using regex pattern
+<FilesMatch "version\.json$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache" 
+    Header set Expires "0"
+    Header set ETag ""
+    Header unset Last-Modified
+</FilesMatch>
