@@ -23,6 +23,8 @@ export class AppRoot extends ComponentBase {
   async connectedCallback() {
     super.connectedCallback();
     
+    console.log('🔧 Initializing PlayableTools...');
+    
     // Initialize version checking
     await this.initializeVersionService();
   }

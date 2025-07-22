@@ -43,16 +43,28 @@ export class VersionService {
   async initialize(): Promise<void> {
     try {
       this.currentVersion = await this.fetchVersionInfo();
-      console.log('Version service initialized:', this.currentVersion);
+      
+      // Log version information prominently
+      console.log(`🚀 PlayableTools v${this.currentVersion.version}`);
+      console.log(`📦 Build: ${this.currentVersion.buildTime}`);
+      console.log(`🔖 Hash: ${this.currentVersion.hash}`);
+      if (this.isPWA) {
+        console.log('📱 Running in PWA mode');
+      }
+      
       this.startPeriodicCheck();
     } catch (error) {
       console.warn('Failed to initialize version service:', error);
       // Set a fallback version so it doesn't show "unknown"
       this.currentVersion = {
-        version: '1.0.0',
+        version: '1.0.1',
         buildTime: new Date().toISOString(),
         hash: 'unknown'
       };
+      
+      // Log fallback version
+      console.log(`🚀 PlayableTools v${this.currentVersion.version} (fallback)`);
+      console.log('⚠️ Could not fetch version from server');
     }
   }
 
@@ -87,8 +99,14 @@ export class VersionService {
       const latestVersion = await this.fetchVersionInfo();
       
       if (this.currentVersion && this.hasNewVersion(this.currentVersion, latestVersion)) {
+        console.log('🆕 Update available!');
+        console.log(`📍 Current: v${this.currentVersion.version} (${this.currentVersion.hash})`);
+        console.log(`🎯 Latest: v${latestVersion.version} (${latestVersion.hash})`);
+        
         this.notifyListeners(true);
         return true;
+      } else {
+        console.log('✅ App is up to date');
       }
       
       return false;
@@ -180,7 +198,7 @@ export class VersionService {
     }
 
     const data = await response.json();
-    console.log('Fetched version info:', data);
+    console.log('📡 Version info fetched from server:', data);
     return data;
   }
 
