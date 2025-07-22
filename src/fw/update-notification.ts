@@ -10,80 +10,98 @@ export class UpdateNotification extends ComponentBase {
   static styles = css`
     :host {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 0;
+      left: 0;
+      right: 0;
       z-index: 10000;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .notification {
-      background: #3b82f6;
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
       color: white;
-      padding: 16px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 12px 20px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      min-width: 300px;
-      transform: translateX(100%);
+      justify-content: center;
+      gap: 16px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transform: translateY(-100%);
       transition: transform 0.3s ease-in-out;
     }
 
     .notification.visible {
-      transform: translateX(0);
+      transform: translateY(0);
     }
 
     .notification-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       flex: 1;
-    }
-
-    .notification-title {
-      font-weight: 600;
-      margin: 0 0 4px 0;
-      font-size: 14px;
+      justify-content: center;
+      max-width: 600px;
     }
 
     .notification-message {
       margin: 0;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-
-    .notification-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
-      transition: background-color 0.2s;
     }
 
-    .btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .btn-primary {
+    .reload-btn {
       background: white;
       color: #3b82f6;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .btn-primary:hover {
+    .reload-btn:hover {
       background: #f8fafc;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     .icon {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       fill: currentColor;
+    }
+
+    .reload-icon {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    @media (max-width: 768px) {
+      .notification {
+        padding: 10px 16px;
+        text-align: center;
+      }
+      
+      .notification-content {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .notification-message {
+        font-size: 13px;
+      }
+      
+      .reload-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
     }
   `;
 
@@ -102,28 +120,21 @@ export class UpdateNotification extends ComponentBase {
     }));
   }
 
-  private handleDismiss(): void {
-    this.hide();
-  }
-
   render() {
     return html`
       <div class="notification ${this.visible ? 'visible' : ''}">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-        </svg>
         <div class="notification-content">
-          <div class="notification-title">Update Available</div>
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
           <div class="notification-message">
-            A new version of the app is available. Reload to get the latest features and fixes.
+            A new version is available with latest features and improvements
           </div>
-        </div>
-        <div class="notification-actions">
-          <button class="btn" @click=${this.handleDismiss}>
-            Later
-          </button>
-          <button class="btn btn-primary" @click=${this.handleReload}>
-            Reload
+          <button class="reload-btn" @click=${this.handleReload}>
+            <svg class="reload-icon" viewBox="0 0 24 24">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            Reload App
           </button>
         </div>
       </div>

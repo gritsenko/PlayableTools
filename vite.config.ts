@@ -6,15 +6,17 @@ import { VitePWA } from "vite-plugin-pwa";
 import yandexMetrikaPlugin from "./vite-plugin-yandex-metrika";
 import viteVersionPlugin from "./vite-plugin-version";
 import { readFileSync } from "fs";
+import { resolve } from "path";
 // Use manifest path string instead of importing
 import { fileURLToPath } from "url";
-import { dirname, resolve } from "path";
+import { dirname } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Read version from package.json
-const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
+// Read package.json properly
+const packageJsonPath = resolve(__dirname, 'package.json');
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
 export default defineConfig(({ command }) => ({
   base: command === "serve" ? "/" : "/PlayableTools/",

@@ -70,19 +70,9 @@ export class AppRoot extends ComponentBase {
     }
   }
 
-  private handleManualUpdateCheck(event: CustomEvent): void {
-    if (event.detail?.hasUpdate) {
-      this.updateAvailable = true;
-      this.showUpdateNotification();
-    }
-  }
-
   render() {
     return html`
-      <router-outlet 
-        .defaultLayout="${MainLayout}" 
-        @update-available=${this.handleManualUpdateCheck}
-      ></router-outlet>
+      <router-outlet .defaultLayout="${MainLayout}"></router-outlet>
       ${this.updateAvailable ? html`
         <update-notification @reload-requested=${this.handleReloadRequested}></update-notification>
       ` : ''}

@@ -13,7 +13,7 @@ export class VersionService {
   private isPWA: boolean = false;
 
   constructor(
-    checkIntervalMs: number = 5 * 60 * 1000, // 5 minutes
+    checkIntervalMs: number = 60 * 60 * 1000, // 1 hour
     versionEndpoint: string = './version.json'
   ) {
     this.checkIntervalMs = checkIntervalMs;
@@ -43,9 +43,16 @@ export class VersionService {
   async initialize(): Promise<void> {
     try {
       this.currentVersion = await this.fetchVersionInfo();
+      console.log('Version service initialized:', this.currentVersion);
       this.startPeriodicCheck();
     } catch (error) {
       console.warn('Failed to initialize version service:', error);
+      // Set a fallback version so it doesn't show "unknown"
+      this.currentVersion = {
+        version: '1.0.0',
+        buildTime: new Date().toISOString(),
+        hash: 'unknown'
+      };
     }
   }
 
@@ -149,10 +156,14 @@ export class VersionService {
    * Direct fetch version info (fallback)
    */
   private async fetchVersionDirect(): Promise<VersionInfo> {
-    // Build the full URL to handle PWA installed mode
-    const baseUrl = window.location.origin;
-    const basePath = document.querySelector('base')?.getAttribute('href') || '/';
-    const versionUrl = new URL(this.versionEndpoint, baseUrl + basePath.replace(/\/$/, '')).toString();
+    // Build the proper URL for production
+    let versionUrl = this.versionEndpoint;
+    
+    // If running on https://gritsenko.biz/PlayableTools, ensure proper path
+    if (window.location.origin === 'https://gritsenko.biz' && 
+        window.location.pathname.startsWith('/PlayableTools')) {
+      versionUrl = '/PlayableTools/version.json';
+    }
     
     const response = await fetch(versionUrl, {
       method: 'GET',
@@ -161,15 +172,16 @@ export class VersionService {
         'Pragma': 'no-cache',
         'Expires': '0'
       },
-      // Add cache busting parameter for extra security
       cache: 'no-store'
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch version info: ${response.status}`);
+      throw new Error(`Failed to fetch version info from ${versionUrl}: ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('Fetched version info:', data);
+    return data;
   }
 
   /**

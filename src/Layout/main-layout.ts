@@ -2,7 +2,6 @@ import type { HTMLTemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { customElement, html, LayoutComponentBase } from "fw";
 import "./site-logo";
-import "../fw/version-checker";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -52,15 +51,6 @@ export class MainLayout extends LayoutComponentBase {
     }
   }
 
-  private handleUpdateAvailable(event: CustomEvent) {
-    // Forward the event to the app root
-    this.dispatchEvent(new CustomEvent('update-available', {
-      bubbles: true,
-      composed: true,
-      detail: event.detail
-    }));
-  }
-
   render() {
     return html`
       <!-- Responsive header for mobile -->
@@ -104,9 +94,6 @@ export class MainLayout extends LayoutComponentBase {
             <button @click="${this.suggestPWAInstall}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--pico-muted-color);text-decoration:none;font-size:1rem;padding:0.5rem 0;border:none;background:none;cursor:pointer;">
               <img src="pwa.png" width="170" alt="PWA Badge" style="vertical-align:middle;"/>
             </button>
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--pico-muted-border-color);">
-              <version-checker @update-available=${this.handleUpdateAvailable}></version-checker>
-            </div>
           </div>
         </aside>
         <main class="main">${this.body}</main>

@@ -4,27 +4,33 @@ This implementation provides automatic version checking and app reload functiona
 
 ## Features
 
-- **Automatic Version Checking**: Periodically checks for new versions every 5 minutes
-- **Manual Version Check**: Button in the sidebar to manually check for updates
-- **Update Notification**: Shows a user-friendly notification when updates are available
+- **Automatic Version Checking**: Checks for new versions on app start and every hour
+- **Full-Width Update Banner**: Shows a prominent top banner when updates are available
 - **Cache Clearing**: Clears all caches (Browser Cache API, Service Worker, localStorage, sessionStorage) before reload
 - **PWA Compatibility**: Full support for PWA installed mode with proper service worker handling
-- **Development Support**: Works in both development and production modes
+- **Simple UX**: No manual buttons - automatic checking with clear reload action
 
-## PWA Mode Support
+## How It Works
 
-### Key PWA Features:
-- **Service Worker Integration**: Communicates with service workers to bypass caches
-- **PWA Detection**: Automatically detects if running in installed PWA mode
-- **Cache Exclusion**: `version.json` is excluded from service worker caching
-- **Network-Only Strategy**: Version checks always hit the network, never cache
-- **Service Worker Updates**: Properly handles service worker updates during reload
+1. **App Start**: When the app loads, `VersionService` fetches current version from `version.json`
+2. **Hourly Checks**: Every hour, the service checks for updates by fetching the latest `version.json`
+3. **Version Comparison**: Compares versions using content hash, build timestamp, and version string
+4. **Update Banner**: If an update is detected, shows a full-width blue banner at the top
+5. **One-Click Reload**: User clicks "Reload App" button to get the latest version with cache clearing
 
-### PWA-Specific Behavior:
-1. **Version Fetching**: Uses service worker communication when available, falls back to direct fetch
-2. **Cache Management**: Sends cache clearing messages to service workers
-3. **Service Worker Updates**: Forces service worker updates before reload
-4. **URL Resolution**: Properly resolves version.json URL in installed PWA context
+## User Experience
+
+### Update Banner:
+- Appears at the top of the screen when updates are available
+- Blue gradient background with clear messaging
+- Single "Reload App" button for immediate action
+- Responsive design for mobile devices
+- Non-intrusive but clearly visible
+
+### Version Detection:
+- Shows proper version number (e.g., "v1.0.0") instead of "unknown"
+- Handles network failures gracefully with fallback version
+- Works correctly in both browser and PWA installed modes
 
 ## Components
 

@@ -68,105 +68,120 @@ and limitations under the License.
           >×</button>
         </div>
       `:""}
-    `}};mi([Ve({type:Boolean})],Rt.prototype,"open",2);mi([Ve({type:String})],Rt.prototype,"src",2);mi([Ve({type:String})],Rt.prototype,"alt",2);mi([Ve({type:String})],Rt.prototype,"thumbWidth",2);Rt=mi([we("image-popup")],Rt);var Eo=Object.defineProperty,Co=Object.getOwnPropertyDescriptor,Ka=(e,i,t,n)=>{for(var r=n>1?void 0:n?Co(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&Eo(i,t,r),r};let oi=class extends ge{constructor(){super(...arguments),this.visible=!1}show(){this.visible=!0}hide(){this.visible=!1}handleReload(){this.dispatchEvent(new CustomEvent("reload-requested",{bubbles:!0,composed:!0}))}handleDismiss(){this.hide()}render(){return F`
+    `}};mi([Ve({type:Boolean})],Rt.prototype,"open",2);mi([Ve({type:String})],Rt.prototype,"src",2);mi([Ve({type:String})],Rt.prototype,"alt",2);mi([Ve({type:String})],Rt.prototype,"thumbWidth",2);Rt=mi([we("image-popup")],Rt);var Eo=Object.defineProperty,Co=Object.getOwnPropertyDescriptor,Ka=(e,i,t,n)=>{for(var r=n>1?void 0:n?Co(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&Eo(i,t,r),r};let oi=class extends ge{constructor(){super(...arguments),this.visible=!1}show(){this.visible=!0}hide(){this.visible=!1}handleReload(){this.dispatchEvent(new CustomEvent("reload-requested",{bubbles:!0,composed:!0}))}render(){return F`
       <div class="notification ${this.visible?"visible":""}">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-        </svg>
         <div class="notification-content">
-          <div class="notification-title">Update Available</div>
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
           <div class="notification-message">
-            A new version of the app is available. Reload to get the latest features and fixes.
+            A new version is available with latest features and improvements
           </div>
-        </div>
-        <div class="notification-actions">
-          <button class="btn" @click=${this.handleDismiss}>
-            Later
-          </button>
-          <button class="btn btn-primary" @click=${this.handleReload}>
-            Reload
+          <button class="reload-btn" @click=${this.handleReload}>
+            <svg class="reload-icon" viewBox="0 0 24 24">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            Reload App
           </button>
         </div>
       </div>
     `}};oi.useShadowDom=!0;oi.styles=Za`
     :host {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 0;
+      left: 0;
+      right: 0;
       z-index: 10000;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .notification {
-      background: #3b82f6;
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
       color: white;
-      padding: 16px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 12px 20px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      min-width: 300px;
-      transform: translateX(100%);
+      justify-content: center;
+      gap: 16px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transform: translateY(-100%);
       transition: transform 0.3s ease-in-out;
     }
 
     .notification.visible {
-      transform: translateX(0);
+      transform: translateY(0);
     }
 
     .notification-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       flex: 1;
-    }
-
-    .notification-title {
-      font-weight: 600;
-      margin: 0 0 4px 0;
-      font-size: 14px;
+      justify-content: center;
+      max-width: 600px;
     }
 
     .notification-message {
       margin: 0;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-
-    .notification-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
-      transition: background-color 0.2s;
     }
 
-    .btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .btn-primary {
+    .reload-btn {
       background: white;
       color: #3b82f6;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .btn-primary:hover {
+    .reload-btn:hover {
       background: #f8fafc;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     .icon {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       fill: currentColor;
     }
-  `;Ka([vt()],oi.prototype,"visible",2);oi=Ka([we("update-notification")],oi);class Xa{constructor(i=5*60*1e3,t="./version.json"){this.currentVersion=null,this.checkInterval=null,this.listeners=[],this.isPWA=!1,this.checkIntervalMs=i,this.versionEndpoint=t,this.detectPWAMode()}detectPWAMode(){this.isPWA=window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches||window.navigator.standalone===!0||document.referrer.includes("android-app://"),this.isPWA&&console.log("VersionService: Running in PWA mode")}async initialize(){try{this.currentVersion=await this.fetchVersionInfo(),this.startPeriodicCheck()}catch(i){console.warn("Failed to initialize version service:",i)}}startPeriodicCheck(){this.checkInterval&&clearInterval(this.checkInterval),this.checkInterval=window.setInterval(async()=>{await this.checkForUpdates()},this.checkIntervalMs)}stopPeriodicCheck(){this.checkInterval&&(clearInterval(this.checkInterval),this.checkInterval=null)}async checkForUpdates(){try{const i=await this.fetchVersionInfo();return this.currentVersion&&this.hasNewVersion(this.currentVersion,i)?(this.notifyListeners(!0),!0):!1}catch(i){return console.warn("Failed to check for updates:",i),!1}}async fetchVersionInfo(){if("serviceWorker"in navigator&&navigator.serviceWorker.controller)try{const i=await this.fetchVersionViaServiceWorker();if(i)return i}catch(i){console.warn("Failed to fetch version via service worker, falling back to direct fetch:",i)}return this.fetchVersionDirect()}async fetchVersionViaServiceWorker(){return new Promise((i,t)=>{if(!navigator.serviceWorker.controller){t(new Error("No service worker controller"));return}const n=new MessageChannel;n.port1.onmessage=r=>{const{type:a,data:o,error:l}=r.data;a==="VERSION_INFO"?i(o):a==="VERSION_ERROR"&&t(new Error(l))},navigator.serviceWorker.controller.postMessage({type:"CHECK_VERSION"},[n.port2]),setTimeout(()=>{t(new Error("Service worker version check timeout"))},5e3)})}async fetchVersionDirect(){const i=window.location.origin,t=document.querySelector("base")?.getAttribute("href")||"/",n=new URL(this.versionEndpoint,i+t.replace(/\/$/,"")).toString(),r=await fetch(n,{method:"GET",headers:{"Cache-Control":"no-cache, no-store, must-revalidate",Pragma:"no-cache",Expires:"0"},cache:"no-store"});if(!r.ok)throw new Error(`Failed to fetch version info: ${r.status}`);return await r.json()}hasNewVersion(i,t){return i.hash!==t.hash||i.buildTime!==t.buildTime?!0:i.version!==t.version}onUpdateAvailable(i){return this.listeners.push(i),()=>{const t=this.listeners.indexOf(i);t>-1&&this.listeners.splice(t,1)}}notifyListeners(i){this.listeners.forEach(t=>{try{t(i)}catch(n){console.error("Error in update listener:",n)}})}async reloadWithCacheClear(){try{await this.clearAllCaches(),await this.updateServiceWorker(),window.location.reload()}catch(i){console.error("Failed to clear caches:",i),window.location.reload()}}async updateServiceWorker(){if("serviceWorker"in navigator)try{const i=await navigator.serviceWorker.getRegistrations();for(const t of i)await t.update(),t.waiting&&t.waiting.postMessage({type:"SKIP_WAITING"})}catch(i){console.warn("Failed to update service worker:",i)}}async clearAllCaches(){const i=[];if("caches"in window&&i.push(caches.keys().then(t=>Promise.all(t.map(n=>(console.log(`Clearing cache: ${n}`),caches.delete(n)))))),"serviceWorker"in navigator&&navigator.serviceWorker.controller)try{navigator.serviceWorker.controller.postMessage({type:"CLEAR_CACHE"})}catch(t){console.warn("Failed to send clear cache message to service worker:",t)}try{localStorage.clear(),sessionStorage.clear()}catch(t){console.warn("Failed to clear storage:",t)}await Promise.all(i)}getCurrentVersion(){return this.currentVersion}isPWAMode(){return this.isPWA}destroy(){this.stopPeriodicCheck(),this.listeners=[]}}var To=Object.defineProperty,Po=Object.getOwnPropertyDescriptor,wi=(e,i,t,n)=>{for(var r=n>1?void 0:n?Po(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&To(i,t,r),r};let tt=class extends ge{constructor(){super(...arguments),this.versionService=new Xa,this.isChecking=!1}async connectedCallback(){super.connectedCallback(),await this.loadCurrentVersion()}async loadCurrentVersion(){try{await this.versionService.initialize();const e=this.versionService.getCurrentVersion();this.currentVersion=e?.version||"unknown",this.isPWA=this.versionService.isPWAMode()}catch(e){console.warn("Failed to load current version:",e)}}async handleCheckVersion(){this.isChecking=!0;try{const e=await this.versionService.checkForUpdates();this.lastCheckTime=new Date,e&&this.dispatchEvent(new CustomEvent("update-available",{bubbles:!0,composed:!0,detail:{hasUpdate:!0}}))}catch(e){console.error("Failed to check for updates:",e)}finally{this.isChecking=!1}}async handleForceReload(){try{await this.versionService.reloadWithCacheClear()}catch(e){console.error("Failed to reload:",e),window.location.reload()}}render(){const e=i=>i.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});return F`
+
+    .reload-icon {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    @media (max-width: 768px) {
+      .notification {
+        padding: 10px 16px;
+        text-align: center;
+      }
+      
+      .notification-content {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .notification-message {
+        font-size: 13px;
+      }
+      
+      .reload-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+    }
+  `;Ka([vt()],oi.prototype,"visible",2);oi=Ka([we("update-notification")],oi);class Xa{constructor(i=60*60*1e3,t="./version.json"){this.currentVersion=null,this.checkInterval=null,this.listeners=[],this.isPWA=!1,this.checkIntervalMs=i,this.versionEndpoint=t,this.detectPWAMode()}detectPWAMode(){this.isPWA=window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches||window.navigator.standalone===!0||document.referrer.includes("android-app://"),this.isPWA&&console.log("VersionService: Running in PWA mode")}async initialize(){try{this.currentVersion=await this.fetchVersionInfo(),console.log("Version service initialized:",this.currentVersion),this.startPeriodicCheck()}catch(i){console.warn("Failed to initialize version service:",i),this.currentVersion={version:"1.0.0",buildTime:new Date().toISOString(),hash:"unknown"}}}startPeriodicCheck(){this.checkInterval&&clearInterval(this.checkInterval),this.checkInterval=window.setInterval(async()=>{await this.checkForUpdates()},this.checkIntervalMs)}stopPeriodicCheck(){this.checkInterval&&(clearInterval(this.checkInterval),this.checkInterval=null)}async checkForUpdates(){try{const i=await this.fetchVersionInfo();return this.currentVersion&&this.hasNewVersion(this.currentVersion,i)?(this.notifyListeners(!0),!0):!1}catch(i){return console.warn("Failed to check for updates:",i),!1}}async fetchVersionInfo(){if("serviceWorker"in navigator&&navigator.serviceWorker.controller)try{const i=await this.fetchVersionViaServiceWorker();if(i)return i}catch(i){console.warn("Failed to fetch version via service worker, falling back to direct fetch:",i)}return this.fetchVersionDirect()}async fetchVersionViaServiceWorker(){return new Promise((i,t)=>{if(!navigator.serviceWorker.controller){t(new Error("No service worker controller"));return}const n=new MessageChannel;n.port1.onmessage=r=>{const{type:a,data:o,error:l}=r.data;a==="VERSION_INFO"?i(o):a==="VERSION_ERROR"&&t(new Error(l))},navigator.serviceWorker.controller.postMessage({type:"CHECK_VERSION"},[n.port2]),setTimeout(()=>{t(new Error("Service worker version check timeout"))},5e3)})}async fetchVersionDirect(){let i=this.versionEndpoint;window.location.origin==="https://gritsenko.biz"&&window.location.pathname.startsWith("/PlayableTools")&&(i="/PlayableTools/version.json");const t=await fetch(i,{method:"GET",headers:{"Cache-Control":"no-cache, no-store, must-revalidate",Pragma:"no-cache",Expires:"0"},cache:"no-store"});if(!t.ok)throw new Error(`Failed to fetch version info from ${i}: ${t.status}`);const n=await t.json();return console.log("Fetched version info:",n),n}hasNewVersion(i,t){return i.hash!==t.hash||i.buildTime!==t.buildTime?!0:i.version!==t.version}onUpdateAvailable(i){return this.listeners.push(i),()=>{const t=this.listeners.indexOf(i);t>-1&&this.listeners.splice(t,1)}}notifyListeners(i){this.listeners.forEach(t=>{try{t(i)}catch(n){console.error("Error in update listener:",n)}})}async reloadWithCacheClear(){try{await this.clearAllCaches(),await this.updateServiceWorker(),window.location.reload()}catch(i){console.error("Failed to clear caches:",i),window.location.reload()}}async updateServiceWorker(){if("serviceWorker"in navigator)try{const i=await navigator.serviceWorker.getRegistrations();for(const t of i)await t.update(),t.waiting&&t.waiting.postMessage({type:"SKIP_WAITING"})}catch(i){console.warn("Failed to update service worker:",i)}}async clearAllCaches(){const i=[];if("caches"in window&&i.push(caches.keys().then(t=>Promise.all(t.map(n=>(console.log(`Clearing cache: ${n}`),caches.delete(n)))))),"serviceWorker"in navigator&&navigator.serviceWorker.controller)try{navigator.serviceWorker.controller.postMessage({type:"CLEAR_CACHE"})}catch(t){console.warn("Failed to send clear cache message to service worker:",t)}try{localStorage.clear(),sessionStorage.clear()}catch(t){console.warn("Failed to clear storage:",t)}await Promise.all(i)}getCurrentVersion(){return this.currentVersion}isPWAMode(){return this.isPWA}destroy(){this.stopPeriodicCheck(),this.listeners=[]}}var To=Object.defineProperty,Po=Object.getOwnPropertyDescriptor,wi=(e,i,t,n)=>{for(var r=n>1?void 0:n?Po(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&To(i,t,r),r};let tt=class extends ge{constructor(){super(...arguments),this.versionService=new Xa,this.isChecking=!1}async connectedCallback(){super.connectedCallback(),await this.loadCurrentVersion()}async loadCurrentVersion(){try{await this.versionService.initialize();const e=this.versionService.getCurrentVersion();this.currentVersion=e?.version||"unknown",this.isPWA=this.versionService.isPWAMode()}catch(e){console.warn("Failed to load current version:",e)}}async handleCheckVersion(){this.isChecking=!0;try{const e=await this.versionService.checkForUpdates();this.lastCheckTime=new Date,e&&this.dispatchEvent(new CustomEvent("update-available",{bubbles:!0,composed:!0,detail:{hasUpdate:!0}}))}catch(e){console.error("Failed to check for updates:",e)}finally{this.isChecking=!1}}async handleForceReload(){try{await this.versionService.reloadWithCacheClear()}catch(e){console.error("Failed to reload:",e),window.location.reload()}}render(){const e=i=>i.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});return F`
       <div class="version-checker">
         <div class="version-info">
           v${this.currentVersion||"?"}${this.isPWA?" (PWA)":""}
@@ -649,7 +664,7 @@ ${await l.text()}
 ${a}
 `+t.slice(c)}else t=t.replace(/<\/head>/i,`${a}
 </head>`)}}else/<\/body>/i.test(t)?t=t.replace(/<\/body>/i,`${a}
-</body>`):t=t+a;return t}async processAllPlatforms(e,i){if(!i.outputDirectory)throw new Error("Output directory is required");const t=i.name||"Playable",n=i.suffix||"EN";let r=e,a=performance.now();this.globalDefaults.replaceTokens&&(r=this.applyReplaceTokens(r,this.globalDefaults.replaceTokens));let o=performance.now();console.log(`[PlayablePublishService] Global replaceTokens: ${(o-a).toFixed(2)} ms`);let l=this.config;i.selectedPlatforms&&Array.isArray(i.selectedPlatforms)&&i.selectedPlatforms.length>0&&(l=this.config.filter(d=>i.selectedPlatforms.includes(d.Name)));const f=l.length;let c=0;for(const d of l){const $=await this.createPlatformDirectory(i.outputDirectory,d.Name),k=await this.processHtml(r,d.Name,i),v=this.generateFileName(t,d.Name,n,d);d.format==="zip"?await this.createZipPackageToDirectory(k,v,$,d):await this.saveHtmlFileToDirectory(k,v,$),c++;const C=30+c/f*70;i.onProgress?.(C,d.Name)}}generateFileName(e,i,t,n){return n.OutputIndexHtmlName?n.OutputIndexHtmlName.includes("%name%")?n.OutputIndexHtmlName.replace("%name%",e):n.OutputIndexHtmlName:`${e}_${i}_${t}.html`}async createPlatformDirectory(e,i){try{const t=await e.getDirectoryHandle(i,{create:!0});return console.log(`Created/accessed directory: ${i}`),t}catch(t){throw new Error(`Failed to create platform directory ${i}: ${t}`)}}async saveHtmlFileToDirectory(e,i,t){let n=performance.now();try{const o=await(await t.getFileHandle(i,{create:!0})).createWritable();await o.write(e),await o.close();const l=(e.length/1024).toFixed(2);console.log(`Saved HTML file: ${i} (${l} KB)`)}catch(a){throw new Error(`Failed to save HTML file ${i}: ${a}`)}let r=performance.now();console.log(`[PlayablePublishService] Save HTML (${i}): ${(r-n).toFixed(2)} ms`)}async createZipPackageToDirectory(e,i,t,n){try{const r=(await Id(async()=>{const{default:U}=await import("./jszip.min-CbL4w7fO.js").then(D=>D.j);return{default:U}},[])).default,a=new r;if(a.file(i,e),n.ExtraFiles)for(const U of n.ExtraFiles)try{const D=`/publish-data/${U.from.replace("./","")}`,G=await fetch(D);if(G.ok){const z=await G.text();a.file(U.to.replace("./",""),z)}else console.warn(`Could not load extra file from: ${D}`)}catch(D){console.warn(`Could not load extra file: ${U.from}`,D)}let o=performance.now();const l=await a.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:3}}),f=new Blob([l],{type:"application/zip"});let c=performance.now();console.log(`[PlayablePublishService] Zipping (${i}): ${(c-o).toFixed(2)} ms`);let d=performance.now();const $=i.replace(".html",".zip"),v=await(await t.getFileHandle($,{create:!0})).createWritable();await v.write(f),await v.close();let C=performance.now();console.log(`[PlayablePublishService] Save ZIP (${$}): ${(C-d).toFixed(2)} ms`);const j=(f.size/1024).toFixed(2);console.log(`Saved ZIP file: ${$} (${j} KB)`)}catch(r){throw new Error(`Failed to create ZIP package ${i}: ${r}`)}}async requestOutputDirectory(){if("showDirectoryPicker"in window)try{const e=await window.showDirectoryPicker();return console.log(`Selected output directory: ${e.name}`),e}catch(e){throw e instanceof Error&&e.name==="AbortError"?new Error("Directory selection was cancelled"):new Error(`Failed to select directory: ${e}`)}else throw new Error("File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser.")}};Jr=Nd([nr(Et.Singleton)],Jr);var Zd=Object.defineProperty,Hd=(e,i,t,n)=>{for(var r=void 0,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=o(i,t,r)||r);return r&&Zd(i,t,r),r};class Gs extends ge{constructor(){super(...arguments),this.dragActive=!1,this.loadedFile=null,this.isPublishing=!1,this.publishProgress=0,this.currentPlatform=null,this.publishStartTime=null,this.publishElapsed=null,this.playableTitle="",this.googlePlayUrl="",this.appStoreUrl="",this.customSuffix="EN",this.outputDirectory="",this.availablePlatforms=[],this.selectedPlatforms=[],this.STORAGE_KEYS={playableTitle:"playable-publisher-title",googlePlayUrl:"playable-publisher-google-url",appStoreUrl:"playable-publisher-app-store-url",customSuffix:"playable-publisher-suffix",selectedPlatforms:"playable-publisher-selected-platforms"}}connectedCallback(){super.connectedCallback(),this.loadFromLocalStorage(),this.playablePublishService&&typeof this.playablePublishService.getAvailablePlatforms=="function"&&(this.availablePlatforms=this.playablePublishService.getAvailablePlatforms(),(!this.selectedPlatforms||this.selectedPlatforms.length===0)&&(this.selectedPlatforms=[...this.availablePlatforms]))}render(){return F`
+</body>`):t=t+a;return t}async processAllPlatforms(e,i){if(!i.outputDirectory)throw new Error("Output directory is required");const t=i.name||"Playable",n=i.suffix||"EN";let r=e,a=performance.now();this.globalDefaults.replaceTokens&&(r=this.applyReplaceTokens(r,this.globalDefaults.replaceTokens));let o=performance.now();console.log(`[PlayablePublishService] Global replaceTokens: ${(o-a).toFixed(2)} ms`);let l=this.config;i.selectedPlatforms&&Array.isArray(i.selectedPlatforms)&&i.selectedPlatforms.length>0&&(l=this.config.filter(d=>i.selectedPlatforms.includes(d.Name)));const f=l.length;let c=0;for(const d of l){const $=await this.createPlatformDirectory(i.outputDirectory,d.Name),k=await this.processHtml(r,d.Name,i),v=this.generateFileName(t,d.Name,n,d);d.format==="zip"?await this.createZipPackageToDirectory(k,v,$,d):await this.saveHtmlFileToDirectory(k,v,$),c++;const C=30+c/f*70;i.onProgress?.(C,d.Name)}}generateFileName(e,i,t,n){return n.OutputIndexHtmlName?n.OutputIndexHtmlName.includes("%name%")?n.OutputIndexHtmlName.replace("%name%",e):n.OutputIndexHtmlName:`${e}_${i}_${t}.html`}async createPlatformDirectory(e,i){try{const t=await e.getDirectoryHandle(i,{create:!0});return console.log(`Created/accessed directory: ${i}`),t}catch(t){throw new Error(`Failed to create platform directory ${i}: ${t}`)}}async saveHtmlFileToDirectory(e,i,t){let n=performance.now();try{const o=await(await t.getFileHandle(i,{create:!0})).createWritable();await o.write(e),await o.close();const l=(e.length/1024).toFixed(2);console.log(`Saved HTML file: ${i} (${l} KB)`)}catch(a){throw new Error(`Failed to save HTML file ${i}: ${a}`)}let r=performance.now();console.log(`[PlayablePublishService] Save HTML (${i}): ${(r-n).toFixed(2)} ms`)}async createZipPackageToDirectory(e,i,t,n){try{const r=(await Id(async()=>{const{default:U}=await import("./jszip.min-DvmN-EQj.js").then(D=>D.j);return{default:U}},[])).default,a=new r;if(a.file(i,e),n.ExtraFiles)for(const U of n.ExtraFiles)try{const D=`/publish-data/${U.from.replace("./","")}`,G=await fetch(D);if(G.ok){const z=await G.text();a.file(U.to.replace("./",""),z)}else console.warn(`Could not load extra file from: ${D}`)}catch(D){console.warn(`Could not load extra file: ${U.from}`,D)}let o=performance.now();const l=await a.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:3}}),f=new Blob([l],{type:"application/zip"});let c=performance.now();console.log(`[PlayablePublishService] Zipping (${i}): ${(c-o).toFixed(2)} ms`);let d=performance.now();const $=i.replace(".html",".zip"),v=await(await t.getFileHandle($,{create:!0})).createWritable();await v.write(f),await v.close();let C=performance.now();console.log(`[PlayablePublishService] Save ZIP (${$}): ${(C-d).toFixed(2)} ms`);const j=(f.size/1024).toFixed(2);console.log(`Saved ZIP file: ${$} (${j} KB)`)}catch(r){throw new Error(`Failed to create ZIP package ${i}: ${r}`)}}async requestOutputDirectory(){if("showDirectoryPicker"in window)try{const e=await window.showDirectoryPicker();return console.log(`Selected output directory: ${e.name}`),e}catch(e){throw e instanceof Error&&e.name==="AbortError"?new Error("Directory selection was cancelled"):new Error(`Failed to select directory: ${e}`)}else throw new Error("File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser.")}};Jr=Nd([nr(Et.Singleton)],Jr);var Zd=Object.defineProperty,Hd=(e,i,t,n)=>{for(var r=void 0,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=o(i,t,r)||r);return r&&Zd(i,t,r),r};class Gs extends ge{constructor(){super(...arguments),this.dragActive=!1,this.loadedFile=null,this.isPublishing=!1,this.publishProgress=0,this.currentPlatform=null,this.publishStartTime=null,this.publishElapsed=null,this.playableTitle="",this.googlePlayUrl="",this.appStoreUrl="",this.customSuffix="EN",this.outputDirectory="",this.availablePlatforms=[],this.selectedPlatforms=[],this.STORAGE_KEYS={playableTitle:"playable-publisher-title",googlePlayUrl:"playable-publisher-google-url",appStoreUrl:"playable-publisher-app-store-url",customSuffix:"playable-publisher-suffix",selectedPlatforms:"playable-publisher-selected-platforms"}}connectedCallback(){super.connectedCallback(),this.loadFromLocalStorage(),this.playablePublishService&&typeof this.playablePublishService.getAvailablePlatforms=="function"&&(this.availablePlatforms=this.playablePublishService.getAvailablePlatforms(),(!this.selectedPlatforms||this.selectedPlatforms.length===0)&&(this.selectedPlatforms=[...this.availablePlatforms]))}render(){return F`
       <div class="playable-publisher">
         <div style="margin-bottom:1.5rem">
           <strong>Publish Playable Ad</strong><br />
@@ -1107,7 +1122,7 @@ For best results, please use Chrome 86+, Edge 86+, or another browser that suppo
           Playable Ads Tools
         </span>
       </a>
-    `}};Fa=Jd([we("site-logo")],Fa);var Qd=Object.defineProperty,ef=Object.getOwnPropertyDescriptor,En=(e,i,t,n)=>{for(var r=n>1?void 0:n?ef(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&Qd(i,t,r),r};let bi=class extends So{constructor(){super(...arguments),this.sidebarOpen=!1,this.deferredPrompt=null}toggleSidebar(){this.sidebarOpen=!this.sidebarOpen}closeSidebar(){this.sidebarOpen=!1}connectedCallback(){super.connectedCallback(),window.addEventListener("beforeinstallprompt",e=>{const i=e;i.preventDefault(),this.deferredPrompt=i})}suggestPWAInstall(){this.deferredPrompt?(this.deferredPrompt.prompt(),this.deferredPrompt.userChoice.then(e=>{e.outcome==="accepted"?console.log("User accepted the install prompt"):console.log("User dismissed the install prompt"),this.deferredPrompt=null})):alert("The install prompt is not available. Please use the browser menu to install the app.")}handleUpdateAvailable(e){this.dispatchEvent(new CustomEvent("update-available",{bubbles:!0,composed:!0,detail:e.detail}))}render(){return F`
+    `}};Fa=Jd([we("site-logo")],Fa);var Qd=Object.defineProperty,ef=Object.getOwnPropertyDescriptor,En=(e,i,t,n)=>{for(var r=n>1?void 0:n?ef(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&Qd(i,t,r),r};let bi=class extends So{constructor(){super(...arguments),this.sidebarOpen=!1,this.deferredPrompt=null}toggleSidebar(){this.sidebarOpen=!this.sidebarOpen}closeSidebar(){this.sidebarOpen=!1}connectedCallback(){super.connectedCallback(),window.addEventListener("beforeinstallprompt",e=>{const i=e;i.preventDefault(),this.deferredPrompt=i})}suggestPWAInstall(){this.deferredPrompt?(this.deferredPrompt.prompt(),this.deferredPrompt.userChoice.then(e=>{e.outcome==="accepted"?console.log("User accepted the install prompt"):console.log("User dismissed the install prompt"),this.deferredPrompt=null})):alert("The install prompt is not available. Please use the browser menu to install the app.")}render(){return F`
       <!-- Responsive header for mobile -->
       <header class="main-header">
         <site-logo></site-logo>
@@ -1149,18 +1164,12 @@ For best results, please use Chrome 86+, Edge 86+, or another browser that suppo
             <button @click="${this.suggestPWAInstall}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--pico-muted-color);text-decoration:none;font-size:1rem;padding:0.5rem 0;border:none;background:none;cursor:pointer;">
               <img src="pwa.png" width="170" alt="PWA Badge" style="vertical-align:middle;"/>
             </button>
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--pico-muted-border-color);">
-              <version-checker @update-available=${this.handleUpdateAvailable}></version-checker>
-            </div>
           </div>
         </aside>
         <main class="main">${this.body}</main>
       </div>
-    `}};En([Ve({attribute:!1,type:Object})],bi.prototype,"body",2);En([Ve({type:Boolean})],bi.prototype,"sidebarOpen",2);bi=En([we("main-layout")],bi);var tf=Object.defineProperty,rf=Object.getOwnPropertyDescriptor,Vs=(e,i,t,n)=>{for(var r=n>1?void 0:n?rf(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&tf(i,t,r),r};let Qr=class extends ge{constructor(){super(...arguments),this.versionService=new Xa,this.updateAvailable=!1}async connectedCallback(){super.connectedCallback(),await this.initializeVersionService()}disconnectedCallback(){super.disconnectedCallback(),this.versionService.destroy()}async initializeVersionService(){try{await this.versionService.initialize(),this.versionService.onUpdateAvailable(e=>{this.updateAvailable=e,e&&this.showUpdateNotification()})}catch(e){console.warn("Failed to initialize version service:",e)}}showUpdateNotification(){this.requestUpdate(),requestAnimationFrame(()=>{const e=this.querySelector("update-notification");e?.show&&e.show()})}async handleReloadRequested(){try{await this.versionService.reloadWithCacheClear()}catch(e){console.error("Failed to reload app:",e),window.location.reload()}}handleManualUpdateCheck(e){e.detail?.hasUpdate&&(this.updateAvailable=!0,this.showUpdateNotification())}render(){return F`
-      <router-outlet 
-        .defaultLayout="${bi}" 
-        @update-available=${this.handleManualUpdateCheck}
-      ></router-outlet>
+    `}};En([Ve({attribute:!1,type:Object})],bi.prototype,"body",2);En([Ve({type:Boolean})],bi.prototype,"sidebarOpen",2);bi=En([we("main-layout")],bi);var tf=Object.defineProperty,rf=Object.getOwnPropertyDescriptor,Vs=(e,i,t,n)=>{for(var r=n>1?void 0:n?rf(i,t):i,a=e.length-1,o;a>=0;a--)(o=e[a])&&(r=(n?o(i,t,r):o(r))||r);return n&&r&&tf(i,t,r),r};let Qr=class extends ge{constructor(){super(...arguments),this.versionService=new Xa,this.updateAvailable=!1}async connectedCallback(){super.connectedCallback(),await this.initializeVersionService()}disconnectedCallback(){super.disconnectedCallback(),this.versionService.destroy()}async initializeVersionService(){try{await this.versionService.initialize(),this.versionService.onUpdateAvailable(e=>{this.updateAvailable=e,e&&this.showUpdateNotification()})}catch(e){console.warn("Failed to initialize version service:",e)}}showUpdateNotification(){this.requestUpdate(),requestAnimationFrame(()=>{const e=this.querySelector("update-notification");e?.show&&e.show()})}async handleReloadRequested(){try{await this.versionService.reloadWithCacheClear()}catch(e){console.error("Failed to reload app:",e),window.location.reload()}}render(){return F`
+      <router-outlet .defaultLayout="${bi}"></router-outlet>
       ${this.updateAvailable?F`
         <update-notification @reload-requested=${this.handleReloadRequested}></update-notification>
       `:""}
