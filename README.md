@@ -15,17 +15,6 @@ You can install it as a Progressive Web App (PWA) for offline access and a nativ
 <a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 
 
-# Build and run locally
-
-1. Install dependencies:
-   ```sh
-   npm install
-   ```
-2. Start the development server:
-   ```sh
-   npm run dev
-   ```
-
 ## Features
 - Vite for fast development
 - TypeScript for type safety
@@ -34,6 +23,17 @@ You can install it as a Progressive Web App (PWA) for offline access and a nativ
 - Progress tracking during publishing
 - Platform-specific CTA script injection
 - ZIP packaging for platforms that require it
+
+## Screenshots
+
+<p align="center">
+  <img src="media/app-screenshots/previewer.jpg" alt="Playable Previewer Screenshot" width="600"/>
+</p>
+
+<p align="center">
+  <img src="media/app-screenshots/base64.png" alt="Playable Previewer Screenshot" width="600"/>
+</p>
+
 
 ## Playable Publisher
 
@@ -64,6 +64,17 @@ The Playable Publisher tool allows you to:
 Output files follow the pattern: `{PlayableTitle}_{Platform}_{Suffix}.html`
 
 Example: `GoH_PBCustomHero3D_Facebook_EN.html`
+
+# Build and run locally
+
+1. Install dependencies:
+   ```sh
+   npm install
+   ```
+2. Start the development server:
+   ```sh
+   npm run dev
+   ```
 
 ### Testing
 
