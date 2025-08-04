@@ -1,0 +1,10 @@
+.portfolio-container {
+  padding: 2rem;
+}
+.playables-list {
+  margin-top: 2rem;
+}
+.playables-list ul {
+  list-style: disc;
+  margin-left: 2rem;
+}

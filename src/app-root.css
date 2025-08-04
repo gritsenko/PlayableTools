@@ -195,6 +195,11 @@ body {
   z-index: 1000;
 }
 
+/* override menu items spacing */
+aside li {
+    padding: calc(var(--pico-nav-element-spacing-vertical) * .33) var(--pico-nav-element-spacing-horizontal);
+}
+
 @media (max-width: 768px) {
   .layout {
     flex-direction: column;
