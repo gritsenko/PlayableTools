@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Facebook CTA Test</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial;
+        padding: 2rem;
+      }
+      .container {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      button {
+        padding: 0.6rem 1rem;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .note {
+        margin-top: 1rem;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Facebook CTA Test</h1>
+      <p>
+        Click the button below to trigger
+        <code>FbPlayableAd.onCTAClick()</code>. This page includes a lightweight
+        mock so it can be used locally.
+      </p>
+
+      <button id="ctaBtn" onclick="FbPlayableAd.onCTAClick()">
+        Call FbPlayableAd.onCTAClick()
+      </button>
+
+      <div class="note" id="result"></div>
+    </div>
+
+  </body>
+</html>

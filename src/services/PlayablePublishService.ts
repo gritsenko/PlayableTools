@@ -1,6 +1,7 @@
 import { injectable, ServiceLifetime } from "fw";
 import type { PlatformConfig, PlayableProcessOptions } from "./types";
 import { UrlUtils } from "../utils/url-utils";
+import { AsstesExtractor } from "../utils/AsstesExtractor";
 // @ts-ignore
 import platformsConfig from "../assets/platforms-config.json";
 
@@ -72,7 +73,11 @@ export class PlayablePublishService {
       resultHtml = this.applyReplaceTokens(resultHtml, platform.replaceTokens);
     }
     let t1 = performance.now();
-    console.log(`[PlayablePublishService] Platform replaceTokens (${platformName}): ${(t1-t0).toFixed(2)} ms`);
+    console.log(
+      `[PlayablePublishService] Platform replaceTokens (${platformName}): ${(
+        t1 - t0
+      ).toFixed(2)} ms`
+    );
 
     // Script injection stopwatch
     if (platform.InjeectScripts && Array.isArray(platform.InjeectScripts)) {
@@ -82,7 +87,11 @@ export class PlayablePublishService {
         platform.InjeectScripts
       );
       let t3 = performance.now();
-      console.log(`[PlayablePublishService] Script injection (${platformName}): ${(t3-t2).toFixed(2)} ms`);
+      console.log(
+        `[PlayablePublishService] Script injection (${platformName}): ${(
+          t3 - t2
+        ).toFixed(2)} ms`
+      );
     }
 
     // Output index.html name replacement
@@ -107,12 +116,14 @@ export class PlayablePublishService {
     if (!replaceTokens || Object.keys(replaceTokens).length === 0) return html;
 
     // Escape regex special chars in search tokens
-    const escapedTokens = Object.keys(replaceTokens).map(token => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const escapedTokens = Object.keys(replaceTokens).map((token) =>
+      token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    );
     // Build a regex that matches any token
     const regex = new RegExp(escapedTokens.join("|"), "g");
 
     // Replace using a single pass
-    return html.replace(regex, match => replaceTokens[match] ?? match);
+    return html.replace(regex, (match) => replaceTokens[match] ?? match);
   }
 
   /**
@@ -142,7 +153,9 @@ export class PlayablePublishService {
       }
     });
 
-    const scriptTags = (await Promise.all(scriptFetches)).filter(Boolean) as string[];
+    const scriptTags = (await Promise.all(scriptFetches)).filter(
+      Boolean
+    ) as string[];
 
     // Inject all script tags in order
     for (const scriptTag of scriptTags) {
@@ -152,8 +165,14 @@ export class PlayablePublishService {
           const headContent = headMatch[2];
           const firstScriptMatch = headContent.match(/<script[^>]*>/i);
           if (firstScriptMatch) {
-            const insertIndex = headMatch.index! + headMatch[1].length + headContent.indexOf(firstScriptMatch[0]);
-            result = result.slice(0, insertIndex) + `\n${scriptTag}\n` + result.slice(insertIndex);
+            const insertIndex =
+              headMatch.index! +
+              headMatch[1].length +
+              headContent.indexOf(firstScriptMatch[0]);
+            result =
+              result.slice(0, insertIndex) +
+              `\n${scriptTag}\n` +
+              result.slice(insertIndex);
           } else {
             result = result.replace(/<\/head>/i, `${scriptTag}\n</head>`);
           }
@@ -197,10 +216,17 @@ export class PlayablePublishService {
     let globalProcessedHtml = htmlContent;
     let t0 = performance.now();
     if (this.globalDefaults.replaceTokens) {
-      globalProcessedHtml = this.applyReplaceTokens(globalProcessedHtml, this.globalDefaults.replaceTokens);
+      globalProcessedHtml = this.applyReplaceTokens(
+        globalProcessedHtml,
+        this.globalDefaults.replaceTokens
+      );
     }
     let t1 = performance.now();
-    console.log(`[PlayablePublishService] Global replaceTokens: ${(t1-t0).toFixed(2)} ms`);
+    console.log(
+      `[PlayablePublishService] Global replaceTokens: ${(t1 - t0).toFixed(
+        2
+      )} ms`
+    );
 
     // Determine which platforms to process
     let platformsToProcess = this.config;
@@ -230,24 +256,37 @@ export class PlayablePublishService {
         platform.Name,
         options
       );
-      const fileName = this.generateFileName(
+      // Generate HTML file name (allow platform.OutputIndexHtmlName to override)
+      const htmlFileName = this.generateFileName(
         playableName,
         platform.Name,
         suffix,
-        platform
+        platform,
+        true
       );
+
+      // Generate ZIP file name: do NOT use OutputIndexHtmlName — always use default pattern and .zip extension
+      const zipBaseHtmlName = this.generateFileName(
+        playableName,
+        platform.Name,
+        suffix,
+        platform,
+        false
+      );
+      const zipFileName = zipBaseHtmlName.replace(/\.html$/i, ".zip");
 
       if (platform.format === "zip") {
         await this.createZipPackageToDirectory(
           processedHtml,
-          fileName,
+          htmlFileName,
+          zipFileName,
           platformDirHandle,
           platform
         );
       } else {
         await this.saveHtmlFileToDirectory(
           processedHtml,
-          fileName,
+          htmlFileName,
           platformDirHandle
         );
       }
@@ -265,9 +304,11 @@ export class PlayablePublishService {
     playableName: string,
     platformName: string,
     suffix: string,
-    platform: PlatformConfig
+    platform: PlatformConfig,
+    // When false, ignore platform.OutputIndexHtmlName and use default pattern (useful for ZIP naming)
+    useOutputIndexHtmlName: boolean = true
   ): string {
-    if (platform.OutputIndexHtmlName) {
+    if (useOutputIndexHtmlName && platform.OutputIndexHtmlName) {
       if (platform.OutputIndexHtmlName.includes("%name%")) {
         return platform.OutputIndexHtmlName.replace("%name%", playableName);
       }
@@ -322,7 +363,11 @@ export class PlayablePublishService {
       throw new Error(`Failed to save HTML file ${fileName}: ${error}`);
     }
     let tSaveEnd = performance.now();
-    console.log(`[PlayablePublishService] Save HTML (${fileName}): ${(tSaveEnd-tSaveStart).toFixed(2)} ms`);
+    console.log(
+      `[PlayablePublishService] Save HTML (${fileName}): ${(
+        tSaveEnd - tSaveStart
+      ).toFixed(2)} ms`
+    );
   }
 
   /**
@@ -330,7 +375,8 @@ export class PlayablePublishService {
    */
   private async createZipPackageToDirectory(
     htmlContent: string,
-    fileName: string,
+    htmlFileName: string,
+    zipFileName: string,
     directory: FileSystemDirectoryHandle,
     platform: PlatformConfig
   ): Promise<void> {
@@ -339,8 +385,25 @@ export class PlayablePublishService {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
-      // Add the main HTML file
-      zip.file(fileName, htmlContent);
+      // If platform requests script extraction, split inline scripts into separate files
+      if (platform.ExtractScripts) {
+        try {
+          const extracted = AsstesExtractor.extractScripts(htmlContent);
+          // Add processed HTML (with script src links) under the desired html filename
+          zip.file(htmlFileName, extracted.html);
+          // Add each extracted JS file
+          for (const [fileName, content] of Object.entries(extracted.files)) {
+            zip.file(fileName, content);
+          }
+        } catch (err) {
+          console.warn(`ExtractScripts failed for platform ${platform.Name}:`, err);
+          // Fallback: add original HTML
+          zip.file(htmlFileName, htmlContent);
+        }
+      } else {
+        // Add the main HTML file as-is
+        zip.file(htmlFileName, htmlContent);
+      }
 
       // Add extra files if specified
       if (platform.ExtraFiles) {
@@ -369,18 +432,25 @@ export class PlayablePublishService {
       const zipUint8 = await zip.generateAsync({
         type: "uint8array",
         compression: "DEFLATE",
-        compressionOptions: { level: 3 } // 1-3 is quick/good, 9 is max
+        compressionOptions: { level: 3 }, // 1-3 is quick/good, 9 is max
       });
-      // Use JSZip output directly for Blob (do NOT re-compress with Pako)
-      const zipBlob = new Blob([
-        zipUint8
-      ], { type: "application/zip" });
+  // Use JSZip output directly for Blob (do NOT re-compress with Pako)
+  // Ensure we pass an ArrayBuffer to Blob (zipUint8.buffer may be a SharedArrayBuffer-like in some envs)
+      // Convert Uint8Array to a standalone ArrayBuffer slice to satisfy Blob typing
+      const zipArrayBuffer = zipUint8.buffer.slice(
+        zipUint8.byteOffset,
+        zipUint8.byteOffset + zipUint8.byteLength
+      );
+  const zipBlob = new Blob([zipArrayBuffer as unknown as ArrayBuffer], { type: "application/zip" });
       let tZipEnd = performance.now();
-      console.log(`[PlayablePublishService] Zipping (${fileName}): ${(tZipEnd-tZipStart).toFixed(2)} ms`);
+      console.log(
+        `[PlayablePublishService] Zipping (${zipFileName}): ${(
+          tZipEnd - tZipStart
+        ).toFixed(2)} ms`
+      );
 
       // Save zip file to directory
       let tSaveStart = performance.now();
-      const zipFileName = fileName.replace(".html", ".zip");
       const fileHandle = await directory.getFileHandle(zipFileName, {
         create: true,
       });
@@ -388,12 +458,16 @@ export class PlayablePublishService {
       await writable.write(zipBlob);
       await writable.close();
       let tSaveEnd = performance.now();
-      console.log(`[PlayablePublishService] Save ZIP (${zipFileName}): ${(tSaveEnd-tSaveStart).toFixed(2)} ms`);
+      console.log(
+        `[PlayablePublishService] Save ZIP (${zipFileName}): ${(
+          tSaveEnd - tSaveStart
+        ).toFixed(2)} ms`
+      );
 
       const sizeKB = (zipBlob.size / 1024).toFixed(2);
       console.log(`Saved ZIP file: ${zipFileName} (${sizeKB} KB)`);
     } catch (error) {
-      throw new Error(`Failed to create ZIP package ${fileName}: ${error}`);
+      throw new Error(`Failed to create ZIP package ${zipFileName}: ${error}`);
     }
   }
 

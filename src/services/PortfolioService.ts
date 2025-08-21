@@ -16,8 +16,11 @@ export class PortfolioService {
    * For demo, returns stub data. Replace with real GitHub API logic as needed.
    */
   async getPlayables(repoUrl: string): Promise<string[]> {
-    // TODO: Use GitHub API to fetch folder structure and list playable ads
-    // For now, return stub data
+  // Reference variables to avoid unused variable TypeScript errors in this demo implementation
+  void this.githubToken;
+  void repoUrl;
+  // TODO: Use GitHub API to fetch folder structure and list playable ads
+  // For now, return stub data
     return [
       "Playable 1 (stub)",
       "Playable 2 (stub)",

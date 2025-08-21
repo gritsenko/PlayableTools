@@ -8,20 +8,28 @@
   "platforms": [
     {
       "Name": "Facebook",
-      "InjeectScripts": ["cta.Facebook.js"]
+      "InjeectScripts": ["cta.Facebook.js"],
+      "replaceTokens": {
+        "XMLHttpRequest": "_xrq_"
+      }
     },
     {
       "Name": "Moloco",
       "InjeectScripts": ["cta.Moloco.js"],
       "replaceTokens": {
-        "XMLHttpRequest": "XRQ"
+        "XMLHttpRequest": "_xrq_"
       }
     },
     {
       "Name": "Facebook_Zip",
       "format": "zip",
+      "OutputIndexHtmlName": "index.html",
+      "ExtractAssets": true,
       "ExtractScripts": true,
-      "InjeectScripts": ["cta.Facebook_Zip.js"]
+      "InjeectScripts": ["cta.Facebook_Zip.js"],
+      "replaceTokens": {
+        "XMLHttpRequest": "_xrq_"
+      }
     },
     {
       "Name": "Mintegral",

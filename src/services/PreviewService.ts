@@ -57,4 +57,23 @@ export class PreviewService {
     if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
     return await response.text();
   }
+
+  // In-memory uploaded HTML content (not persisted). When set, components can preview it.
+  private _uploadedContent: string | null = null;
+  private _uploadedListeners = new Set<(content: string | null) => void>();
+
+  setUploadedContent(content: string | null) {
+    this._uploadedContent = content;
+    for (const cb of Array.from(this._uploadedListeners)) cb(content);
+  }
+
+  getUploadedContent(): string | null {
+    return this._uploadedContent;
+  }
+
+  onUploadedContentChange(cb: (content: string | null) => void): () => void {
+    this._uploadedListeners.add(cb);
+    // return unsubscribe
+    return () => this._uploadedListeners.delete(cb);
+  }
 }
