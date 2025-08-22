@@ -19,3 +19,28 @@ export interface PlayableProcessOptions {
   onProgress?: (progress: number, platform?: string) => void;
   // Add more options as needed
 }
+
+export interface PreviewScript {
+  source: string;
+  position: 'beforeHeadEnd' | 'afterBodyStart' | 'beforeBodyEnd';
+}
+
+export interface PreviewPreset {
+  id: string;
+  name: string;
+  description: string;
+  maxFileSizeMB: number;
+  injectScripts: PreviewScript[];
+  replaceTokens: Record<string, string>;
+}
+
+export interface PreviewPresetsConfig {
+  presets: PreviewPreset[];
+}
+
+export interface PreviewServiceOptions {
+  preset?: PreviewPreset;
+  customMaxFileSizeMB?: number;
+  customInjectScripts?: PreviewScript[];
+  customReplaceTokens?: Record<string, string>;
+}

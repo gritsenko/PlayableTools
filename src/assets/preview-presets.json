@@ -1,0 +1,27 @@
+{
+  "presets": [
+    {
+      "id": "default",
+      "name": "Default Preview",
+      "description": "Standard preview without any ad network validation",
+      "maxFileSizeMB": 10,
+      "injectScripts": [],
+      "replaceTokens": {}
+    },
+    {
+      "id": "facebook",
+      "name": "Facebook Validator",
+      "description": "Facebook ad network validation with content security policies",
+      "maxFileSizeMB": 5,
+      "injectScripts": [
+        {
+          "source": "/fb_validator.js",
+          "position": "beforeHeadEnd"
+        }
+      ],
+      "replaceTokens": {
+        "XMLHttpRequest": "_xrq_"
+      }
+    }
+  ]
+}

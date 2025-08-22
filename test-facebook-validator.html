@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Playable</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+        }
+        .game-area {
+            background: rgba(0,0,0,0.2);
+            padding: 40px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .game-area:hover {
+            background: rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-area" onclick="handleClick()">
+        <h1>🎮 Test Playable Ad</h1>
+        <p>Click anywhere to trigger CTA!</p>
+        <p id="status">Facebook validator will be injected automatically</p>
+    </div>
+
+    <script>
+        function handleClick() {
+            console.log('Game clicked!');
+            document.getElementById('status').textContent = 'CTA triggered!';
+            
+            // This should work with Facebook validator
+            if (window.FbPlayableAd) {
+                window.FbPlayableAd.onCTAClick();
+                console.log('Facebook CTA called');
+            } else {
+                console.log('Facebook validator not loaded');
+            }
+        }
+
+        // Test if validator loaded
+        setTimeout(() => {
+            if (window.FbPlayableAd) {
+                document.getElementById('status').textContent = '✅ Facebook validator loaded!';
+            } else {
+                document.getElementById('status').textContent = '❌ No validator detected';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

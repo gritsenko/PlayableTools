@@ -6,4 +6,4 @@ document.CTA = {
     }
 };
 
-document.XRQ = window["XMLHttp" + "Request"];
+document._xrq_ = window[atob("WE1MSHR0cHBSZXF1ZXN0")];

@@ -1,5 +1,7 @@
 import { injectable } from "fw";
 import pako from "pako";
+import type { PreviewPreset, PreviewPresetsConfig } from "./types";
+import previewPresetsConfig from "../assets/preview-presets.json";
 
 @injectable()
 export class PreviewService {
@@ -55,12 +57,29 @@ export class PreviewService {
   async fetchRawContent(rawUrl: string): Promise<string> {
     const response = await fetch(rawUrl);
     if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
-    return await response.text();
+    const originalContent = await response.text();
+    
+    // Store original content and URL for preset switching
+    this._originalGithubContent = originalContent;
+    this._currentGithubUrl = rawUrl;
+    
+    // Process content with current preset
+    return await this.processContentWithPreset(originalContent);
   }
 
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
   private _uploadedContent: string | null = null;
   private _uploadedListeners = new Set<(content: string | null) => void>();
+  
+  // Store original content separately from processed content
+  private _originalUploadedContent: string | null = null;
+  private _originalGithubContent: string | null = null;
+  private _currentGithubUrl: string | null = null;
+  
+  // Preview preset configuration
+  private _currentPreset: PreviewPreset | null = null;
+  private _presetListeners = new Set<(preset: PreviewPreset | null) => void>();
+  private _presetsConfig: PreviewPresetsConfig = previewPresetsConfig as PreviewPresetsConfig;
 
   setUploadedContent(content: string | null) {
     this._uploadedContent = content;
@@ -78,33 +97,167 @@ export class PreviewService {
   }
 
   /**
+   * Gets all available preview presets
+   */
+  getAvailablePresets(): PreviewPreset[] {
+    return this._presetsConfig.presets;
+  }
+
+  /**
+   * Gets the default preset (first one)
+   */
+  getDefaultPreset(): PreviewPreset {
+    return this._presetsConfig.presets[0];
+  }
+
+  /**
+   * Gets preset by ID
+   */
+  getPresetById(id: string): PreviewPreset | null {
+    return this._presetsConfig.presets.find(p => p.id === id) || null;
+  }
+
+  /**
+   * Sets the current preview preset
+   */
+  setCurrentPreset(preset: PreviewPreset | null): void {
+    const previousPreset = this._currentPreset?.name || 'none';
+    console.log(`🔄 PreviewService: Changing preset from "${previousPreset}" to "${preset?.name || 'none'}"`);
+    
+    this._currentPreset = preset;
+    for (const cb of Array.from(this._presetListeners)) cb(preset);
+    
+    console.log(`✅ PreviewService: Preset change completed, notified ${this._presetListeners.size} listeners`);
+  }
+
+  /**
+   * Gets the current preview preset
+   */
+  getCurrentPreset(): PreviewPreset | null {
+    return this._currentPreset || this.getDefaultPreset();
+  }
+
+  /**
+   * Subscribe to preset changes
+   */
+  onPresetChange(cb: (preset: PreviewPreset | null) => void): () => void {
+    this._presetListeners.add(cb);
+    return () => this._presetListeners.delete(cb);
+  }
+
+  /**
+   * Processes HTML content with the current preset settings
+   */
+  private async processContentWithPreset(content: string, preset?: PreviewPreset): Promise<string> {
+    const activePreset = preset || this.getCurrentPreset();
+    if (!activePreset) return content;
+
+    console.log('Processing content with preset:', activePreset.name);
+    let processedContent = content;
+
+    // Apply token replacements
+    for (const [find, replace] of Object.entries(activePreset.replaceTokens)) {
+      const regex = new RegExp(find, 'g');
+      const matches = processedContent.match(regex);
+      if (matches) {
+        console.log(`Replacing ${matches.length} occurrences of "${find}" with "${replace}"`);
+        processedContent = processedContent.replace(regex, replace);
+      }
+    }
+
+    // Inject scripts
+    for (const script of activePreset.injectScripts) {
+      try {
+        console.log(`📜 Injecting script from ${script.source} at position ${script.position}`);
+        const startTime = performance.now();
+        
+        const scriptContent = await this.loadScriptContent(script.source);
+        const loadTime = performance.now() - startTime;
+        console.log(`📥 Script loaded in ${loadTime.toFixed(2)}ms (${scriptContent.length} chars)`);
+        
+        processedContent = this.injectScript(processedContent, scriptContent, script.position);
+        const totalTime = performance.now() - startTime;
+        console.log(`✅ Script injection completed in ${totalTime.toFixed(2)}ms`);
+      } catch (error) {
+        console.warn(`❌ Failed to inject script ${script.source}:`, error);
+      }
+    }
+
+    return processedContent;
+  }
+
+  /**
+   * Loads script content from a URL or path
+   */
+  private async loadScriptContent(source: string): Promise<string> {
+    // If source starts with '/', it's relative to the domain root
+    const fullUrl = source.startsWith('/') ? `${window.location.origin}${source}` : source;
+    console.log(`Loading script from: ${fullUrl}`);
+    
+    const response = await fetch(fullUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to load script: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  }
+
+  /**
+   * Injects script content at the specified position in HTML
+   */
+  private injectScript(html: string, scriptContent: string, position: string): string {
+    const scriptTag = `<script>\n${scriptContent}\n</script>`;
+    
+    switch (position) {
+      case 'beforeHeadEnd':
+        return html.replace(/<\/head>/i, `${scriptTag}\n</head>`);
+      case 'afterBodyStart':
+        return html.replace(/<body[^>]*>/i, match => `${match}\n${scriptTag}`);
+      case 'beforeBodyEnd':
+        return html.replace(/<\/body>/i, `${scriptTag}\n</body>`);
+      default:
+        console.warn(`Unknown script injection position: ${position}`);
+        return html;
+    }
+  }
+
+  /**
    * Handles file upload from user's PC and reads HTML content
    */
   async handleFileUpload(file: File): Promise<string> {
+    const preset = this.getCurrentPreset();
+    
     // Validate file type
     if (!this.isValidHtmlFile(file)) {
       throw new Error('Please select a valid HTML file (.html, .htm)');
     }
 
-    // Validate file size (limit to 10MB)
-    const maxSizeInMB = 10;
+    // Validate file size using preset limits
+    const maxSizeInMB = preset?.maxFileSizeMB || 10;
     const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
     if (file.size > maxSizeInBytes) {
-      throw new Error(`File size must be less than ${maxSizeInMB}MB`);
+      throw new Error(`File size must be less than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
     }
 
     try {
-      const content = await this.readFileAsText(file);
+      const originalContent = await this.readFileAsText(file);
       
       // Basic HTML validation
-      if (!this.isValidHtmlContent(content)) {
+      if (!this.isValidHtmlContent(originalContent)) {
         throw new Error('The file does not appear to contain valid HTML content');
       }
 
-      // Set the uploaded content so components can access it
-      this.setUploadedContent(content);
+      // Store original content for preset switching
+      this._originalUploadedContent = originalContent;
+      this._originalGithubContent = null; // Clear GitHub content when uploading
+      this._currentGithubUrl = null;
+
+      // Process content with current preset
+      const processedContent = await this.processContentWithPreset(originalContent, preset || undefined);
+
+      // Set the processed content so components can access it
+      this.setUploadedContent(processedContent);
       
-      return content;
+      return processedContent;
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -165,6 +318,37 @@ export class PreviewService {
    */
   clearUploadedContent(): void {
     this.setUploadedContent(null);
+    this._originalUploadedContent = null;
+    this._originalGithubContent = null;
+    this._currentGithubUrl = null;
+    console.log(`🧹 Cleared all content (processed and original)`);
+  }
+
+  /**
+   * Reloads current content with a different preset
+   */
+  async reloadContentWithPreset(preset: PreviewPreset): Promise<void> {
+    console.log(`🔄 Reloading content with preset: ${preset.name}`);
+    
+    this.setCurrentPreset(preset);
+    
+    // If we have original uploaded content, reprocess it
+    if (this._originalUploadedContent) {
+      console.log(`📁 Reprocessing uploaded content with ${preset.name} preset`);
+      const processedContent = await this.processContentWithPreset(this._originalUploadedContent, preset);
+      this.setUploadedContent(processedContent);
+      return;
+    }
+    
+    // If we have original GitHub content, reprocess it
+    if (this._originalGithubContent) {
+      console.log(`🔗 Reprocessing GitHub content with ${preset.name} preset`);
+      const processedContent = await this.processContentWithPreset(this._originalGithubContent, preset);
+      this.setUploadedContent(processedContent);
+      return;
+    }
+    
+    console.log(`⚠️ No original content available to reprocess`);
   }
 
   /**
@@ -176,5 +360,12 @@ export class PreviewService {
       hasContent: content !== null,
       size: content ? new Blob([content]).size : undefined
     };
+  }
+
+  /**
+   * Checks if we have original content that can be reprocessed
+   */
+  hasOriginalContent(): boolean {
+    return this._originalUploadedContent !== null || this._originalGithubContent !== null;
   }
 }

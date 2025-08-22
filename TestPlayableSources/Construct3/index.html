@@ -6,6 +6,8 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 	
 	<!-- Made with Construct, the game and app creator :: https://www.construct.net -->
+	
+
 <style>
 html, body {
 	padding: 0;
@@ -124,16 +126,16 @@ html[ioswebview] .c3htmlwrap > * {
 }
 </style>
 
-
-
 </head> 
  
 <body>
-	<script>
-		debugger;
-		document.createElement = createElementBackup;
-	</script>	
+
 <script>
+	if (typeof createElementBackup !== "undefined" && createElementBackup)
+    	document.createElement = createElementBackup;
+	if (typeof origFetch !== "undefined" && origFetch)
+    	window.fetch = origFetch;
+
 self.c3_base64files = {
 	"scripts/c3main.js": {
 		"type": "application/javascript",
@@ -149,7 +151,7 @@ self.c3_base64files = {
 	},
 	"data.json": {
 		"type": "application/json",
-		"str": "{\"project\":[\"FacbookAdTest\",null,[[[0,false,true,true,true,false,false,true,false,false,true,true,true,true,false,false,true,true,false,1,\"Button\",\"\"]],[]],[[\"Button\",0,false,[],0,0,null,null,[],false,false,162488339599565,[],null,0,null]],[],[[\"Layout 1\",960,1280,false,false,0.5,0.5,\"Event sheet 1\",486643056058422,[[\"Layer 0\",0,255769400201226,true,[255,255,255],false,1,1,1,false,false,1,0,true,[[[195,292,0,72,24,0,0,[1,1,1,1],0,0,0,0,[],null,null,null,[\"\",\"\"]],0,2,[],[],[0,\"Call CTA\",\"\",true,true,true,false,\"\",\"\"],\"\"]],[],0,true,false,false,[]]],[],[]]],[[\"Event sheet 1\",[[0,0,false,null,120410098577507,1,[[0,1,null,1,false,false,false,335093707920922,null]],[[-3,2,[false,false,0]]]]]]],[],\"media/\",false,480,640,4,false,\"trilinear\",false,\"1.0.0.0\",false,false,3,1,3,false,true,1,true,0.7853981633974483,[],\"icons/\",[],\"normalized\",\"wigccxi00ep\",\"fonts/\",[[\"Timeline 1\",5,0.1,\"default\",\"default\",[],0,0,1,\"\",1,1]],\"low-power\",[],1755786158459,\"vsync\",\"\",\"icons/loading-logo.png\",false,4,false,null,[],\"folders\",1,10000,false,[[\"Flowchart 1\",[]]],\"auto\"]}"
+		"str": "{\"project\":[\"FacbookAdTest\",null,[[[0,false,true,true,true,false,false,true,false,false,true,true,true,true,false,false,true,true,false,1,\"Button\",\"\"]],[]],[[\"Button\",0,false,[],0,0,null,null,[],false,false,162488339599565,[],null,0,null]],[],[[\"Layout 1\",960,1280,false,false,0.5,0.5,\"Event sheet 1\",486643056058422,[[\"Layer 0\",0,255769400201226,true,[255,255,255],false,1,1,1,false,false,1,0,true,[[[195,292,0,72,24,0,0,[1,1,1,1],0,0,0,0,[],null,null,null,[\"\",\"\"]],0,2,[],[],[0,\"Call CTA\",\"\",true,true,true,false,\"\",\"\"],\"\"]],[],0,true,false,false,[]]],[],[]]],[[\"Event sheet 1\",[[0,0,false,null,120410098577507,1,[[0,1,null,1,false,false,false,335093707920922,null]],[[-3,2,[false,false,0]]]]]]],[],\"media/\",false,480,640,4,false,\"trilinear\",false,\"1.0.0.0\",false,false,3,1,3,false,true,1,true,0.7853981633974483,[],\"icons/\",[],\"normalized\",\"wigccxi00ep\",\"fonts/\",[[\"Timeline 1\",5,0.1,\"default\",\"default\",[],0,0,1,\"\",1,1]],\"low-power\",[],1755855905288,\"vsync\",\"\",\"icons/loading-logo.png\",false,4,false,null,[],\"folders\",1,10000,false,[[\"Flowchart 1\",[]]],\"auto\"]}"
 	}
 };
 </script>
@@ -188,5 +190,7 @@ self.c3_base64files = {
 "use strict";if(window["C3_IsSupported"]){const e=false;window["c3_runtimeInterface"]=new self.RuntimeInterface({useWorker:e,workerMainUrl:"workermain.js",runtimeScriptList:["scripts/c3main.js"],scriptFolder:"scripts/",exportType:"playable-ad-single-file"})}
 
 </script>
+
+
 </body> 
 </html>

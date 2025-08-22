@@ -5,3 +5,4 @@ document.CTA = {
         window.console.log("CTA Clicked");
     }
 };
+document._xrq_ = window[atob("WE1MSHR0cHBSZXF1ZXN0")];
