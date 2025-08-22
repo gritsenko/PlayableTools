@@ -76,4 +76,105 @@ export class PreviewService {
     // return unsubscribe
     return () => this._uploadedListeners.delete(cb);
   }
+
+  /**
+   * Handles file upload from user's PC and reads HTML content
+   */
+  async handleFileUpload(file: File): Promise<string> {
+    // Validate file type
+    if (!this.isValidHtmlFile(file)) {
+      throw new Error('Please select a valid HTML file (.html, .htm)');
+    }
+
+    // Validate file size (limit to 10MB)
+    const maxSizeInMB = 10;
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+    if (file.size > maxSizeInBytes) {
+      throw new Error(`File size must be less than ${maxSizeInMB}MB`);
+    }
+
+    try {
+      const content = await this.readFileAsText(file);
+      
+      // Basic HTML validation
+      if (!this.isValidHtmlContent(content)) {
+        throw new Error('The file does not appear to contain valid HTML content');
+      }
+
+      // Set the uploaded content so components can access it
+      this.setUploadedContent(content);
+      
+      return content;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to read the uploaded file');
+    }
+  }
+
+  /**
+   * Validates if the file is an HTML file based on extension
+   */
+  private isValidHtmlFile(file: File): boolean {
+    const validExtensions = ['.html', '.htm'];
+    const fileName = file.name.toLowerCase();
+    return validExtensions.some(ext => fileName.endsWith(ext));
+  }
+
+  /**
+   * Reads a file as text using FileReader
+   */
+  private readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (typeof result === 'string') {
+          resolve(result);
+        } else {
+          reject(new Error('Failed to read file as text'));
+        }
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('Error reading file'));
+      };
+      
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  /**
+   * Basic validation to check if content contains HTML
+   */
+  private isValidHtmlContent(content: string): boolean {
+    const trimmedContent = content.trim();
+    if (trimmedContent.length === 0) {
+      return false;
+    }
+    
+    // Check for basic HTML structure
+    const hasHtmlTags = /<html|<!DOCTYPE|<head|<body|<div|<script|<style/i.test(trimmedContent);
+    return hasHtmlTags;
+  }
+
+  /**
+   * Clears the uploaded content
+   */
+  clearUploadedContent(): void {
+    this.setUploadedContent(null);
+  }
+
+  /**
+   * Gets file info for uploaded content
+   */
+  getUploadedFileInfo(): { hasContent: boolean; size?: number } {
+    const content = this.getUploadedContent();
+    return {
+      hasContent: content !== null,
+      size: content ? new Blob([content]).size : undefined
+    };
+  }
 }

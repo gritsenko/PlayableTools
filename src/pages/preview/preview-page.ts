@@ -40,6 +40,9 @@ export class PreviewPage extends ComponentBase {
   isEncoded: boolean = false;
   linkCopied: boolean = false;
   copyTimeout?: number;
+  uploadedFileName: string = "";
+  uploadError: string = "";
+  isUploading: boolean = false;
 
   connectedCallback() {
     super.connectedCallback();
@@ -169,7 +172,52 @@ export class PreviewPage extends ComponentBase {
     }
   }
 
+  async handleFileUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    
+    if (!file) return;
+
+    this.isUploading = true;
+    this.uploadError = "";
+    this.uploadedFileName = "";
+    
+    // Clear any existing GitHub URL state when uploading
+    this.isEncoded = false;
+    this.decodedUrl = "";
+    this._encodedUrlInternal = undefined;
+    
+    // Clear URL from browser history
+    window.history.pushState({}, "", window.location.pathname + "#preview");
+    
+    this.requestUpdate();
+
+    try {
+      await this.previewService.handleFileUpload(file);
+      this.uploadedFileName = file.name;
+    } catch (err: any) {
+      this.uploadError = err.message || String(err);
+    }
+
+    this.isUploading = false;
+    this.requestUpdate();
+    
+    // Clear the input so the same file can be selected again
+    input.value = '';
+  }
+
+  clearUploadedContent() {
+    this.previewService.clearUploadedContent();
+    this.uploadedFileName = "";
+    this.uploadError = "";
+    this.requestUpdate();
+  }
+
   render() {
+    const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
+    const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
+    const showInputSections = !hasContent;
+
     return html`
       <div class="preview-container">
         <div style="display: flex; align-items: center; gap: 1em;">
@@ -184,18 +232,40 @@ export class PreviewPage extends ComponentBase {
                 </button>
               `
             : null}
+          ${hasContent
+            ? html`
+                <button
+                  @click=${() => {
+                    // Clear all content and return to input mode
+                    this.previewService.clearUploadedContent();
+                    this.uploadedFileName = "";
+                    this.uploadError = "";
+                    this.isEncoded = false;
+                    this.decodedUrl = "";
+                    this._encodedUrlInternal = undefined;
+                    window.history.pushState({}, "", window.location.pathname + "#preview");
+                    this.requestUpdate();
+                  }}
+                  style="background: #ff6b6b; color: white; border: none; padding: 0.5em 1em; border-radius: 4px; cursor: pointer;"
+                >
+                  Load New Content
+                </button>
+              `
+            : null}
         </div>
-        ${!this.isEncoded
+        
+        ${showInputSections
           ? html`
               <div style="margin: 1em 0; color: #555;">
                 <p>
-                  This page lets you share playable ads from a public GitHub repository and preview them on different devices and orientations.<br />
+                  This page lets you preview playable ads from either a public GitHub repository or by uploading an HTML file directly.<br />
                 </p>
                 <p>
-                  Paste the URL of your playable ad hosted on GitHub below, then click <b>Load</b> to preview and share the link. Use the <b>Share</b> button to copy a direct preview link.
+                  <b>Option 1:</b> Paste a GitHub URL below to preview and create shareable links.<br />
+                  <b>Option 2:</b> Upload an HTML file from your computer for immediate preview.
                 </p>
                 <details style="margin-top: 1em;">
-                  <summary style="cursor: pointer; font-weight: bold; color: #1976d2;">Show sample playable URL</summary>
+                  <summary style="cursor: pointer; font-weight: bold; color: #1976d2;">Show sample GitHub URL</summary>
                   <div style="margin: 0.5em 0 0 1em;">
                     <div style="display: flex; align-items: center; gap: 0.5em;">
                       <code style="background: #f5f5f5; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.95em;">https://github.com/gritsenko/playables/blob/main/Customize3d/index.html</code>
@@ -212,47 +282,91 @@ export class PreviewPage extends ComponentBase {
                   </div>
                 </details>
               </div>
-            `
-          : null}
-        <div class="preview-controls" style="margin-bottom: 1.5em;">
-          ${!this.isEncoded
-            ? html`
-                <input
-                  type="text"
-                  placeholder="Paste GitHub playable URL..."
-                  .value=${this.decodedUrl}
-                  @input=${this.handleInput.bind(this)}
-                  style="width: 400px;"
-                />
-                <button @click=${this.handleLoad.bind(this)} style="margin-left: 0.5em;">Load</button>
-              `
-            : null}
-        </div>
-        ${!this.isEncoded && this.recentUrls.length > 0
-          ? html`
-              <div style="margin-top: 0.5em;">
-                <h3 style="margin-bottom: 0.5em; font-size: 1.1em; color: #1976d2;">Recent Playable URLs</h3>
-                <div>
-                  ${this.recentUrls.map(
-                    url => html`
-                      <div style="margin-bottom: 0.5em;">
-                        <button
-                          style="width: 100%; display: flex; align-items: center; justify-content: space-between; background: #f5f5f5; color: #222; border: none; border-radius: 4px; padding: 0.4em 0.8em; font-size: 0.95em; cursor: pointer; text-align: left;"
-                          @click=${() => {
-                            this.decodedUrl = url;
-                            this.handleLoad();
-                          }}
-                        >
-                          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${url}</span>
-                          <span style="margin-left: 1em; color: #1976d2; font-weight: bold;">Preview</span>
-                        </button>
-                      </div>
-                    `
-                  )}
+
+              <!-- File Upload Section -->
+              <div class="upload-section" style="margin-bottom: 1.5em; padding: 1em; border: 2px dashed #ddd; border-radius: 8px; background: #f9f9f9;">
+                <h3 style="margin-top: 0; margin-bottom: 1em; color: #1976d2;">
+                  📁 Upload HTML File
+                </h3>
+                
+                <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 1em;">
+                  <input 
+                    type="file" 
+                    accept=".html,.htm" 
+                    @change="${this.handleFileUpload}"
+                    style="padding: 0.5em;"
+                    ?disabled="${this.isUploading}"
+                  />
+                  
+                  ${this.isUploading ? html`
+                    <div style="display: flex; align-items: center; gap: 0.5em; color: #1976d2;">
+                      <div style="width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #1976d2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                      <span>Uploading...</span>
+                    </div>
+                  ` : ''}
+                </div>
+                
+                ${this.uploadError ? html`
+                  <div style="color: red; margin-bottom: 1em; padding: 0.5em; background: #ffe6e6; border-radius: 4px;">
+                    ${this.uploadError}
+                  </div>
+                ` : ''}
+                
+                <div style="font-size: 0.9em; color: #666;">
+                  <p style="margin: 0;">
+                    • Supported formats: .html, .htm<br />
+                    • Maximum file size: 10MB<br />
+                    • Files are processed locally and not stored on our servers
+                  </p>
                 </div>
               </div>
+
+              <!-- GitHub URL Section -->
+              <div class="github-section" style="margin-bottom: 1.5em; padding: 1em; border: 2px dashed #ddd; border-radius: 8px; background: #f0f8ff;">
+                <h3 style="margin-top: 0; margin-bottom: 1em; color: #1976d2;">
+                  🔗 Load from GitHub
+                </h3>
+                
+                <div class="preview-controls">
+                  <input
+                    type="text"
+                    placeholder="Paste GitHub playable URL..."
+                    .value=${this.decodedUrl}
+                    @input=${this.handleInput.bind(this)}
+                    style="width: 400px; padding: 0.5em;"
+                  />
+                  <button @click=${this.handleLoad.bind(this)} style="margin-left: 0.5em; padding: 0.5em 1em;">Load</button>
+                </div>
+              </div>
+
+              ${this.recentUrls.length > 0
+                ? html`
+                    <div style="margin-bottom: 1.5em;">
+                      <h3 style="margin-bottom: 0.5em; font-size: 1.1em; color: #1976d2;">Recent GitHub URLs</h3>
+                      <div>
+                        ${this.recentUrls.map(
+                          url => html`
+                            <div style="margin-bottom: 0.5em;">
+                              <button
+                                style="width: 100%; display: flex; align-items: center; justify-content: space-between; background: #f5f5f5; color: #222; border: none; border-radius: 4px; padding: 0.4em 0.8em; font-size: 0.95em; cursor: pointer; text-align: left;"
+                                @click=${() => {
+                                  this.decodedUrl = url;
+                                  this.handleLoad();
+                                }}
+                              >
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${url}</span>
+                                <span style="margin-left: 1em; color: #1976d2; font-weight: bold;">Preview</span>
+                              </button>
+                            </div>
+                          `
+                        )}
+                      </div>
+                    </div>
+                  `
+                : null}
             `
           : null}
+          
         <div
           class="preview-frame"
           style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"
@@ -261,8 +375,18 @@ export class PreviewPage extends ComponentBase {
             ? html`<playable-previewer
                 githubUrl="${this.decodedUrl}"
               ></playable-previewer>`
+            : hasUploadedContent || this.uploadedFileName
+            ? html`<playable-previewer></playable-previewer>`
             : null}
         </div>
+        
+        <!-- CSS Animation for spinner -->
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
       </div>
     `;
   }

@@ -11,6 +11,7 @@ export class PlayablePreviewer extends ComponentBase {
   pageContent: string = "";
   loading: boolean = true;
   error: string = "";
+  private uploadedContentUnsubscribe?: () => void;
 
   devices = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -28,26 +29,61 @@ export class PlayablePreviewer extends ComponentBase {
   selectedDeviceIdx: number = 2;
   isPortrait: boolean = true;
 
-  async updated(changedProps: Map<string, any>) {
-    if (changedProps.has("githubUrl") && this.githubUrl) {
-      this.loading = true;
-      this.error = "";
-      this.pageContent = "";
-      const rawUrl = this.previewService.githubToRawUrl(this.githubUrl);
-      if (!rawUrl) {
-        this.error = "Invalid GitHub URL";
+  connectedCallback() {
+    super.connectedCallback();
+    // Subscribe to uploaded content changes
+    this.uploadedContentUnsubscribe = this.previewService.onUploadedContentChange((content) => {
+      if (content) {
+        this.pageContent = content;
         this.loading = false;
+        this.error = "";
         this.requestUpdate();
-        return;
       }
-      try {
-        this.pageContent = await this.previewService.fetchRawContent(rawUrl);
-      } catch (err: any) {
-        this.error = err.message || String(err);
-      }
+    });
+    
+    // Check if there's already uploaded content
+    const existingContent = this.previewService.getUploadedContent();
+    if (existingContent) {
+      this.pageContent = existingContent;
       this.loading = false;
       this.requestUpdate();
     }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.uploadedContentUnsubscribe) {
+      this.uploadedContentUnsubscribe();
+    }
+  }
+
+  async updated(changedProps: Map<string, any>) {
+    if (changedProps.has("githubUrl") && this.githubUrl) {
+      await this.loadFromGithub();
+    }
+  }
+
+  private async loadFromGithub() {
+    this.loading = true;
+    this.error = "";
+    this.pageContent = "";
+    
+    const rawUrl = this.previewService.githubToRawUrl(this.githubUrl);
+    if (!rawUrl) {
+      this.error = "Invalid GitHub URL";
+      this.loading = false;
+      this.requestUpdate();
+      return;
+    }
+    
+    try {
+      this.pageContent = await this.previewService.fetchRawContent(rawUrl);
+    } catch (err: any) {
+      this.error = err.message || String(err);
+    }
+    
+    this.loading = false;
+    this.requestUpdate();
   }
 
   get selectedDevice() {
@@ -69,8 +105,10 @@ export class PlayablePreviewer extends ComponentBase {
     const device = this.selectedDevice;
     const width = this.isPortrait ? device.width : device.height;
     const height = this.isPortrait ? device.height : device.width;
+    
     return html`
-      <div class="device-controls" style="margin-bottom: 1em; margin-top: 1em; display: flex; align-items: center; gap: 1em;">
+      <!-- Device Controls -->
+      <div class="device-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em;">
         <select @change="${this.handleDeviceChange.bind(this)}" style="margin-bottom: 0;">
           ${this.devices.map((d, i) =>
             d.disabled
@@ -82,6 +120,8 @@ export class PlayablePreviewer extends ComponentBase {
           ${this.isPortrait ? "Portrait" : "Landscape"}
         </button>
       </div>
+      
+      <!-- Preview Frame -->
       <div class="phone-simulator">
         <div class="phone-simulator-bg">
           <div class="phone-frame" style="width:${width}px; height:${height}px;">
@@ -89,18 +129,24 @@ export class PlayablePreviewer extends ComponentBase {
               ? html`
                   <div class="spinner-container">
                     <div class="spinner"></div>
-                    <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">Loading playable content...</div>
+                    <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">
+                      Loading playable content...
+                    </div>
                   </div>
                 `
               : this.error
-              ? html`<div style="color: red;">${this.error}</div>`
-              : html`<iframe
+              ? html`<div style="color: red; padding: 1em;">${this.error}</div>`
+              : this.pageContent
+              ? html`<iframe
                   srcdoc="${this.pageContent}"
                   class="playable-iframe"
                   frameborder="0"
                   allowfullscreen
                   style="width:100%; height:100%; border:none;"
-                ></iframe>`}
+                ></iframe>`
+              : html`<div style="padding: 1em; color: #666; text-align: center;">
+                  Ready to preview content.
+                </div>`}
           </div>
         </div>
       </div>

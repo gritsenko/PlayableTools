@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Playable</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .playable-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2em;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .cta-button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            background: #ff5252;
+            transform: scale(1.05);
+        }
+        
+        .game-area {
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .game-area:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(5deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="playable-container">
+        <h1>🎮 Test Playable Ad</h1>
+        <p>This is a sample playable ad for testing the upload functionality!</p>
+        
+        <div class="game-area" onclick="playGame()">
+            <span id="gameText">Click to Play!</span>
+        </div>
+        
+        <button class="cta-button" onclick="downloadApp()">
+            Download Now!
+        </button>
+        
+        <p><small>Score: <span id="score">0</span></small></p>
+    </div>
+
+    <script>
+        let score = 0;
+        
+        function playGame() {
+            score++;
+            document.getElementById('score').textContent = score;
+            document.getElementById('gameText').textContent = `Score: ${score}`;
+            
+            if (score >= 5) {
+                document.getElementById('gameText').textContent = '🎉 Amazing!';
+                setTimeout(() => {
+                    downloadApp();
+                }, 1000);
+            }
+        }
+        
+        function downloadApp() {
+            // In a real playable ad, this would redirect to the app store
+            alert('🎉 Redirecting to App Store!\n\n(In a real playable ad, this would open the app store)');
+        }
+        
+        // Simple animation
+        setInterval(() => {
+            const container = document.querySelector('.playable-container');
+            container.style.transform = `rotate(${Math.sin(Date.now() / 1000) * 2}deg)`;
+        }, 50);
+    </script>
+</body>
+</html>
