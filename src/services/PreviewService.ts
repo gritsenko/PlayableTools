@@ -61,7 +61,6 @@ export class PreviewService {
     
     // Store original content and URL for preset switching
     this._originalGithubContent = originalContent;
-    this._currentGithubUrl = rawUrl;
     
     // Process content with current preset
     return await this.processContentWithPreset(originalContent);
@@ -74,7 +73,6 @@ export class PreviewService {
   // Store original content separately from processed content
   private _originalUploadedContent: string | null = null;
   private _originalGithubContent: string | null = null;
-  private _currentGithubUrl: string | null = null;
   
   // Preview preset configuration
   private _currentPreset: PreviewPreset | null = null;
@@ -249,7 +247,6 @@ export class PreviewService {
       // Store original content for preset switching
       this._originalUploadedContent = originalContent;
       this._originalGithubContent = null; // Clear GitHub content when uploading
-      this._currentGithubUrl = null;
 
       // Process content with current preset
       const processedContent = await this.processContentWithPreset(originalContent, preset || undefined);
@@ -320,7 +317,6 @@ export class PreviewService {
     this.setUploadedContent(null);
     this._originalUploadedContent = null;
     this._originalGithubContent = null;
-    this._currentGithubUrl = null;
     console.log(`🧹 Cleared all content (processed and original)`);
   }
 
