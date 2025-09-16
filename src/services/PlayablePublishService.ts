@@ -67,10 +67,29 @@ export class PlayablePublishService {
 
     let resultHtml = htmlContent;
 
+    // Build effective replaceTokens for this processing run.
+    // Start with platform-specific tokens (if any), then merge tokens provided via options
+    // (googlePlayUrl/appStoreUrl) and finally any globalDefaults (already applied earlier
+    // in processAllPlatforms for global pass).
+    const effectiveTokens: Record<string, string> = {};
+    if (platform.replaceTokens) {
+      Object.assign(effectiveTokens, platform.replaceTokens);
+    }
+
+    // Add run-time tokens for app store links. Use the exact placeholders used in CTA templates.
+    if (options) {
+      if (options.googlePlayUrl) {
+        effectiveTokens["{{google}}"] = options.googlePlayUrl;
+      }
+      if (options.appStoreUrl) {
+        effectiveTokens["{{apple}}"] = options.appStoreUrl;
+      }
+    }
+
     // Platform replaceTokens stopwatch
     let t0 = performance.now();
-    if (platform.replaceTokens) {
-      resultHtml = this.applyReplaceTokens(resultHtml, platform.replaceTokens);
+    if (Object.keys(effectiveTokens).length > 0) {
+      resultHtml = this.applyReplaceTokens(resultHtml, effectiveTokens);
     }
     let t1 = performance.now();
     console.log(
@@ -82,9 +101,11 @@ export class PlayablePublishService {
     // Script injection stopwatch
     if (platform.InjeectScripts && Array.isArray(platform.InjeectScripts)) {
       let t2 = performance.now();
+      // Pass effectiveTokens so we can replace placeholders inside fetched scripts as well
       resultHtml = await this.injectScripts(
         resultHtml,
-        platform.InjeectScripts
+        platform.InjeectScripts,
+        effectiveTokens
       );
       let t3 = performance.now();
       console.log(
@@ -115,15 +136,41 @@ export class PlayablePublishService {
     // If no tokens, return original
     if (!replaceTokens || Object.keys(replaceTokens).length === 0) return html;
 
-    // Escape regex special chars in search tokens
-    const escapedTokens = Object.keys(replaceTokens).map((token) =>
+    // Determine which tokens actually occur in the input and log counts
+    const tokens = Object.keys(replaceTokens);
+    const matched: { token: string; count: number }[] = [];
+    for (const token of tokens) {
+      try {
+        const esc = token.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+        const matches = html.match(new RegExp(esc, "g"));
+        const count = matches ? matches.length : 0;
+        if (count > 0) matched.push({ token, count });
+      } catch (e) {
+        // ignore malformed token regex
+      }
+    }
+
+    // Escape regex special chars in search tokens for global replacement
+    const escapedTokens = tokens.map((token) =>
       token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     );
     // Build a regex that matches any token
     const regex = new RegExp(escapedTokens.join("|"), "g");
 
     // Replace using a single pass
-    return html.replace(regex, (match) => replaceTokens[match] ?? match);
+    const result = html.replace(regex, (match) => replaceTokens[match] ?? match);
+
+    if (matched.length > 0) {
+      console.log(
+        `[PlayablePublishService] applyReplaceTokens: replaced ${matched.length} token(s): ${matched
+          .map((m) => `${m.token}(${m.count})`)
+          .join(", ")}`
+      );
+    } else {
+      console.log(`[PlayablePublishService] applyReplaceTokens: no tokens matched`);
+    }
+
+    return result;
   }
 
   /**
@@ -131,7 +178,9 @@ export class PlayablePublishService {
    */
   private async injectScripts(
     html: string,
-    scripts: string[]
+    scripts: string[],
+    // Optional replace tokens to apply inside fetched script contents
+    replaceTokens?: Record<string, string>
   ): Promise<string> {
     let result = html;
 
@@ -141,7 +190,11 @@ export class PlayablePublishService {
         const fetchUrl = UrlUtils.buildFetchUrl("publish-data/", scriptSrc);
         const response = await fetch(fetchUrl);
         if (response.ok) {
-          const scriptContent = await response.text();
+          let scriptContent = await response.text();
+          // Apply replace tokens to fetched script content as well
+          if (replaceTokens && Object.keys(replaceTokens).length > 0) {
+            scriptContent = this.applyReplaceTokens(scriptContent, replaceTokens);
+          }
           return `<script>\n${scriptContent}\n</script>`;
         } else {
           console.warn(`Could not load script: ${scriptSrc} from ${fetchUrl}`);

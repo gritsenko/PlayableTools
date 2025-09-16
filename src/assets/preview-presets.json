@@ -23,5 +23,19 @@
         "XMLHttpRequest": "_xrq_"
       }
     }
+    ,
+    {
+      "id": "mraid",
+      "name": "MRAID Preview",
+      "description": "Preview configured for MRAID playables. Useful when testing playables targeted to ad networks that use MRAID (examples: Unity, IronSource, AppLovin, Vungle, Mintegral, MoPub). Injects mraid.js where appropriate and preserves MRAID API behavior when available.",
+      "maxFileSizeMB": 10,
+      "injectScripts": [
+        {
+          "source": "/mraid.js",
+          "position": "beforeHeadEnd"
+        }
+      ],
+      "replaceTokens": {}
+    }
   ]
 }
