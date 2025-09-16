@@ -1,6 +1,7 @@
 import { ComponentBase, customElement, html, property, inject, state } from "fw";
 import { PreviewService } from "../../services/PreviewService";
 import type { PreviewPreset } from "../../services/types";
+import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
 import "./playable-previewer.ts.css";
 
@@ -14,10 +15,12 @@ export class PlayablePreviewer extends ComponentBase {
   error: string = "";
   private uploadedContentUnsubscribe?: () => void;
   private presetUnsubscribe?: () => void;
+  private validationUnsubscribe?: () => void;
   @state() private currentPreset: PreviewPreset | null = null;
   @state() private availablePresets: PreviewPreset[] = [];
   @state() private isPresetSwitching: boolean = false;
   @state() private presetSuccessMessage: string = "";
+  @state() private validationResults: ValidationResult | null = null;
 
   devices = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -38,19 +41,11 @@ export class PlayablePreviewer extends ComponentBase {
   connectedCallback() {
     super.connectedCallback();
     
-    console.log(`🎬 PlayablePreviewer connected`);
-    
-    // Initialize presets
     this.availablePresets = this.previewService.getAvailablePresets();
     this.currentPreset = this.previewService.getCurrentPreset();
     
-    console.log(`📋 Available presets:`, this.availablePresets.map(p => p.name));
-    console.log(`🎯 Current preset: ${this.currentPreset?.name}`);
-    
-    // Subscribe to uploaded content changes
     this.uploadedContentUnsubscribe = this.previewService.onUploadedContentChange((content) => {
       if (content) {
-        console.log(`📁 Uploaded content changed (${content.length} chars)`);
         this.pageContent = content;
         this.loading = false;
         this.error = "";
@@ -60,21 +55,37 @@ export class PlayablePreviewer extends ComponentBase {
       }
     });
     
-    // Subscribe to preset changes
     this.presetUnsubscribe = this.previewService.onPresetChange((preset) => {
-      console.log(`🔄 Preset changed to: ${preset?.name}`);
       this.currentPreset = preset;
       this.requestUpdate();
     });
     
-    // Check if there's already uploaded content
+    this.validationUnsubscribe = this.previewService.onValidationChange((results) => {
+      this.validationResults = results;
+      this.requestUpdate();
+    });
+    
     const existingContent = this.previewService.getUploadedContent();
     if (existingContent) {
-      console.log(`📁 Found existing uploaded content (${existingContent.length} chars)`);
       this.pageContent = existingContent;
       this.loading = false;
       this.requestUpdate();
     }
+
+    // Get initial validation results
+    this.validationResults = this.previewService.getValidationResults();
+
+    // Listen for playable-screen-lock events so external emitters (service or page) can update UI
+    this._playableLockHandler = (e: Event) => {
+      try {
+        const ev = e as CustomEvent<{ locked: boolean }>;
+        this._locked = !!ev.detail?.locked;
+        this.requestUpdate();
+      } catch (err) {
+        console.warn('playable-previewer: lock handler error', err);
+      }
+    };
+    window.addEventListener('playable-screen-lock', this._playableLockHandler as EventListener);
   }
 
   disconnectedCallback() {
@@ -85,6 +96,25 @@ export class PlayablePreviewer extends ComponentBase {
     if (this.presetUnsubscribe) {
       this.presetUnsubscribe();
     }
+    if (this.validationUnsubscribe) {
+      this.validationUnsubscribe();
+    }
+    if (this._playableLockHandler) {
+      window.removeEventListener('playable-screen-lock', this._playableLockHandler as EventListener);
+    }
+  }
+
+  private _playableLockHandler?: (e: Event) => void;
+  @state() private _locked: boolean = false;
+
+  private _toggleLock() {
+    this._locked = !this._locked;
+    try {
+      this.previewService.handleScreenLockChange(this._locked);
+    } catch (err) {
+      console.warn('playable-previewer: failed to notify service about lock change', err);
+    }
+    this.requestUpdate();
   }
 
   async updated(changedProps: Map<string, any>) {
@@ -94,7 +124,6 @@ export class PlayablePreviewer extends ComponentBase {
   }
 
   private async loadFromGithub() {
-    console.log(`🔗 Loading from GitHub: ${this.githubUrl}`);
     this.loading = true;
     this.error = "";
     this.pageContent = "";
@@ -108,14 +137,8 @@ export class PlayablePreviewer extends ComponentBase {
       return;
     }
     
-    console.log(`📡 Fetching raw content from: ${rawUrl}`);
-    
     try {
-      const currentPreset = this.previewService.getCurrentPreset();
-      console.log(`🔧 Using preset: ${currentPreset?.name}`);
-      
       this.pageContent = await this.previewService.fetchRawContent(rawUrl);
-      console.log(`✅ Successfully loaded content (${this.pageContent.length} chars) with ${currentPreset?.name} preset`);
     } catch (err: any) {
       console.error(`❌ Failed to load from GitHub:`, err);
       this.error = err.message || String(err);
@@ -144,30 +167,17 @@ export class PlayablePreviewer extends ComponentBase {
     const presetId = (e.target as HTMLSelectElement).value;
     const preset = this.previewService.getPresetById(presetId);
     
-    console.log(`🔄 Preset changing from "${this.currentPreset?.name}" to "${preset?.name}"`);
-    
     if (preset) {
-      // Show visual feedback
       this.isPresetSwitching = true;
       this.error = "";
       this.requestUpdate();
       
       try {
-        console.log(`📋 Applying preset: ${preset.name}`, {
-          maxFileSizeMB: preset.maxFileSizeMB,
-          injectScripts: preset.injectScripts.length,
-          replaceTokens: Object.keys(preset.replaceTokens).length
-        });
-        
         this.previewService.setCurrentPreset(preset);
         
         // Reprocess existing content with new preset (works for both uploaded and GitHub content)
-        console.log(`🔄 Reprocessing existing content with ${preset.name} preset`);
         await this.previewService.reloadContentWithPreset(preset);
         
-        console.log(`✅ Preset successfully switched to "${preset.name}"`);
-        
-        // Show success message briefly
         this.presetSuccessMessage = `✅ Applied ${preset.name} preset`;
         setTimeout(() => {
           this.presetSuccessMessage = "";
@@ -231,11 +241,6 @@ export class PlayablePreviewer extends ComponentBase {
           </select>
         </div>
         
-        <!-- Orientation Toggle -->
-        <button @click="${this.toggleOrientation.bind(this)}" style="margin-left: 0;">
-          ${this.isPortrait ? "Portrait" : "Landscape"}
-        </button>
-        
         <!-- Preset Info -->
         ${this.currentPreset ? html`
           <div style="font-size: 0.9em; color: #666; margin-left: auto; display: flex; align-items: center; gap: 1em;">
@@ -252,51 +257,164 @@ export class PlayablePreviewer extends ComponentBase {
         ` : ''}
       </div>
       
-      <!-- Preview Frame -->
-      <div class="phone-simulator">
-        <div class="phone-simulator-bg">
-          <div class="phone-frame" style="width:${width}px; height:${height}px;">
-            ${this.loading
-              ? html`
-                  <div class="spinner-container">
-                    <div class="spinner"></div>
-                    <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">
-                      ${this.isPresetSwitching ? `Applying ${this.currentPreset?.name} preset...` : 'Loading playable content...'}
+      <!-- Simulator Controls -->
+      <div class="simulator-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; justify-content: center;">
+        <button @click=${() => this.toggleOrientation()} title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}" aria-label="${this.isPortrait ? 'Switch to landscape orientation' : 'Switch to portrait orientation'}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
+          ${this.isPortrait ? '↕️' : '↔️'}
+        </button>
+        <button @click=${() => this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
+          ${this._locked ? '🔒' : '🔓'}
+        </button>
+      </div>
+      
+      <!-- Main Content Layout -->
+      <div class="preview-layout" style="display: grid; grid-template-columns: 350px 1fr; gap: 2em; align-items: start; margin-top: 1em;">
+        
+        <!-- Validation Results Sidebar -->
+        ${this.validationResults && this.validationResults.categories.length > 0 ? html`
+          <div class="validation-results" style="padding: 1em; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; height: fit-content;">
+            <h3 style="margin: 0 0 1em 0; color: #495057; font-size: 1.1em;">Validation Results</h3>
+            ${this.validationResults.categories.map(category => html`
+              <div class="validation-category" style="margin-bottom: 1em;">
+                <h4 style="margin: 0 0 0.5em 0; color: #1976d2; font-size: 1em; display: flex; align-items: center; gap: 0.5em;">
+                  <span style="font-size: 1.2em;">${category.checks.every(check => check.passed) ? '✅' : '⚠️'}</span>
+                  ${category.name}
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 0.3em;">
+                  ${category.checks.map(check => html`
+                    <div class="validation-check" style="display: flex; align-items: flex-start; gap: 0.5em; font-size: 0.9em;">
+                      <span style="font-size: 1.1em; margin-top: -2px;">${check.passed ? '✅' : '❌'}</span>
+                      <div style="flex: 1;">
+                        <span style="color: ${check.passed ? '#28a745' : '#dc3545'}; font-weight: ${check.passed ? 'normal' : 'bold'};">${check.name}</span>
+                        ${check.details ? html`
+                          <div style="color: #6c757d; font-size: 0.85em; margin-top: 0.2em;">${check.details}</div>
+                        ` : ''}
+                      </div>
                     </div>
-                  </div>
-                `
-              : this.error
-              ? html`
-                  <div style="color: ${this.error.includes('re-upload') ? '#ff9800' : 'red'}; padding: 1em; background: ${this.error.includes('re-upload') ? '#fff3e0' : '#ffebee'}; border-radius: 4px; margin: 1em;">
-                    ${this.error.includes('re-upload') ? '⚠️' : '❌'} ${this.error}
-                  </div>
-                `
-              : this.pageContent
-              ? html`
-                  <div style="position: relative; width: 100%; height: 100%;">
-                    <iframe
-                      srcdoc="${this.pageContent}"
-                      class="playable-iframe"
-                      frameborder="0"
-                      allowfullscreen
-                      style="width:100%; height:100%; border:none;"
-                    ></iframe>
-                    ${this.isPresetSwitching ? html`
-                      <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(25, 118, 210, 0.1); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(1px);">
-                        <div style="background: rgba(25, 118, 210, 0.9); color: white; padding: 1em 2em; border-radius: 8px; display: flex; align-items: center; gap: 1em;">
-                          <div class="preset-spinner"></div>
-                          <span>Applying ${this.currentPreset?.name} preset...</span>
+                  `)}
+                </div>
+              </div>
+            `)}
+          </div>
+        ` : html`
+          <!-- Placeholder for validation sidebar when no results -->
+          <div style="padding: 1em; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; color: #6c757d; text-align: center; font-style: italic;">
+            No validation results available
+          </div>
+        `}
+        
+        <!-- Preview Frame -->
+        <div class="preview-frame-container">
+          <div style="display:flex; justify-content:center;">
+            <div class="phone-simulator">
+              <div class="phone-simulator-bg">
+                <div class="phone-frame" style="width:${width}px; height:${height}px;">
+                ${this.loading
+                  ? html`
+                      <div class="spinner-container">
+                        <div class="spinner"></div>
+                        <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">
+                          ${this.isPresetSwitching ? `Applying ${this.currentPreset?.name} preset...` : 'Loading playable content...'}
                         </div>
                       </div>
-                    ` : ''}
-                  </div>
-                `
-              : html`<div style="padding: 1em; color: #666; text-align: center;">
-                  Ready to preview content.
-                </div>`}
+                    `
+                  : this.error
+                  ? html`
+                      <div style="color: ${this.error.includes('re-upload') ? '#ff9800' : 'red'}; padding: 1em; background: ${this.error.includes('re-upload') ? '#fff3e0' : '#ffebee'}; border-radius: 4px; margin: 1em;">
+                        ${this.error.includes('re-upload') ? '⚠️' : '❌'} ${this.error}
+                      </div>
+                    `
+                  : this.pageContent
+                  ? html`
+                      <div style="position: relative; width: 100%; height: 100%;">
+                        <iframe
+                          srcdoc="${this.pageContent}"
+                          class="playable-iframe"
+                          frameborder="0"
+                          allowfullscreen
+                          style="width:100%; height:100%; border:none;"
+                        ></iframe>
+                            ${this.isPresetSwitching ? html`
+                              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(25, 118, 210, 0.1); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(1px);">
+                                <div style="background: rgba(25, 118, 210, 0.9); color: white; padding: 1em 2em; border-radius: 8px; display: flex; align-items: center; gap: 1em;">
+                                  <div class="preset-spinner"></div>
+                                  <span>Applying ${this.currentPreset?.name} preset...</span>
+                                </div>
+                              </div>
+                            ` : ''}
+                            ${this._locked ? html`
+                              <div style="position: absolute; left:0; top:0; right:0; bottom:0; background: rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index: 2147483646;">
+                                <div style="color:#fff; padding:12px 18px; background:rgba(0,0,0,0.6); border-radius:8px; font-size:18px;">Screen is locked</div>
+                              </div>
+                            ` : null}
+
+                            </div>
+                      </div>
+                    `
+                  : html`<div style="padding: 1em; color: #666; text-align: center;">
+                      Ready to preview content.
+                    </div>`}
+              </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      
+      <!-- Responsive Styles -->
+      <style>
+        .preview-layout {
+          margin-top: 1em;
+        }
+        
+        .validation-results {
+          max-height: 70vh;
+          overflow-y: auto;
+          position: sticky;
+          top: 1em;
+        }
+        
+        .preview-frame-container {
+          min-height: 400px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        @media (max-width: 1024px) {
+          .preview-layout {
+            grid-template-columns: 1fr !important;
+            gap: 1em !important;
+          }
+          
+          .validation-results {
+            order: 2;
+            max-height: none !important;
+            position: static !important;
+          }
+          
+          .preview-frame-container {
+            order: 1;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .preview-layout {
+            gap: 0.5em !important;
+          }
+          
+          .validation-results {
+            padding: 0.75em !important;
+          }
+        }
+        
+        @media (min-width: 1400px) {
+          .preview-layout {
+            grid-template-columns: 400px 1fr;
+          }
+        }
+      </style>
     `;
   }
 }

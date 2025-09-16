@@ -26,6 +26,7 @@ export class PreviewPage extends ComponentBase {
       }
     }
     window.removeEventListener("popstate", this.handlePopState);
+    // playable-screen-lock handled inside previewer
   }
   @inject(PreviewService) previewService!: PreviewService;
 
@@ -90,7 +91,11 @@ export class PreviewPage extends ComponentBase {
     }
     // Listen for browser navigation (back/forward)
     window.addEventListener("popstate", this.handlePopState);
+
+    // playable-screen-lock is handled inside the previewer component
   }
+
+  // Lock UI moved into PlayablePreviewer component
 
   handlePopState = () => {
     // Re-run connectedCallback logic to update preview on navigation
@@ -211,6 +216,11 @@ export class PreviewPage extends ComponentBase {
     this.uploadedFileName = "";
     this.uploadError = "";
     this.requestUpdate();
+  }
+
+  // UI handler: toggle lock state and inform PreviewService
+  toggleScreenLock() {
+  // Lock UI moved into PlayablePreviewer component
   }
 
   render() {
@@ -369,7 +379,7 @@ export class PreviewPage extends ComponentBase {
           
         <div
           class="preview-frame"
-          style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"
+          style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 60vh;"
         >
           ${this.isEncoded && this.decodedUrl
             ? html`<playable-previewer
@@ -378,7 +388,10 @@ export class PreviewPage extends ComponentBase {
             : hasUploadedContent || this.uploadedFileName
             ? html`<playable-previewer></playable-previewer>`
             : null}
+
+          
         </div>
+
         
         <!-- CSS Animation for spinner -->
         <style>

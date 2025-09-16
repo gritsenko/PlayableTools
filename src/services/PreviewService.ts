@@ -2,6 +2,7 @@ import { injectable } from "fw";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
+import { GeneralValidator, FacebookValidator, MraidValidator, type ValidationResult } from "./PreviewServiceValidators";
 
 @injectable()
 export class PreviewService {
@@ -63,7 +64,13 @@ export class PreviewService {
     this._originalGithubContent = originalContent;
     
     // Process content with current preset
-    return await this.processContentWithPreset(originalContent);
+    const processedContent = await this.processContentWithPreset(originalContent);
+    
+    // Run validation on the processed content
+    const fileSize = new Blob([processedContent]).size;
+    await this.runValidation(processedContent, fileSize);
+    
+    return processedContent;
   }
 
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
@@ -78,6 +85,10 @@ export class PreviewService {
   private _currentPreset: PreviewPreset | null = null;
   private _presetListeners = new Set<(preset: PreviewPreset | null) => void>();
   private _presetsConfig: PreviewPresetsConfig = previewPresetsConfig as PreviewPresetsConfig;
+
+  // Validation results
+  private _validationResults: ValidationResult | null = null;
+  private _validationListeners = new Set<(results: ValidationResult | null) => void>();
 
   setUploadedContent(content: string | null) {
     this._uploadedContent = content;
@@ -251,6 +262,9 @@ export class PreviewService {
       // Process content with current preset
       const processedContent = await this.processContentWithPreset(originalContent, preset || undefined);
 
+      // Run validation on the processed content
+      await this.runValidation(processedContent, file.size);
+
       // Set the processed content so components can access it
       this.setUploadedContent(processedContent);
       
@@ -332,6 +346,7 @@ export class PreviewService {
     if (this._originalUploadedContent) {
       console.log(`📁 Reprocessing uploaded content with ${preset.name} preset`);
       const processedContent = await this.processContentWithPreset(this._originalUploadedContent, preset);
+      await this.runValidation(processedContent, new Blob([processedContent]).size);
       this.setUploadedContent(processedContent);
       return;
     }
@@ -340,6 +355,7 @@ export class PreviewService {
     if (this._originalGithubContent) {
       console.log(`🔗 Reprocessing GitHub content with ${preset.name} preset`);
       const processedContent = await this.processContentWithPreset(this._originalGithubContent, preset);
+      await this.runValidation(processedContent, new Blob([processedContent]).size);
       this.setUploadedContent(processedContent);
       return;
     }
@@ -363,5 +379,70 @@ export class PreviewService {
    */
   hasOriginalContent(): boolean {
     return this._originalUploadedContent !== null || this._originalGithubContent !== null;
+  }
+
+  /**
+   * Runs validation on the current content using appropriate validators
+   */
+  private async runValidation(content: string, fileSize: number): Promise<void> {
+    const preset = this.getCurrentPreset();
+    const results: ValidationResult = { categories: [] };
+
+    // Always run general validation
+    const generalValidator = new GeneralValidator();
+    const generalResults = generalValidator.validate(content, fileSize);
+    results.categories.push(...generalResults.categories);
+
+    // Run preset-specific validation
+    if (preset) {
+      switch (preset.id) {
+        case 'facebook':
+          const facebookValidator = new FacebookValidator();
+          const facebookResults = facebookValidator.validate(content, fileSize);
+          results.categories.push(...facebookResults.categories);
+          break;
+        case 'mraid':
+          const mraidValidator = new MraidValidator();
+          const mraidResults = mraidValidator.validate(content, fileSize);
+          results.categories.push(...mraidResults.categories);
+          break;
+      }
+    }
+
+    this._validationResults = results;
+    for (const cb of Array.from(this._validationListeners)) cb(results);
+  }
+
+  /**
+   * Gets the current validation results
+   */
+  getValidationResults(): ValidationResult | null {
+    return this._validationResults;
+  }
+
+  /**
+   * Subscribe to validation result changes
+   */
+  onValidationChange(cb: (results: ValidationResult | null) => void): () => void {
+    this._validationListeners.add(cb);
+    return () => this._validationListeners.delete(cb);
+  }
+
+  /**
+   * Called when the preview page toggles a simulated screen lock.
+   * This will invoke the emulated SDK helpers (currently mraid shim)
+   * to raise a viewableChange event. The mraid viewableChange expects
+   * a boolean where true = viewable (unlocked) and false = not viewable (locked).
+   */
+  handleScreenLockChange(locked: boolean): void {
+    try {
+      // Dispatch a generic event; SDK-specific shims (like mraid.js) should
+      // listen for this and translate into appropriate SDK events.
+      const ev = new CustomEvent('playable-screen-lock', { detail: { locked } });
+      window.dispatchEvent(ev);
+      console.log('PreviewService: dispatched playable-screen-lock', locked);
+    } catch (err) {
+      console.warn('PreviewService: handleScreenLockChange failed', err);
+    }
   }
 }
