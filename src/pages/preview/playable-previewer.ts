@@ -416,19 +416,6 @@ export class PlayablePreviewer extends ComponentBase {
         ` : ''}
       </div>
       
-      <!-- Simulator Controls -->
-      <div class="simulator-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; justify-content: center;">
-        <button @click=${() => this.toggleOrientation()} title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}" aria-label="${this.isPortrait ? 'Switch to landscape orientation' : 'Switch to portrait orientation'}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this.isPortrait ? '↕️' : '↔️'}
-        </button>
-        <button @click=${() => this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this._locked ? '🔒' : '🔓'}
-        </button>
-        <button @click=${() => this._toggleMute()} title="${this._muted ? 'Unmute audio' : 'Mute audio'}" aria-pressed="${this._muted}" aria-label="${this._muted ? 'Unmute audio' : 'Mute audio'}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this._muted ? '🔇' : '🔊'}
-        </button>
-      </div>
-      
       <!-- Main Content Layout -->
       <div class="preview-layout" style="display: grid; grid-template-columns: 350px 1fr; gap: 2em; align-items: start; margin-top: 1em;">
         
@@ -465,8 +452,23 @@ export class PlayablePreviewer extends ComponentBase {
           </div>
         `}
         
-        <!-- Preview Frame -->
+      <!-- Preview Frame -->
         <div class="preview-frame-container">
+
+          <!-- Simulator Controls -->
+          <div class="simulator-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; justify-content: center;">
+            <button @click=${() => this.toggleOrientation()} title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}" aria-label="${this.isPortrait ? 'Switch to landscape orientation' : 'Switch to portrait orientation'}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+              ${this.isPortrait ? '↕️' : '↔️'}
+            </button>
+            <button @click=${() => this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+              ${this._locked ? '🔒' : '🔓'}
+            </button>
+            <button @click=${() => this._toggleMute()} title="${this._muted ? 'Unmute audio' : 'Mute audio'}" aria-pressed="${this._muted}" aria-label="${this._muted ? 'Unmute audio' : 'Mute audio'}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+              ${this._muted ? '🔇' : '🔊'}
+            </button>
+          </div>
+
+
           <div style="display:flex; justify-content:center;">
             <div class="phone-simulator">
               <div class="phone-simulator-bg">
@@ -524,60 +526,6 @@ export class PlayablePreviewer extends ComponentBase {
           </div>
         </div>
       </div>
-      
-      <!-- Responsive Styles -->
-      <style>
-        .preview-layout {
-          margin-top: 1em;
-        }
-        
-        .validation-results {
-          max-height: 70vh;
-          overflow-y: auto;
-          position: sticky;
-          top: 1em;
-        }
-        
-        .preview-frame-container {
-          min-height: 400px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        @media (max-width: 1024px) {
-          .preview-layout {
-            grid-template-columns: 1fr !important;
-            gap: 1em !important;
-          }
-          
-          .validation-results {
-            order: 2;
-            max-height: none !important;
-            position: static !important;
-          }
-          
-          .preview-frame-container {
-            order: 1;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .preview-layout {
-            gap: 0.5em !important;
-          }
-          
-          .validation-results {
-            padding: 0.75em !important;
-          }
-        }
-        
-        @media (min-width: 1400px) {
-          .preview-layout {
-            grid-template-columns: 400px 1fr;
-          }
-        }
-      </style>
     `;
   }
 }

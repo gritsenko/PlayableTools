@@ -639,18 +639,7 @@ ${r}`);case"beforeBodyEnd":return e.replace(/<\/body>/i,`${r}
         `:""}
       </div>
       
-      <!-- Simulator Controls -->
-      <div class="simulator-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; justify-content: center;">
-        <button @click=${()=>this.toggleOrientation()} title="${this.isPortrait?"Switch to landscape":"Switch to portrait"}" aria-label="${this.isPortrait?"Switch to landscape orientation":"Switch to portrait orientation"}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this.isPortrait?"↕️":"↔️"}
-        </button>
-        <button @click=${()=>this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this._locked?"🔒":"🔓"}
-        </button>
-        <button @click=${()=>this._toggleMute()} title="${this._muted?"Unmute audio":"Mute audio"}" aria-pressed="${this._muted}" aria-label="${this._muted?"Unmute audio":"Mute audio"}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
-          ${this._muted?"🔇":"🔊"}
-        </button>
-      </div>
+      <!-- Simulator Controls (moved inside preview frame for better overlay positioning) -->
       
       <!-- Main Content Layout -->
       <div class="preview-layout" style="display: grid; grid-template-columns: 350px 1fr; gap: 2em; align-items: start; margin-top: 1em;">
@@ -690,7 +679,20 @@ ${r}`);case"beforeBodyEnd":return e.replace(/<\/body>/i,`${r}
         
         <!-- Preview Frame -->
         <div class="preview-frame-container">
-          <div style="display:flex; justify-content:center;">
+          <div style="display:flex; justify-content:center; position: relative;">
+            <!-- Toolbar overlay: absolutely centered above the simulator -->
+            <div class="simulator-controls" part="simulator-controls" style="position:absolute; left:50%; transform:translateX(-50%); top: -50px; display:flex; align-items:center; gap:1em; z-index: 1000;">
+              <button @click=${()=>this.toggleOrientation()} title="${this.isPortrait?"Switch to landscape":"Switch to portrait"}" aria-label="${this.isPortrait?"Switch to landscape orientation":"Switch to portrait orientation"}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+                ${this.isPortrait?"↕️":"↔️"}
+              </button>
+              <button @click=${()=>this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+                ${this._locked?"🔒":"🔓"}
+              </button>
+              <button @click=${()=>this._toggleMute()} title="${this._muted?"Unmute audio":"Mute audio"}" aria-pressed="${this._muted}" aria-label="${this._muted?"Unmute audio":"Mute audio"}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
+                ${this._muted?"🔇":"🔊"}
+              </button>
+            </div>
+
             <div class="phone-simulator">
               <div class="phone-simulator-bg">
                 <div class="phone-frame" style="width:${i}px; height:${t}px;">
@@ -760,6 +762,23 @@ ${r}`);case"beforeBodyEnd":return e.replace(/<\/body>/i,`${r}
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+
+        /* Simulator controls overlay styling */
+        .simulator-controls {
+          transition: top 120ms ease, opacity 120ms ease;
+        }
+
+        /* On smaller screens keep toolbar static above simulator to avoid overflow */
+        @media (max-width: 640px) {
+          .simulator-controls {
+            position: static !important;
+            transform: none !important;
+            margin-bottom: 0.5em;
+            top: auto !important;
+            left: auto !important;
+            z-index: auto !important;
+          }
         }
         
         @media (max-width: 1024px) {
@@ -945,7 +964,7 @@ ${c}
 ${o}
 `+r.slice(h)}else r=r.replace(/<\/head>/i,`${o}
 </head>`)}}else/<\/body>/i.test(r)?r=r.replace(/<\/body>/i,`${o}
-</body>`):r=r+o;return r}async processAllPlatforms(e,i){if(!i.outputDirectory)throw new Error("Output directory is required");const t=i.name||"Playable",r=i.suffix||"EN";let n=e,a=performance.now();this.globalDefaults.replaceTokens&&(n=this.applyReplaceTokens(n,this.globalDefaults.replaceTokens));let o=performance.now();console.log(`[PlayablePublishService] Global replaceTokens: ${(o-a).toFixed(2)} ms`);let l=this.config;i.selectedPlatforms&&Array.isArray(i.selectedPlatforms)&&i.selectedPlatforms.length>0&&(l=this.config.filter(h=>i.selectedPlatforms.includes(h.Name)));const u=l.length;let c=0;for(const h of l){const x=await this.createPlatformDirectory(i.outputDirectory,h.Name),y=await this.processHtml(n,h.Name,i),v=this.generateFileName(t,h.Name,r,h,!0),H=this.generateFileName(t,h.Name,r,h,!1).replace(/\.html$/i,".zip");h.format==="zip"?await this.createZipPackageToDirectory(y,v,H,x,h):await this.saveHtmlFileToDirectory(y,v,x),c++;const M=30+c/u*70;i.onProgress?.(M,h.Name)}}generateFileName(e,i,t,r,n=!0){return n&&r.OutputIndexHtmlName?r.OutputIndexHtmlName.includes("%name%")?r.OutputIndexHtmlName.replace("%name%",e):r.OutputIndexHtmlName:`${e}_${i}_${t}.html`}async createPlatformDirectory(e,i){try{const t=await e.getDirectoryHandle(i,{create:!0});return console.log(`Created/accessed directory: ${i}`),t}catch(t){throw new Error(`Failed to create platform directory ${i}: ${t}`)}}async saveHtmlFileToDirectory(e,i,t){let r=performance.now();try{const o=await(await t.getFileHandle(i,{create:!0})).createWritable();await o.write(e),await o.close();const l=(e.length/1024).toFixed(2);console.log(`Saved HTML file: ${i} (${l} KB)`)}catch(a){throw new Error(`Failed to save HTML file ${i}: ${a}`)}let n=performance.now();console.log(`[PlayablePublishService] Save HTML (${i}): ${(n-r).toFixed(2)} ms`)}async createZipPackageToDirectory(e,i,t,r,n){try{const a=(await Yh(async()=>{const{default:O}=await import("./jszip.min-D7dR3f3M.js").then(q=>q.j);return{default:O}},[])).default,o=new a;if(n.ExtractScripts)try{const O=Kh.extractScripts(e);o.file(i,O.html);for(const[q,I]of Object.entries(O.files))o.file(q,I)}catch(O){console.warn(`ExtractScripts failed for platform ${n.Name}:`,O),o.file(i,e)}else o.file(i,e);if(n.ExtraFiles)for(const O of n.ExtraFiles)try{const q=`/publish-data/${O.from.replace("./","")}`,I=await fetch(q);if(I.ok){const P=await I.text();o.file(O.to.replace("./",""),P)}else console.warn(`Could not load extra file from: ${q}`)}catch(q){console.warn(`Could not load extra file: ${O.from}`,q)}let l=performance.now();const u=await o.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:3}}),c=u.buffer.slice(u.byteOffset,u.byteOffset+u.byteLength),h=new Blob([c],{type:"application/zip"});let x=performance.now();console.log(`[PlayablePublishService] Zipping (${t}): ${(x-l).toFixed(2)} ms`);let y=performance.now();const E=await(await r.getFileHandle(t,{create:!0})).createWritable();await E.write(h),await E.close();let H=performance.now();console.log(`[PlayablePublishService] Save ZIP (${t}): ${(H-y).toFixed(2)} ms`);const M=(h.size/1024).toFixed(2);console.log(`Saved ZIP file: ${t} (${M} KB)`)}catch(a){throw new Error(`Failed to create ZIP package ${t}: ${a}`)}}async requestOutputDirectory(){if("showDirectoryPicker"in window)try{const e=await window.showDirectoryPicker();return console.log(`Selected output directory: ${e.name}`),e}catch(e){throw e instanceof Error&&e.name==="AbortError"?new Error("Directory selection was cancelled"):new Error(`Failed to select directory: ${e}`)}else throw new Error("File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser.")}};tn=tu([vi(mt.Singleton)],tn);var iu=Object.defineProperty,ru=(e,i,t,r)=>{for(var n=void 0,a=e.length-1,o;a>=0;a--)(o=e[a])&&(n=o(i,t,n)||n);return n&&iu(i,t,n),n};class Ys extends ge{constructor(){super(...arguments),this.dragActive=!1,this.loadedFile=null,this.isPublishing=!1,this.publishProgress=0,this.currentPlatform=null,this.publishStartTime=null,this.publishElapsed=null,this.playableTitle="",this.googlePlayUrl="",this.appStoreUrl="",this.customSuffix="EN",this.outputDirectory="",this.availablePlatforms=[],this.selectedPlatforms=[],this.STORAGE_KEYS={playableTitle:"playable-publisher-title",googlePlayUrl:"playable-publisher-google-url",appStoreUrl:"playable-publisher-app-store-url",customSuffix:"playable-publisher-suffix",selectedPlatforms:"playable-publisher-selected-platforms"}}connectedCallback(){super.connectedCallback(),this.loadFromLocalStorage(),this.playablePublishService&&typeof this.playablePublishService.getAvailablePlatforms=="function"&&(this.availablePlatforms=this.playablePublishService.getAvailablePlatforms(),(!this.selectedPlatforms||this.selectedPlatforms.length===0)&&(this.selectedPlatforms=[...this.availablePlatforms]))}render(){return U`
+</body>`):r=r+o;return r}async processAllPlatforms(e,i){if(!i.outputDirectory)throw new Error("Output directory is required");const t=i.name||"Playable",r=i.suffix||"EN";let n=e,a=performance.now();this.globalDefaults.replaceTokens&&(n=this.applyReplaceTokens(n,this.globalDefaults.replaceTokens));let o=performance.now();console.log(`[PlayablePublishService] Global replaceTokens: ${(o-a).toFixed(2)} ms`);let l=this.config;i.selectedPlatforms&&Array.isArray(i.selectedPlatforms)&&i.selectedPlatforms.length>0&&(l=this.config.filter(h=>i.selectedPlatforms.includes(h.Name)));const u=l.length;let c=0;for(const h of l){const x=await this.createPlatformDirectory(i.outputDirectory,h.Name),y=await this.processHtml(n,h.Name,i),v=this.generateFileName(t,h.Name,r,h,!0),H=this.generateFileName(t,h.Name,r,h,!1).replace(/\.html$/i,".zip");h.format==="zip"?await this.createZipPackageToDirectory(y,v,H,x,h):await this.saveHtmlFileToDirectory(y,v,x),c++;const M=30+c/u*70;i.onProgress?.(M,h.Name)}}generateFileName(e,i,t,r,n=!0){return n&&r.OutputIndexHtmlName?r.OutputIndexHtmlName.includes("%name%")?r.OutputIndexHtmlName.replace("%name%",e):r.OutputIndexHtmlName:`${e}_${i}_${t}.html`}async createPlatformDirectory(e,i){try{const t=await e.getDirectoryHandle(i,{create:!0});return console.log(`Created/accessed directory: ${i}`),t}catch(t){throw new Error(`Failed to create platform directory ${i}: ${t}`)}}async saveHtmlFileToDirectory(e,i,t){let r=performance.now();try{const o=await(await t.getFileHandle(i,{create:!0})).createWritable();await o.write(e),await o.close();const l=(e.length/1024).toFixed(2);console.log(`Saved HTML file: ${i} (${l} KB)`)}catch(a){throw new Error(`Failed to save HTML file ${i}: ${a}`)}let n=performance.now();console.log(`[PlayablePublishService] Save HTML (${i}): ${(n-r).toFixed(2)} ms`)}async createZipPackageToDirectory(e,i,t,r,n){try{const a=(await Yh(async()=>{const{default:O}=await import("./jszip.min-C582Rc7d.js").then(q=>q.j);return{default:O}},[])).default,o=new a;if(n.ExtractScripts)try{const O=Kh.extractScripts(e);o.file(i,O.html);for(const[q,I]of Object.entries(O.files))o.file(q,I)}catch(O){console.warn(`ExtractScripts failed for platform ${n.Name}:`,O),o.file(i,e)}else o.file(i,e);if(n.ExtraFiles)for(const O of n.ExtraFiles)try{const q=`/publish-data/${O.from.replace("./","")}`,I=await fetch(q);if(I.ok){const P=await I.text();o.file(O.to.replace("./",""),P)}else console.warn(`Could not load extra file from: ${q}`)}catch(q){console.warn(`Could not load extra file: ${O.from}`,q)}let l=performance.now();const u=await o.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:3}}),c=u.buffer.slice(u.byteOffset,u.byteOffset+u.byteLength),h=new Blob([c],{type:"application/zip"});let x=performance.now();console.log(`[PlayablePublishService] Zipping (${t}): ${(x-l).toFixed(2)} ms`);let y=performance.now();const E=await(await r.getFileHandle(t,{create:!0})).createWritable();await E.write(h),await E.close();let H=performance.now();console.log(`[PlayablePublishService] Save ZIP (${t}): ${(H-y).toFixed(2)} ms`);const M=(h.size/1024).toFixed(2);console.log(`Saved ZIP file: ${t} (${M} KB)`)}catch(a){throw new Error(`Failed to create ZIP package ${t}: ${a}`)}}async requestOutputDirectory(){if("showDirectoryPicker"in window)try{const e=await window.showDirectoryPicker();return console.log(`Selected output directory: ${e.name}`),e}catch(e){throw e instanceof Error&&e.name==="AbortError"?new Error("Directory selection was cancelled"):new Error(`Failed to select directory: ${e}`)}else throw new Error("File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser.")}};tn=tu([vi(mt.Singleton)],tn);var iu=Object.defineProperty,ru=(e,i,t,r)=>{for(var n=void 0,a=e.length-1,o;a>=0;a--)(o=e[a])&&(n=o(i,t,n)||n);return n&&iu(i,t,n),n};class Ys extends ge{constructor(){super(...arguments),this.dragActive=!1,this.loadedFile=null,this.isPublishing=!1,this.publishProgress=0,this.currentPlatform=null,this.publishStartTime=null,this.publishElapsed=null,this.playableTitle="",this.googlePlayUrl="",this.appStoreUrl="",this.customSuffix="EN",this.outputDirectory="",this.availablePlatforms=[],this.selectedPlatforms=[],this.STORAGE_KEYS={playableTitle:"playable-publisher-title",googlePlayUrl:"playable-publisher-google-url",appStoreUrl:"playable-publisher-app-store-url",customSuffix:"playable-publisher-suffix",selectedPlatforms:"playable-publisher-selected-platforms"}}connectedCallback(){super.connectedCallback(),this.loadFromLocalStorage(),this.playablePublishService&&typeof this.playablePublishService.getAvailablePlatforms=="function"&&(this.availablePlatforms=this.playablePublishService.getAvailablePlatforms(),(!this.selectedPlatforms||this.selectedPlatforms.length===0)&&(this.selectedPlatforms=[...this.availablePlatforms]))}render(){return U`
       <div class="playable-publisher">
         <div style="margin-bottom:1.5rem">
           <strong>Publish Playable Ad</strong><br />
