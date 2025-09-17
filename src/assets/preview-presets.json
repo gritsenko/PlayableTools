@@ -32,7 +32,7 @@
       "injectScripts": [
         {
           "source": "/mraid.js",
-          "position": "beforeHeadEnd"
+          "position": "afterBodyStart"
         }
       ],
       "replaceTokens": {}

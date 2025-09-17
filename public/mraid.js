@@ -109,7 +109,9 @@
         error('failed to create document.CTA stubs', e);
       }
 
-      _fire('ready');
+      _fire('ready', {});
+      // Fire initial viewableChange after ready (ad is initially viewable in preview)
+      _fire('viewableChange', true);
     } catch (e) {
       error('ready transition error', e);
     }
@@ -154,61 +156,18 @@
     });
   } catch (e) { error('failed to register playable-screen-lock listener', e); }
 
-  // Create an overlay mute/unmute button in the bottom-right for preview testing
+  // Listen for playable audio mute events and translate them to mraid audioVolumeChange
   try {
-    (function createMuteButton() {
-      if (typeof document === 'undefined' || !document.body) return;
-
-      const btn = document.createElement('button');
-      btn.setAttribute('aria-label', 'Mute');
-      btn.title = 'Mute / Unmute';
-      btn.style.position = 'fixed';
-      btn.style.right = '12px';
-      btn.style.bottom = '12px';
-      btn.style.zIndex = 2147483647; // very high so it's on top
-      btn.style.width = '44px';
-      btn.style.height = '44px';
-      btn.style.borderRadius = '6px';
-      btn.style.border = 'none';
-      btn.style.background = 'rgba(0,0,0,0.6)';
-      btn.style.color = '#fff';
-      btn.style.display = 'flex';
-      btn.style.alignItems = 'center';
-      btn.style.justifyContent = 'center';
-      btn.style.fontSize = '18px';
-      btn.style.cursor = 'pointer';
-      btn.style.backdropFilter = 'blur(4px)';
-      btn.style.padding = '0';
-
-      // simple icon text: 🔊 / 🔈 / 🔇
-      let muted = false;
-      const updateIcon = () => {
-        btn.textContent = muted ? '🔇' : '🔊';
-        btn.setAttribute('aria-pressed', String(muted));
-        btn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
-      };
-
-      updateIcon();
-
-      btn.addEventListener('click', (e) => {
-        try {
-          muted = !muted;
-          updateIcon();
-          // Fire audioVolumeChange with 0 when muted, 100 when unmuted
-          _fire('audioVolumeChange', muted ? 0 : 100);
-        } catch (err) {
-          error('mute button handler error', err);
-        }
-        e.stopPropagation();
-      });
-
-      // Add minimal focus styles for accessibility
-      btn.addEventListener('focus', () => { btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.08)'; });
-      btn.addEventListener('blur', () => { btn.style.boxShadow = 'none'; });
-
-      document.body.appendChild(btn);
-    })();
-  } catch (e) { error('failed to create mute button', e); }
+    window.addEventListener('playable-audio-mute', (e) => {
+      try {
+        const ev = e; // expect CustomEvent with detail { muted }
+        const muted = !!(ev && ev.detail && ev.detail.muted);
+        const volume = muted ? 0 : 100;
+        log('received playable-audio-mute ->', muted, 'translating to audioVolumeChange', volume);
+        _fire('audioVolumeChange', volume);
+      } catch (err) { error('playable-audio-mute handler error', err); }
+    });
+  } catch (e) { error('failed to register playable-audio-mute listener', e); }
 
   log('shim installed (debug)');
 

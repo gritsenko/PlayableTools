@@ -8,8 +8,8 @@ export class GeneralValidator implements Validator {
         checks: [
           {
             name: 'Not using "window.top" access',
-            passed: !content.includes('window.top') && !content.includes('top.'),
-            details: content.includes('window.top') || content.includes('top.')
+            passed: !content.includes('window.top'),
+            details: content.includes('window.top')
               ? 'Playable contains window.top access which may cause issues in ad environments'
               : undefined
           },

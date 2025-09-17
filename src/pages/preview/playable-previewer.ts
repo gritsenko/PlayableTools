@@ -106,6 +106,7 @@ export class PlayablePreviewer extends ComponentBase {
 
   private _playableLockHandler?: (e: Event) => void;
   @state() private _locked: boolean = false;
+  @state() private _muted: boolean = false;
 
   private _toggleLock() {
     this._locked = !this._locked;
@@ -115,8 +116,166 @@ export class PlayablePreviewer extends ComponentBase {
       console.warn('playable-previewer: failed to notify service about lock change', err);
     }
     this.requestUpdate();
+    
+    // Tell iframe to allow/disallow blur events and simulate accordingly
+    this._setPlayableLocked(this._locked);
+    
+    // Refocus the iframe when unlocking to restore interaction
+    if (!this._locked) {
+      this._refocusIframe();
+    }
   }
 
+  private _toggleMute() {
+    this._muted = !this._muted;
+    try {
+      // Dispatch custom event for mute state change (host window)
+      window.dispatchEvent(new CustomEvent('playable-audio-mute', {
+        detail: { muted: this._muted }
+      }));
+      // Also dispatch inside the playable iframe so in-iframe listeners (e.g., mraid shim) receive it
+      this._dispatchToIframe('playable-audio-mute', { muted: this._muted });
+    } catch (err) {
+      console.warn('playable-previewer: failed to dispatch mute event', err);
+    }
+    this.requestUpdate();
+    
+    // When unmuting, restore focus to the playable content
+    if (!this._muted) {
+      this._refocusIframe();
+    }
+  }
+  
+  private _refocusIframe() {
+    const iframe = this._getIframeEl();
+    if (iframe) {
+      try {
+        iframe.focus();
+        // Best-effort focus to the inner document as well
+        iframe.contentWindow?.focus();
+      } catch (err) {
+        console.warn('playable-previewer: failed to refocus iframe', err);
+      }
+    }
+  }
+  
+  private _getIframeEl(): HTMLIFrameElement | null {
+    // ComponentBase renders in light DOM, so query directly
+    return (this as unknown as HTMLElement).querySelector('.playable-iframe');
+  }
+  
+  private _dispatchToIframe(eventName: string, detail?: any) {
+    try {
+      const win = this._getIframeEl()?.contentWindow;
+      if (win) {
+        win.dispatchEvent(new CustomEvent(eventName, { detail }));
+      }
+    } catch (err) {
+      console.warn('playable-previewer: failed to dispatch event into iframe', eventName, err);
+    }
+  }
+  
+  // Install event guards inside the iframe so normal page clicks do not pause the playable.
+  // We stop blur/visibility events from reaching the playable unless the lock button is used.
+  private _installFocusGuards = (e: Event) => {
+    const iframe = e.currentTarget as HTMLIFrameElement;
+    const win = iframe?.contentWindow as (Window & { __ptGuardInstalled?: boolean; __ptGuard?: any });
+    const doc = win?.document;
+    if (!win || !doc) return;
+    
+    if (win.__ptGuardInstalled) return;
+    win.__ptGuardInstalled = true;
+    
+  const state: { guardActive: boolean; locked: boolean } = { guardActive: true, locked: false };
+    
+    const stop = (ev: Event) => {
+      if (state.guardActive) {
+        try { (ev as any).stopImmediatePropagation?.(); } catch {}
+        try { ev.stopPropagation(); } catch {}
+        try { ev.preventDefault(); } catch {}
+      }
+    };
+    
+    // Block common events that playables use to pause when losing focus
+    const windowEvents = ['blur'];
+    const docEvents = ['blur', 'visibilitychange', 'pagehide'];
+    windowEvents.forEach(t => win.addEventListener(t, stop, true));
+    docEvents.forEach(t => doc.addEventListener(t, stop, true));
+
+    // Stronger guard: override dispatchEvent so even earlier listeners don't receive these events
+    try {
+      const blocked = new Set(['blur', 'visibilitychange', 'pagehide']);
+      const origDispatchEvent = EventTarget.prototype.dispatchEvent;
+      (EventTarget.prototype as any).dispatchEvent = function(ev: Event) {
+        try {
+          if ((blocked as Set<string>).has(ev?.type) && state.guardActive) {
+            return true; // swallow
+          }
+        } catch {}
+        return origDispatchEvent.call(this, ev);
+      };
+    } catch {}
+    
+    // Optional: keep document.hasFocus() returning true unless locked
+    try {
+      const origHasFocus = doc.hasFocus.bind(doc);
+      (doc as any).hasFocus = () => !state.guardActive ? origHasFocus() : true;
+    } catch {}
+
+    // Visibility state shim: reflect locked state as hidden for APIs that read it (e.g., MRAID shims)
+    try {
+      const visDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+      const hiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+      const getVis = visDesc && visDesc.get ? () => visDesc.get!.call(doc) : () => 'visible';
+      const getHidden = hiddenDesc && hiddenDesc.get ? () => hiddenDesc.get!.call(doc) : () => false;
+
+      Object.defineProperty(doc, 'visibilityState', {
+        get() { return state.locked ? 'hidden' as DocumentVisibilityState : (getVis() as DocumentVisibilityState); },
+        configurable: true
+      });
+      Object.defineProperty(doc, 'hidden', {
+        get() { return state.locked ? true : !!getHidden(); },
+        configurable: true
+      });
+    } catch {}
+    
+    // API to toggle lock behavior from host
+    win.__ptGuard = {
+      setLocked(locked: boolean) {
+        state.locked = locked;
+        state.guardActive = !locked; // when locked, allow events through
+        try {
+          if (locked) {
+            // Simulate blur/visibility change so playable can pause itself
+            try { win.dispatchEvent(new Event('blur', { bubbles: false })); } catch {}
+            try { doc.dispatchEvent(new Event('visibilitychange', { bubbles: true })); } catch {}
+          } else {
+            // Simulate focus back
+            // Temporarily disable guard so synthetic events are delivered
+            const prev = state.guardActive;
+            state.guardActive = false;
+            try { win.dispatchEvent(new Event('focus', { bubbles: false })); } catch {}
+            try { doc.dispatchEvent(new Event('visibilitychange', { bubbles: true })); } catch {}
+            state.guardActive = prev;
+            try { win.focus(); } catch {}
+          }
+        } catch {}
+      }
+    };
+  };
+  
+  private _setPlayableLocked(locked: boolean) {
+    const iframe = this._getIframeEl();
+    const win = iframe?.contentWindow as (Window & { __ptGuard?: { setLocked: (b: boolean) => void } });
+    try {
+      win?.__ptGuard?.setLocked(locked);
+    } catch (err) {
+      // Guard may not yet be installed if iframe hasn't loaded; try again shortly.
+      setTimeout(() => {
+        try { iframe?.contentWindow && (iframe.contentWindow as any).__ptGuard?.setLocked(locked); } catch {}
+      }, 50);
+    }
+  }
   async updated(changedProps: Map<string, any>) {
     if (changedProps.has("githubUrl") && this.githubUrl) {
       await this.loadFromGithub();
@@ -265,6 +424,9 @@ export class PlayablePreviewer extends ComponentBase {
         <button @click=${() => this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
           ${this._locked ? '🔒' : '🔓'}
         </button>
+        <button @click=${() => this._toggleMute()} title="${this._muted ? 'Unmute audio' : 'Mute audio'}" aria-pressed="${this._muted}" aria-label="${this._muted ? 'Unmute audio' : 'Mute audio'}" style="width:38px;height:38px;border-radius:6px;border:none;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">
+          ${this._muted ? '🔇' : '🔊'}
+        </button>
       </div>
       
       <!-- Main Content Layout -->
@@ -333,6 +495,7 @@ export class PlayablePreviewer extends ComponentBase {
                           frameborder="0"
                           allowfullscreen
                           style="width:100%; height:100%; border:none;"
+                          @load="${this._installFocusGuards}"
                         ></iframe>
                             ${this.isPresetSwitching ? html`
                               <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(25, 118, 210, 0.1); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(1px);">
