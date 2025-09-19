@@ -58,28 +58,38 @@ export class FolderSizeVisualizerPage extends ComponentBase {
   private selectedFolderName = "";
 
   @state()
-  private activeTab = "tree";
+  private treemapOpen = false;
+
+  @state()
+  private treemapHeight = 600;
 
   connectedCallback() {
     super.connectedCallback();
     this._checkBrowserSupport();
   }
 
-  private _switchTab(tabName: string) {
-    this.activeTab = tabName;
+  private _onOpenTreemap = () => {
+    this.treemapHeight = Math.max(480, Math.floor(window.innerHeight - 96));
+    this.treemapOpen = true;
+    window.addEventListener('resize', this._onResizeTreemap);
+    window.addEventListener('keydown', this._onEscClose);
+  };
 
-    // Update tab buttons
-    const tabButtons = this.shadowRoot?.querySelectorAll('.tab-button');
-    tabButtons?.forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
-    });
+  private _onCloseTreemap = () => {
+    this.treemapOpen = false;
+    window.removeEventListener('resize', this._onResizeTreemap);
+    window.removeEventListener('keydown', this._onEscClose);
+  };
 
-    // Update tab panes
-    const tabPanes = this.shadowRoot?.querySelectorAll('.tab-pane');
-    tabPanes?.forEach(pane => {
-      pane.classList.toggle('active', pane.id === `${tabName}-tab`);
-    });
-  }
+  private _onResizeTreemap = () => {
+    if (this.treemapOpen) {
+      this.treemapHeight = Math.max(480, Math.floor(window.innerHeight - 96));
+    }
+  };
+
+  private _onEscClose = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this.treemapOpen) this._onCloseTreemap();
+  };
 
   private _checkBrowserSupport() {
     // Check if File System Access API is supported
@@ -259,22 +269,27 @@ export class FolderSizeVisualizerPage extends ComponentBase {
         <div class="results">
           <h2>Total Size: ${this._formatSize(this.totalSize)}</h2>
 
-          <div class="visualization-tabs">
-            <div class="tab-buttons">
-              <button class="tab-button ${this.activeTab === 'tree' ? 'active' : ''}" data-tab="tree" @click=${() => this._switchTab('tree')}>Tree View</button>
-              <button class="tab-button ${this.activeTab === 'treemap' ? 'active' : ''}" data-tab="treemap" @click=${() => this._switchTab('treemap')}>Treemap View</button>
-            </div>
-
-            <div class="tab-content">
-              <div class="tab-pane ${this.activeTab === 'tree' ? 'active' : ''}" id="tree-tab">
-                <folder-tree-view .fileTree=${this.fileTree}></folder-tree-view>
-              </div>
-
-              <div class="tab-pane ${this.activeTab === 'treemap' ? 'active' : ''}" id="treemap-tab">
-                <folder-treemap-view .fileTree=${this.fileTree}></folder-treemap-view>
-              </div>
-            </div>
+          <div class="view-actions">
+            <button class="open-treemap-button" @click=${this._onOpenTreemap}>Open Treemap (Full Screen)</button>
           </div>
+
+          <div class="tree-view">
+            <folder-tree-view .fileTree=${this.fileTree}></folder-tree-view>
+          </div>
+
+          ${this.treemapOpen ? html`
+            <div class="treemap-modal-backdrop" @click=${this._onCloseTreemap}>
+              <div class="treemap-modal" @click=${(e: Event) => e.stopPropagation()}>
+                <div class="treemap-modal-header">
+                  <h3>Folder Size Treemap</h3>
+                  <button class="treemap-close" aria-label="Close" @click=${this._onCloseTreemap}>✕</button>
+                </div>
+                <div class="treemap-modal-content">
+                  <folder-treemap-view .fileTree=${this.fileTree} .height=${this.treemapHeight}></folder-treemap-view>
+                </div>
+              </div>
+            </div>
+          ` : ''}
         </div>
       ` : ''}
     `;
