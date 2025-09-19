@@ -119,6 +119,39 @@ src/
 - **Base path**: `/` for dev, `/PlayableTools/` for production
 - **PWA**: Auto-update service worker with version checking. The `VersionService` fetches `/version.json` to detect new builds and prompt the user to update.
 
+## README / Landing page guidelines
+This repository doubles as a small landing page for users who come to the project looking for tools to run locally. To keep the README helpful and welcoming to non-developers, follow these guidelines when editing `README.md`:
+
+- Place a small project logo and primary hero visuals (screenshots / PWA badge) immediately under the main H1/title. This creates a visual landing section so users can quickly see the app and install it.
+- Prefer 1–2 centered screenshots (max width ~600px) and a compact PWA badge (around 200px) beneath them. Keep the visuals near the top — before long introductory text or lists.
+- Keep image files inside `media/` or `public/` and reference them with relative paths (e.g., `media/app-screenshots/previewer.jpg`).
+- If the README grows long, move additional screenshots to a dedicated "Screenshots" section later in the file, but keep the hero visuals at the top.
+- Use descriptive alt text for accessibility and SEO.
+
+Example recommended header layout (Markdown):
+
+```markdown
+# <img src="./media/small-logo.jpg" width="28" style="border-radius:16px;"/> PlayableTools
+
+<p align="center">
+  <img src="media/app-screenshots/previewer.jpg" alt="Playable Previewer Screenshot" width="600"/>
+</p>
+
+<p align="center">
+  <img src="media/app-screenshots/base64.png" alt="Base64 Converter Screenshot" width="600"/>
+</p>
+
+<p align="center">
+  <a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
+</p>
+
+PlayableTools is a web-based toolkit for preparing and publishing HTML5 playables... (continue intro)
+```
+
+Rationale:
+- Many users land on the README first; presenting visuals up-front quickly communicates what the app does and reduces friction for new users who want to try the tools.
+- Keeping a consistent, compact hero layout makes the repo friendly to both developers (who need the run instructions) and non-developers (who need quick visuals / install badge).
+
 ### Best Practices
 1. Always use TypeScript with strict mode
 2. Prefer dependency injection over direct instantiation
