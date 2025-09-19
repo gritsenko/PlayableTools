@@ -2,6 +2,7 @@ import { ComponentBase, customElement, html, route, state } from "fw";
 import "./folder-size-visualizer-page.ts.css";
 import "./folder-tree-view";
 import "./folder-treemap-view";
+import "./folder-sunburst-view";
 
 // Type declarations for File System Access API
 declare global {
@@ -61,17 +62,23 @@ export class FolderSizeVisualizerPage extends ComponentBase {
   private treemapOpen = false;
 
   @state()
-  private treemapHeight = 600;
+  private sunburstOpen = false;
+
+  @state()
+  private sunburstHeight = 600;
+
 
   connectedCallback() {
     super.connectedCallback();
     this._checkBrowserSupport();
   }
 
-  private _onOpenTreemap = () => {
-    this.treemapHeight = Math.max(480, Math.floor(window.innerHeight - 96));
-    this.treemapOpen = true;
-    window.addEventListener('resize', this._onResizeTreemap);
+  // Treemap open handler removed - treemap action replaced by Sunburst
+
+  private _onOpenSunburst = () => {
+    this.sunburstHeight = Math.max(480, Math.floor(window.innerHeight - 96));
+    this.sunburstOpen = true;
+    window.addEventListener('resize', this._onResizeSunburst);
     window.addEventListener('keydown', this._onEscClose);
   };
 
@@ -81,14 +88,27 @@ export class FolderSizeVisualizerPage extends ComponentBase {
     window.removeEventListener('keydown', this._onEscClose);
   };
 
+  private _onCloseSunburst = () => {
+    this.sunburstOpen = false;
+    window.removeEventListener('resize', this._onResizeSunburst);
+    window.removeEventListener('keydown', this._onEscClose);
+  };
+
   private _onResizeTreemap = () => {
-    if (this.treemapOpen) {
-      this.treemapHeight = Math.max(480, Math.floor(window.innerHeight - 96));
+    // treemap is not actively used in UI; keep handler for completeness
+    return;
+  };
+
+  private _onResizeSunburst = () => {
+    if (this.sunburstOpen) {
+      this.sunburstHeight = Math.max(480, Math.floor(window.innerHeight - 96));
     }
   };
 
   private _onEscClose = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this.treemapOpen) this._onCloseTreemap();
+    if (e.key !== 'Escape') return;
+    if (this.sunburstOpen) this._onCloseSunburst();
+    else if (this.treemapOpen) this._onCloseTreemap();
   };
 
   private _checkBrowserSupport() {
@@ -242,20 +262,47 @@ export class FolderSizeVisualizerPage extends ComponentBase {
         </div>
       ` : ''}
 
-      <div class="folder-picker-container">
-        <button
-          class="folder-select-button"
-          @click=${this._onSelectFolder}
-          ?disabled=${!this.isSupported || this.processing}
-        >
-          ${this.processing ? 'Analyzing...' : 'Select Folder'}
-        </button>
-        ${this.selectedFolderName ? html`
-          <div class="selected-folder">
-            Selected: <strong>${this.selectedFolderName}</strong>
+      ${this.fileTree.length > 0 ? html`
+        <div class="folder-preview-row">
+          <div class="picker-column">
+            <div class="folder-picker-container">
+              <button
+                class="folder-select-button"
+                @click=${this._onSelectFolder}
+                ?disabled=${!this.isSupported || this.processing}
+              >
+                ${this.processing ? 'Analyzing...' : 'Select Folder'}
+              </button>
+              ${this.selectedFolderName ? html`
+                <div class="selected-folder">
+                  Selected: <strong>${this.selectedFolderName}</strong>
+                </div>
+              ` : ''}
+            </div>
           </div>
-        ` : ''}
-      </div>
+
+          <div class="preview-column">
+            <div class="sunburst-preview" @click=${this._onOpenSunburst} title="Open Sunburst (Full Screen)">
+              <folder-sunburst-view .fileTree=${this.fileTree} preview .previewStretch=${true} .previewSize=${360} .hideLabels=${true} .hideTooltip=${true}></folder-sunburst-view>
+            </div>
+          </div>
+        </div>
+      ` : html`
+        <div class="folder-picker-container">
+          <button
+            class="folder-select-button"
+            @click=${this._onSelectFolder}
+            ?disabled=${!this.isSupported || this.processing}
+          >
+            ${this.processing ? 'Analyzing...' : 'Select Folder'}
+          </button>
+          ${this.selectedFolderName ? html`
+            <div class="selected-folder">
+              Selected: <strong>${this.selectedFolderName}</strong>
+            </div>
+          ` : ''}
+        </div>
+      `}
 
       ${this.processing ? html`
         <div class="processing">Analyzing folder structure...</div>
@@ -267,25 +314,25 @@ export class FolderSizeVisualizerPage extends ComponentBase {
 
       ${this.fileTree.length > 0 ? html`
         <div class="results">
-          <h2>Total Size: ${this._formatSize(this.totalSize)}</h2>
+          <h3>Total Size: ${this._formatSize(this.totalSize)}</h3>
 
           <div class="view-actions">
-            <button class="open-treemap-button" @click=${this._onOpenTreemap}>Open Treemap (Full Screen)</button>
+            <!-- Action buttons moved to the top for full-width layout -->
           </div>
 
           <div class="tree-view">
             <folder-tree-view .fileTree=${this.fileTree}></folder-tree-view>
           </div>
 
-          ${this.treemapOpen ? html`
-            <div class="treemap-modal-backdrop" @click=${this._onCloseTreemap}>
+          ${this.sunburstOpen ? html`
+            <div class="treemap-modal-backdrop" @click=${this._onCloseSunburst}>
               <div class="treemap-modal" @click=${(e: Event) => e.stopPropagation()}>
                 <div class="treemap-modal-header">
-                  <h3>Folder Size Treemap</h3>
-                  <button class="treemap-close" aria-label="Close" @click=${this._onCloseTreemap}>✕</button>
+                  <h3>Folder Size Sunburst</h3>
+                  <button class="treemap-close" aria-label="Close" @click=${this._onCloseSunburst}>✕</button>
                 </div>
                 <div class="treemap-modal-content">
-                  <folder-treemap-view .fileTree=${this.fileTree} .height=${this.treemapHeight}></folder-treemap-view>
+                  <folder-sunburst-view .fileTree=${this.fileTree} .height=${this.sunburstHeight}></folder-sunburst-view>
                 </div>
               </div>
             </div>
