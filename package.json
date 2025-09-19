@@ -1,7 +1,7 @@
 {
   "name": "playable_tools",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
+    "@types/d3": "^7.4.3",
     "@types/jszip": "^3.4.0",
+    "d3": "^7.9.0",
     "fw": "file:./src/fw",
     "jszip": "^3.10.1",
     "lit": "^3.3.0",

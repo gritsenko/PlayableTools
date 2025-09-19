@@ -1,0 +1,47 @@
+.tree-container {
+  margin-top: 1rem;
+  border: 1px solid var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+  background-color: var(--pico-background-color);
+}
+
+.tree-node {
+  margin: 0.25rem 0;
+}
+
+.node-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem;
+  border-radius: var(--pico-border-radius);
+}
+
+.node-info:hover {
+  background-color: var(--pico-code-background-color);
+}
+
+.node-name {
+  font-weight: 500;
+}
+
+.node-name.directory {
+  color: var(--pico-primary);
+}
+
+.node-name.file {
+  color: var(--pico-text-color);
+}
+
+.directory-content {
+  margin-left: 20px;
+}
+
+.empty-directory {
+  color: var(--pico-muted-color);
+  font-style: italic;
+  font-size: 0.9em;
+  margin-left: 20px;
+  padding: 2px 0;
+}

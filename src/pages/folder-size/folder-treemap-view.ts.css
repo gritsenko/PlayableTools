@@ -1,0 +1,58 @@
+.treemap-section {
+  margin-top: 1rem;
+}
+
+.treemap-container {
+  border: 1px solid var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+  background-color: var(--pico-background-color);
+  overflow-x: auto;
+}
+
+#treemap-svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: 400px;
+}
+
+.treemap-legend {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.legend-color.folder {
+  background-color: #4a90e2;
+}
+
+.legend-color.file {
+  background-color: #7ed321;
+}
+
+.treemap-tooltip {
+  background: rgba(0, 0, 0, 0.8) !important;
+  color: white !important;
+  padding: 8px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  pointer-events: none !important;
+  z-index: 1000 !important;
+  position: absolute !important;
+}
