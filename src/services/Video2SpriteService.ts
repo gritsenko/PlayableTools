@@ -332,6 +332,120 @@ export class Video2SpriteService {
     return this.videoMetadata ? { ...this.videoMetadata } : null;
   }
 
+  /**
+   * Auto-detect the most common background color from loaded frames
+   * Analyzes edge pixels and finds the most frequent color
+   */
+  autoDetectBackgroundColor(): { r: number; g: number; b: number; a: number; confidence: number } | null {
+    if (this.originalFrames.length === 0) {
+      return null;
+    }
+
+    // Sample multiple frames for better detection
+    const framesToSample = Math.min(5, this.originalFrames.length);
+    const sampleIndices = [];
+    
+    // Sample frames evenly across the video
+    for (let i = 0; i < framesToSample; i++) {
+      const index = Math.floor((i / (framesToSample - 1)) * (this.originalFrames.length - 1));
+      sampleIndices.push(index);
+    }
+
+    const colorCounts = new Map<string, { count: number; r: number; g: number; b: number; a: number }>();
+    let totalPixelsSampled = 0;
+
+    // Sample edge pixels from selected frames
+    for (const frameIndex of sampleIndices) {
+      const frame = this.originalFrames[frameIndex];
+      if (!frame) continue;
+
+      const { width, height, data } = frame.imageData;
+      const borderWidth = Math.max(2, Math.floor(Math.min(width, height) * 0.05)); // 5% border
+
+      // Sample pixels from edges (top, bottom, left, right borders)
+      const pixelsToSample: number[] = [];
+
+      // Top and bottom edges
+      for (let x = 0; x < width; x += 4) { // Sample every 4th pixel for performance
+        for (let y = 0; y < borderWidth; y++) {
+          pixelsToSample.push(y * width + x); // Top edge
+        }
+        for (let y = height - borderWidth; y < height; y++) {
+          pixelsToSample.push(y * width + x); // Bottom edge
+        }
+      }
+
+      // Left and right edges
+      for (let y = borderWidth; y < height - borderWidth; y += 4) {
+        for (let x = 0; x < borderWidth; x++) {
+          pixelsToSample.push(y * width + x); // Left edge
+        }
+        for (let x = width - borderWidth; x < width; x++) {
+          pixelsToSample.push(y * width + x); // Right edge
+        }
+      }
+
+      // Count colors
+      for (const pixelIndex of pixelsToSample) {
+        const dataIndex = pixelIndex * 4;
+        if (dataIndex >= data.length - 3) continue;
+
+        const r = data[dataIndex];
+        const g = data[dataIndex + 1];
+        const b = data[dataIndex + 2];
+        const a = data[dataIndex + 3];
+
+        // Skip transparent pixels
+        if (a < 128) continue;
+
+        // Quantize colors to reduce noise (group similar colors)
+        const quantizedR = Math.round(r / 8) * 8;
+        const quantizedG = Math.round(g / 8) * 8;
+        const quantizedB = Math.round(b / 8) * 8;
+
+        const colorKey = `${quantizedR},${quantizedG},${quantizedB}`;
+        
+        if (colorCounts.has(colorKey)) {
+          colorCounts.get(colorKey)!.count++;
+        } else {
+          colorCounts.set(colorKey, { count: 1, r: quantizedR, g: quantizedG, b: quantizedB, a: 255 });
+        }
+        
+        totalPixelsSampled++;
+      }
+    }
+
+    if (totalPixelsSampled === 0) {
+      return null;
+    }
+
+    // Find the most common color
+    let mostCommonColor: { count: number; r: number; g: number; b: number; a: number } | null = null;
+    let maxCount = 0;
+
+    for (const colorData of colorCounts.values()) {
+      if (colorData.count > maxCount) {
+        maxCount = colorData.count;
+        mostCommonColor = colorData;
+      }
+    }
+
+    if (!mostCommonColor) {
+      return null;
+    }
+
+    // Calculate confidence (percentage of edge pixels that are this color)
+    const confidence = (mostCommonColor.count / totalPixelsSampled) * 100;
+
+    return {
+      r: mostCommonColor.r,
+      g: mostCommonColor.g,
+      b: mostCommonColor.b,
+      a: mostCommonColor.a,
+      confidence: Math.round(confidence * 100) / 100 // Round to 2 decimal places
+    };
+  }
+
   private initializeElements() {
     // Create video element for processing
     this.videoElement = document.createElement('video');

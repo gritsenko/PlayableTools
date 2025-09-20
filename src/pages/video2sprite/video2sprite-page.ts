@@ -60,6 +60,9 @@ export class Video2spritePage extends ComponentBase {
   @state()
   private isSliderBeingDragged = false;
 
+  @state()
+  private detectedBackgroundColor: string | null = null;
+
   @inject(Video2SpriteService)
   private video2SpriteService!: Video2SpriteService;
 
@@ -145,7 +148,7 @@ export class Video2spritePage extends ComponentBase {
               b: parseInt(colorMatch[3]),
               a: 255,
             },
-            tolerance: parseInt(toleranceInput?.value || "32"),
+            tolerance: parseInt(toleranceInput?.value || "50"),
             feather: parseInt(featherInput?.value || "8"),
             contract: parseInt(contractInput?.value || "1"),
             edgeBlur: parseInt(edgeBlurInput?.value || "1"),
@@ -343,6 +346,9 @@ export class Video2spritePage extends ComponentBase {
       this.totalFrames = this.video2SpriteService.getFrameCount();
       this.framesLoaded = true;
       
+      // Auto-detect background color
+      this.autoDetectBackground();
+      
       // Display the first frame
       this.displayFrame(0);
 
@@ -359,6 +365,29 @@ export class Video2spritePage extends ComponentBase {
 
     // Store the file for later processing
     this.selectedFile = file;
+  }
+
+  private autoDetectBackground() {
+    try {
+      const detection = this.video2SpriteService.autoDetectBackgroundColor();
+      if (detection && detection.confidence > 50) { // Auto-apply if confidence > 50%
+        this.detectedBackgroundColor = `rgba(${detection.r}, ${detection.g}, ${detection.b}, ${detection.a})`;
+        this.selectedColor = this.detectedBackgroundColor;
+        console.log(`Auto-applied background color: ${this.detectedBackgroundColor} (${detection.confidence}% confidence)`);
+      } else {
+        this.detectedBackgroundColor = null;
+        console.log(`Background detection failed or low confidence: ${detection ? detection.confidence : 0}%`);
+      }
+    } catch (error) {
+      console.error('Failed to auto-detect background color:', error);
+      this.detectedBackgroundColor = null;
+    }
+  }
+
+  private resetColor() {
+    this.selectedColor = "";
+    this.detectedBackgroundColor = null;
+    this.processCurrentFrame();
   }
 
   private displayFrame(frameIndex: number) {
@@ -456,10 +485,10 @@ export class Video2spritePage extends ComponentBase {
     // Get current parameter values
     const toleranceInput = document.getElementById("toleranceInput") as HTMLInputElement;
     const featherInput = document.getElementById("featherInput") as HTMLInputElement;
-    const contractInput = document.getElementById("contractInput") as HTMLInputElement;
-    const edgeBlurInput = document.getElementById("edgeBlurInput") as HTMLInputElement;
+    const contractInput = document.getElementById("contractPx") as HTMLInputElement;
+    const edgeBlurInput = document.getElementById("edgeBlur") as HTMLInputElement;
 
-    const tolerance = toleranceInput ? parseInt(toleranceInput.value) : 32;
+    const tolerance = toleranceInput ? parseInt(toleranceInput.value) : 50;
     const feather = featherInput ? parseInt(featherInput.value) : 8;
     const contract = contractInput ? parseInt(contractInput.value) : 1;
     const edgeBlur = edgeBlurInput ? parseInt(edgeBlurInput.value) : 1;
@@ -847,9 +876,16 @@ export class Video2spritePage extends ComponentBase {
             title="Selected color"
             style="background-color: ${this.selectedColor};"
           ></div>
+          <button 
+            @click=${this.resetColor}
+            class="reset-color-btn"
+            title="Clear selected color"
+          >
+            ✕
+          </button>
 
           <label for="toleranceInput"
-            >Tolerance: <span id="toleranceValue">32</span></label
+            >Tolerance: <span id="toleranceValue">50</span></label
           >
           <p class="hint">
             How similar colors are considered for removal (0-255). Higher = more
@@ -860,7 +896,7 @@ export class Video2spritePage extends ComponentBase {
             type="number"
             min="0"
             max="255"
-            value="32"
+            value="50"
             @input=${(e: Event) => {
               const target = e.target as HTMLInputElement;
               const range = document.getElementById(
@@ -879,7 +915,7 @@ export class Video2spritePage extends ComponentBase {
             type="range"
             min="0"
             max="255"
-            value="32"
+            value="50"
             @input=${(e: Event) => {
               const target = e.target as HTMLInputElement;
               const number = document.getElementById(

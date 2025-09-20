@@ -37,6 +37,26 @@
   display: inline-block;
 }
 
+.reset-color-btn {
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.reset-color-btn:hover {
+  background: #ff6666;
+}
+
 input[type="number"],
 input[type="range"] {
   width: 100%;
