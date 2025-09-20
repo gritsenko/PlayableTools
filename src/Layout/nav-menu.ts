@@ -5,18 +5,18 @@ import "./nav-menu.ts.css";
 @customElement("nav-menu")
 export class NavMenu extends ComponentBase {
   private menuItems = [
-    { label: "Home", path: "/", disabled: false },
-    { label: "CTA SDK", path: "/cta-sdk", disabled: false },
-    { label: "Publish", path: "/publish", disabled: false },
-    { label: "Validate", path: "/validate", disabled: false },
-    { label: "Compress assets", path: "/compress-assets", disabled: false },
-    { label: "Base64 Converter", path: "/base64", disabled: false },
-    { label: "Imba Packer", path: "/imba-packer", disabled: false },
-    { label: "Folder Size Visualizer", path: "/folder-size-visualizer", disabled: false },
-    { label: "Portfolio", path: "/portfolio", disabled: false },
+    { label: "🏠 Home", path: "/", disabled: false },
+    { label: "📖 CTA SDK", path: "/cta-sdk", disabled: false },
+    { label: "📤 Publish", path: "/publish", disabled: false },
+    { label: "✅ Validate", path: "/validate", disabled: false },
+    { label: "🖼️ Compress assets", path: "/compress-assets", disabled: false },
+    { label: "🔄 Base64 Converter", path: "/base64", disabled: false },
+    { label: "🗜️ Imba Packer", path: "/imba-packer", disabled: false },
+    { label: "📊 Folder Size Map", path: "/folder-size-visualizer", disabled: false },
+    { label: "📂 Portfolio", path: "/portfolio", disabled: false },
     // { label: "FAQ", path: "/faq", disabled: true },
-    { label: "Preview", path: "/preview", disabled: false },
-    { label: "Video to Sprite", path: "/video2sprite", disabled: false },
+    { label: "📱 Preview", path: "/preview", disabled: false },
+    { label: "🎬 Video to Sprite", path: "/video2sprite", disabled: false },
   ];
 
   private get currentPath() {
