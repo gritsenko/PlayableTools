@@ -28,10 +28,16 @@ export interface SpriteSheetResult {
 }
 
 export interface ProcessingProgress {
-  stage: 'loading' | 'processing' | 'generating';
+  stage: 'loading' | 'extracting' | 'processing' | 'generating';
   progress: number; // 0-100
   currentFrame?: number;
   totalFrames?: number;
+}
+
+export interface VideoFrame {
+  imageData: ImageData;
+  timestamp: number;
+  index: number;
 }
 
 @injectable()
@@ -39,42 +45,35 @@ export class Video2SpriteService {
   private videoElement: HTMLVideoElement | null = null;
   private canvasElement: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private originalFrames: VideoFrame[] = [];
+  private processedFrames: VideoFrame[] = [];
+  private currentVideoFile: File | null = null;
+  private videoMetadata: { duration: number; width: number; height: number; frameRate?: number } | null = null;
 
   constructor() {
     this.initializeElements();
   }
 
-  private initializeElements() {
-    // Create video element for processing
-    this.videoElement = document.createElement('video');
-    this.videoElement.preload = 'metadata';
-    this.videoElement.muted = true;
-    this.videoElement.playsInline = true;
-
-    // Create canvas for frame extraction
-    this.canvasElement = document.createElement('canvas');
-    this.ctx = this.canvasElement.getContext('2d');
-  }
-
-  async processVideoToSprites(
+  /**
+   * Load a video file and extract all frames
+   */
+  async loadVideo(
     videoFile: File,
-    options: Video2SpriteOptions = {},
+    options: { frameRate?: number; maxWidth?: number; maxHeight?: number } = {},
     onProgress?: (progress: ProcessingProgress) => void
-  ): Promise<SpriteSheetResult> {
+  ): Promise<void> {
     if (!this.videoElement || !this.canvasElement || !this.ctx) {
       throw new Error('Video processing elements not initialized');
     }
 
-    const {
-      frameRate = 10,
-      maxWidth = 512,
-      maxHeight = 512,
-      quality = 0.9,
-      startTime = 0,
-      spriteColumns = 8
-    } = options;
+    const { frameRate = 10, maxWidth = 512, maxHeight = 512 } = options;
 
     try {
+      // Clear previous data
+      this.originalFrames = [];
+      this.processedFrames = [];
+      this.currentVideoFile = videoFile;
+
       // Load video
       onProgress?.({ stage: 'loading', progress: 0 });
       const videoUrl = URL.createObjectURL(videoFile);
@@ -87,21 +86,24 @@ export class Video2SpriteService {
         this.videoElement.onerror = () => reject(new Error('Failed to load video'));
       });
 
-      const duration = this.videoElement.duration;
-      const endTime = options.endTime || duration;
+      // Store metadata
+      this.videoMetadata = {
+        duration: this.videoElement.duration,
+        width: this.videoElement.videoWidth,
+        height: this.videoElement.videoHeight
+      };
 
-      // Calculate frame extraction parameters
-      const totalFrames = Math.floor((endTime - startTime) * frameRate);
+      const duration = this.videoElement.duration;
+      const totalFrames = Math.floor(duration * frameRate);
       const frameInterval = 1 / frameRate;
 
-      onProgress?.({ stage: 'processing', progress: 10, currentFrame: 0, totalFrames });
+      onProgress?.({ stage: 'extracting', progress: 10, currentFrame: 0, totalFrames });
 
-      // Extract frames
-      const frames: ImageData[] = [];
+      // Extract all frames
       for (let i = 0; i < totalFrames; i++) {
-        const currentTime = startTime + (i * frameInterval);
+        const currentTime = i * frameInterval;
 
-        if (currentTime > endTime) break;
+        if (currentTime > duration) break;
 
         this.videoElement.currentTime = currentTime;
 
@@ -128,55 +130,299 @@ export class Video2SpriteService {
         this.canvasElement.height = frameHeight;
 
         this.ctx.drawImage(this.videoElement, 0, 0, frameWidth, frameHeight);
-        let frameData = this.ctx.getImageData(0, 0, frameWidth, frameHeight);
+        const frameData = this.ctx.getImageData(0, 0, frameWidth, frameHeight);
 
-        // Apply chroma key if specified
-        if (options.chromaKey) {
-          frameData = this.applyChromaKey(
-            frameData,
-            options.chromaKey.keyColor,
-            options.chromaKey.tolerance,
-            options.chromaKey.feather,
-            options.chromaKey.contract,
-            options.chromaKey.edgeBlur
-          );
-        }
+        // Store original frame
+        this.originalFrames.push({
+          imageData: frameData,
+          timestamp: currentTime,
+          index: i
+        });
 
-        frames.push(frameData);
+        // Initially, processed frames are same as original frames
+        this.processedFrames.push({
+          imageData: new ImageData(frameData.data.slice(), frameData.width, frameData.height),
+          timestamp: currentTime,
+          index: i
+        });
 
         onProgress?.({
-          stage: 'processing',
-          progress: 10 + (i / totalFrames) * 70,
+          stage: 'extracting',
+          progress: 10 + (i / totalFrames) * 80,
           currentFrame: i + 1,
           totalFrames
         });
       }
 
-      // Generate sprite sheet
-      onProgress?.({ stage: 'generating', progress: 80 });
+      onProgress?.({ stage: 'extracting', progress: 100 });
 
-      const spriteSheet = await this.generateSpriteSheet(frames, spriteColumns, quality);
-
-      onProgress?.({ stage: 'generating', progress: 100 });
-
-      // Clean up
+      // Clean up video URL
       URL.revokeObjectURL(videoUrl);
-
-      return {
-        spriteSheet,
-        frameCount: frames.length,
-        duration: endTime - startTime,
-        width: this.canvasElement.width,
-        height: this.canvasElement.height,
-        frameWidth: frames[0]?.width || 0,
-        frameHeight: frames[0]?.height || 0
-      };
 
     } catch (error) {
       // Clean up on error
       if (this.videoElement?.src) {
         URL.revokeObjectURL(this.videoElement.src);
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Get the total number of loaded frames
+   */
+  getFrameCount(): number {
+    return this.originalFrames.length;
+  }
+
+  /**
+   * Get original frame at specific index
+   */
+  getOriginalFrame(index: number): VideoFrame | null {
+    return this.originalFrames[index] || null;
+  }
+
+  /**
+   * Get processed frame at specific index
+   */
+  getProcessedFrame(index: number): VideoFrame | null {
+    return this.processedFrames[index] || null;
+  }
+
+  /**
+   * Get all original frames
+   */
+  getOriginalFrames(): VideoFrame[] {
+    return [...this.originalFrames];
+  }
+
+  /**
+   * Get all processed frames
+   */
+  getProcessedFrames(): VideoFrame[] {
+    return [...this.processedFrames];
+  }
+
+  /**
+   * Apply processing to all frames (e.g., chroma key)
+   */
+  applyProcessingToAllFrames(
+    options: Pick<Video2SpriteOptions, 'chromaKey'>,
+    onProgress?: (progress: ProcessingProgress) => void
+  ): void {
+    if (this.originalFrames.length === 0) {
+      throw new Error('No frames loaded. Call loadVideo() first.');
+    }
+
+    onProgress?.({ stage: 'processing', progress: 0, currentFrame: 0, totalFrames: this.originalFrames.length });
+
+    for (let i = 0; i < this.originalFrames.length; i++) {
+      const originalFrame = this.originalFrames[i];
+      let processedImageData = new ImageData(
+        originalFrame.imageData.data.slice(),
+        originalFrame.imageData.width,
+        originalFrame.imageData.height
+      );
+
+      // Apply chroma key if specified
+      if (options.chromaKey) {
+        processedImageData = this.applyChromaKey(
+          processedImageData,
+          options.chromaKey.keyColor,
+          options.chromaKey.tolerance,
+          options.chromaKey.feather,
+          options.chromaKey.contract,
+          options.chromaKey.edgeBlur
+        );
+      }
+
+      this.processedFrames[i] = {
+        imageData: processedImageData,
+        timestamp: originalFrame.timestamp,
+        index: originalFrame.index
+      };
+
+      onProgress?.({
+        stage: 'processing',
+        progress: (i + 1) / this.originalFrames.length * 100,
+        currentFrame: i + 1,
+        totalFrames: this.originalFrames.length
+      });
+    }
+  }
+
+  /**
+   * Apply processing to a single frame
+   */
+  applyProcessingToFrame(
+    frameIndex: number,
+    options: Pick<Video2SpriteOptions, 'chromaKey'>
+  ): VideoFrame | null {
+    const originalFrame = this.originalFrames[frameIndex];
+    if (!originalFrame) {
+      return null;
+    }
+
+    let processedImageData = new ImageData(
+      originalFrame.imageData.data.slice(),
+      originalFrame.imageData.width,
+      originalFrame.imageData.height
+    );
+
+    // Apply chroma key if specified
+    if (options.chromaKey) {
+      processedImageData = this.applyChromaKey(
+        processedImageData,
+        options.chromaKey.keyColor,
+        options.chromaKey.tolerance,
+        options.chromaKey.feather,
+        options.chromaKey.contract,
+        options.chromaKey.edgeBlur
+      );
+    }
+
+    const processedFrame: VideoFrame = {
+      imageData: processedImageData,
+      timestamp: originalFrame.timestamp,
+      index: originalFrame.index
+    };
+
+    // Update the processed frame in the array
+    this.processedFrames[frameIndex] = processedFrame;
+
+    return processedFrame;
+  }
+
+  /**
+   * Create a canvas element with a specific frame for preview
+   */
+  createFramePreviewCanvas(frameIndex: number, useProcessed: boolean = true): HTMLCanvasElement | null {
+    const frame = useProcessed ? this.getProcessedFrame(frameIndex) : this.getOriginalFrame(frameIndex);
+    
+    if (!frame) {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.imageData.width;
+    canvas.height = frame.imageData.height;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.putImageData(frame.imageData, 0, 0);
+    }
+
+    return canvas;
+  }
+
+  /**
+   * Reset and clear all loaded frames
+   */
+  clearFrames(): void {
+    this.originalFrames = [];
+    this.processedFrames = [];
+    this.currentVideoFile = null;
+    this.videoMetadata = null;
+  }
+
+  /**
+   * Get stored video metadata (from loaded video)
+   */
+  getStoredVideoMetadata(): { duration: number; width: number; height: number; frameRate?: number } | null {
+    return this.videoMetadata ? { ...this.videoMetadata } : null;
+  }
+
+  private initializeElements() {
+    // Create video element for processing
+    this.videoElement = document.createElement('video');
+    this.videoElement.preload = 'metadata';
+    this.videoElement.muted = true;
+    this.videoElement.playsInline = true;
+
+    // Create canvas for frame extraction
+    this.canvasElement = document.createElement('canvas');
+    this.ctx = this.canvasElement.getContext('2d');
+  }
+
+  async processVideoToSprites(
+    videoFile: File,
+    options: Video2SpriteOptions = {},
+    onProgress?: (progress: ProcessingProgress) => void
+  ): Promise<SpriteSheetResult> {
+    const {
+      quality = 0.9,
+      spriteColumns = 8,
+      startTime = 0
+    } = options;
+
+    // Check if we need to load the video or if it's already loaded
+    const needsLoading = !this.currentVideoFile || 
+                        this.currentVideoFile !== videoFile || 
+                        this.originalFrames.length === 0;
+
+    if (needsLoading) {
+      // Load video and extract all frames
+      await this.loadVideo(videoFile, {
+        frameRate: options.frameRate,
+        maxWidth: options.maxWidth,
+        maxHeight: options.maxHeight
+      }, onProgress);
+    }
+
+    if (this.processedFrames.length === 0) {
+      throw new Error('No frames available. Video loading may have failed.');
+    }
+
+    try {
+      // Apply processing to frames if needed
+      onProgress?.({ stage: 'processing', progress: 10 });
+      
+      // Use existing processed frames or apply new processing
+      let framesToUse = this.processedFrames;
+      
+      // If we have chroma key options, reprocess the frames
+      if (options.chromaKey) {
+        this.applyProcessingToAllFrames({ chromaKey: options.chromaKey }, (progress) => {
+          onProgress?.({
+            stage: 'processing',
+            progress: 10 + (progress.progress * 0.6), // 10-70%
+            currentFrame: progress.currentFrame,
+            totalFrames: progress.totalFrames
+          });
+        });
+        framesToUse = this.processedFrames;
+      }
+
+      // Filter frames by time range if specified
+      const endTime = options.endTime || (this.videoMetadata?.duration || 0);
+      const filteredFrames = framesToUse.filter(frame => 
+        frame.timestamp >= startTime && frame.timestamp <= endTime
+      );
+
+      if (filteredFrames.length === 0) {
+        throw new Error('No frames in specified time range');
+      }
+
+      // Generate sprite sheet
+      onProgress?.({ stage: 'generating', progress: 70 });
+
+      const frameImageDataArray = filteredFrames.map(frame => frame.imageData);
+      const spriteSheet = await this.generateSpriteSheet(frameImageDataArray, spriteColumns, quality);
+
+      onProgress?.({ stage: 'generating', progress: 100 });
+
+      const firstFrame = filteredFrames[0];
+      return {
+        spriteSheet,
+        frameCount: filteredFrames.length,
+        duration: endTime - startTime,
+        width: firstFrame.imageData.width * spriteColumns,
+        height: firstFrame.imageData.height * Math.ceil(filteredFrames.length / spriteColumns),
+        frameWidth: firstFrame.imageData.width,
+        frameHeight: firstFrame.imageData.height
+      };
+
+    } catch (error) {
       throw error;
     }
   }

@@ -39,10 +39,32 @@ export class Video2spritePage extends ComponentBase {
   @state()
   private selectedColor = "";
 
+  @state()
+  private currentFrameIndex = 0;
+
+  @state()
+  private totalFrames = 0;
+
+  @state()
+  private framesLoaded = false;
+
+  @state()
+  private isPlaying = false;
+
+  @state()
+  private playbackSpeed = 100; // milliseconds per frame
+
+  @state()
+  private isSavingSequence = false;
+
+  @state()
+  private isSliderBeingDragged = false;
+
   @inject(Video2SpriteService)
   private video2SpriteService!: Video2SpriteService;
 
   private selectedFile: File | null = null;
+  private animationInterval: number | null = null;
 
   private backgrounds = [
     checkboard,
@@ -57,94 +79,29 @@ export class Video2spritePage extends ComponentBase {
 
   private originalImageData: ImageData | null = null;
 
-  private selectBackground(bg: string) {
-    this.selectedBackground = bg;
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up animation interval when component is destroyed
+    this.pauseAnimation();
+    // Remove global event listeners
+    document.removeEventListener('mouseup', this.handleGlobalMouseUp);
   }
 
-  private async displayFirstFrame(file: File): Promise<void> {
-    const video = document.createElement("video");
-    const canvas = document.getElementById(
-      "previewCanvas"
-    ) as HTMLCanvasElement;
-    if (!canvas) return;
+  connectedCallback() {
+    super.connectedCallback();
+    // Add global mouse up event listener to handle slider drag end
+    document.addEventListener('mouseup', this.handleGlobalMouseUp);
+  }
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  private handleGlobalMouseUp = () => {
+    if (this.isSliderBeingDragged) {
+      this.isSliderBeingDragged = false;
+      this.updateSliderValue();
+    }
+  };
 
-    const videoUrl = URL.createObjectURL(file);
-    video.src = videoUrl;
-    video.preload = "metadata";
-    video.muted = true; // Prevent autoplay issues
-    video.playsInline = true; // Better mobile support
-
-    return new Promise((resolve) => {
-      let hasResolved = false;
-      let drawWidth = 0,
-        drawHeight = 0,
-        offsetX = 0,
-        offsetY = 0;
-
-      const cleanup = () => {
-        if (!hasResolved) {
-          hasResolved = true;
-          // Delay blob URL revocation to ensure all operations are complete
-          setTimeout(() => {
-            URL.revokeObjectURL(videoUrl);
-          }, 100);
-          resolve();
-        }
-      };
-
-      video.onloadedmetadata = () => {
-        const containerWidth = 600;
-        const containerHeight = 600;
-        const videoAspect = video.videoWidth / video.videoHeight;
-        const containerAspect = containerWidth / containerHeight;
-
-        if (videoAspect > containerAspect) {
-          // Video is wider, fit by width
-          drawWidth = containerWidth;
-          drawHeight = containerWidth / videoAspect;
-          offsetX = 0;
-          offsetY = (containerHeight - drawHeight) / 2;
-        } else {
-          // Video is taller, fit by height
-          drawHeight = containerHeight;
-          drawWidth = containerHeight * videoAspect;
-          offsetX = (containerWidth - drawWidth) / 2;
-          offsetY = 0;
-        }
-
-        canvas.width = containerWidth;
-        canvas.height = containerHeight;
-
-        video.currentTime = 0;
-      };
-
-      video.onseeked = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-
-        // Store the original image data for chroma key processing
-        this.originalImageData = ctx.getImageData(
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        cleanup();
-      };
-
-      video.onerror = () => {
-        cleanup();
-      };
-
-      // Add timeout as fallback
-      setTimeout(() => {
-        cleanup();
-      }, 10000); // 10 second timeout
-    });
+  private selectBackground(bg: string) {
+    this.selectedBackground = bg;
   }
 
   private async startProcessing() {
@@ -232,6 +189,96 @@ export class Video2spritePage extends ComponentBase {
     }
   }
 
+  private async savePngSequence() {
+    if (!this.framesLoaded || this.video2SpriteService.getFrameCount() === 0) {
+      alert("No frames available to save. Please load a video first.");
+      return;
+    }
+
+    // Check if File System Access API is supported
+    if (!('showDirectoryPicker' in window)) {
+      alert("Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another compatible browser.");
+      return;
+    }
+
+    try {
+      // Let user pick a directory
+      const directoryHandle = await (window as any).showDirectoryPicker({
+        mode: 'readwrite'
+      });
+
+      this.isSavingSequence = true;
+      this.processingProgress = { stage: 'generating', progress: 0 };
+
+      // Get all processed frames
+      const frames = this.video2SpriteService.getProcessedFrames();
+      const totalFrames = frames.length;
+      
+      if (totalFrames === 0) {
+        alert("No processed frames available to save.");
+        this.isSavingSequence = false;
+        this.processingProgress = null;
+        return;
+      }
+
+      // Save each frame as PNG
+      for (let i = 0; i < totalFrames; i++) {
+        // Create canvas with frame data
+        const canvas = this.video2SpriteService.createFramePreviewCanvas(i, true);
+        if (!canvas) {
+          console.warn(`Failed to create canvas for frame ${i}`);
+          continue;
+        }
+
+        // Convert canvas to blob
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error(`Failed to create blob for frame ${i}`));
+            }
+          }, 'image/png', 1.0);
+        });
+
+        // Create filename with zero-padded frame number
+        const frameNumber = String(i + 1).padStart(4, '0');
+        const filename = `frame_${frameNumber}.png`;
+
+        // Save file to directory
+        const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+
+        // Update progress
+        this.processingProgress = {
+          stage: 'generating',
+          progress: ((i + 1) / totalFrames) * 100,
+          currentFrame: i + 1,
+          totalFrames
+        };
+      }
+
+      alert(`Successfully saved ${totalFrames} PNG files to the selected folder!`);
+
+    } catch (error) {
+      console.error('Failed to save PNG sequence:', error);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          // User cancelled the directory picker
+          return;
+        }
+        alert(`Failed to save PNG sequence: ${error.message}`);
+      } else {
+        alert('Failed to save PNG sequence. Please try again.');
+      }
+    } finally {
+      this.isSavingSequence = false;
+      this.processingProgress = null;
+    }
+  }
+
   private handleDragOver(event: DragEvent) {
     event.preventDefault();
     this.isDragOver = true;
@@ -271,22 +318,221 @@ export class Video2spritePage extends ComponentBase {
       return;
     }
 
+    // Pause any running animation
+    this.pauseAnimation();
+
     // Clear previous data
     this.originalImageData = null;
     this.selectedColor = "";
+    this.framesLoaded = false;
+    this.currentFrameIndex = 0;
+    this.totalFrames = 0;
 
-    // Display first frame on preview canvas
-    await this.displayFirstFrame(file);
+    // Load all frames from the video
+    this.isProcessing = true;
+    try {
+      await this.video2SpriteService.loadVideo(file, {
+        frameRate: 10,
+        maxWidth: 512,
+        maxHeight: 512
+      }, (progress) => {
+        this.processingProgress = progress;
+      });
+
+      // Update state with frame information
+      this.totalFrames = this.video2SpriteService.getFrameCount();
+      this.framesLoaded = true;
+      
+      // Display the first frame
+      this.displayFrame(0);
+
+    } catch (error) {
+      console.error('Failed to load video frames:', error);
+      alert('Failed to load video. Please try a different file.');
+    } finally {
+      this.isProcessing = false;
+      this.processingProgress = null;
+    }
 
     // Hide upload panel
     this.hasSelectedFile = true;
 
     // Store the file for later processing
     this.selectedFile = file;
+  }
 
-    // Apply chroma key if color is already selected
+  private displayFrame(frameIndex: number) {
+    if (frameIndex < 0 || frameIndex >= this.totalFrames) return;
+    
+    const canvas = document.getElementById("previewCanvas") as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Auto-process the frame with current settings if chroma key is selected
     if (this.selectedColor) {
-      this.processCurrentFrame();
+      this.applyCurrentSettingsToFrame(frameIndex);
+    }
+
+    // Get the frame from the service (processed if chroma key applied)
+    const frame = this.video2SpriteService.getProcessedFrame(frameIndex);
+    if (!frame) return;
+
+    // Set canvas size to match container
+    canvas.width = 600;
+    canvas.height = 600;
+
+    // Calculate scaling to fit frame in canvas while maintaining aspect ratio
+    const frameAspect = frame.imageData.width / frame.imageData.height;
+    const canvasAspect = canvas.width / canvas.height;
+    
+    let drawWidth, drawHeight, offsetX, offsetY;
+    
+    if (frameAspect > canvasAspect) {
+      // Frame is wider, fit by width
+      drawWidth = canvas.width;
+      drawHeight = canvas.width / frameAspect;
+      offsetX = 0;
+      offsetY = (canvas.height - drawHeight) / 2;
+    } else {
+      // Frame is taller, fit by height
+      drawHeight = canvas.height;
+      drawWidth = canvas.height * frameAspect;
+      offsetX = (canvas.width - drawWidth) / 2;
+      offsetY = 0;
+    }
+
+    // Clear canvas and draw frame
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Create a temporary canvas for the frame
+    const tempCanvas = this.video2SpriteService.createFramePreviewCanvas(frameIndex, true);
+    if (tempCanvas) {
+      ctx.drawImage(tempCanvas, offsetX, offsetY, drawWidth, drawHeight);
+    }
+
+    // Store the image data for color picking
+    this.originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Update current frame index and trigger re-render to sync slider
+    this.currentFrameIndex = frameIndex;
+    
+    // Force update the slider to sync with the new frame index
+    this.updateSliderValue();
+  }
+
+  private updateSliderValue() {
+    // Only update slider if it's not currently being dragged by the user
+    if (this.isSliderBeingDragged) return;
+    
+    // Use requestAnimationFrame to ensure DOM is updated after current render cycle
+    requestAnimationFrame(() => {
+      const slider = document.querySelector('.frame-slider input[type="range"]') as HTMLInputElement;
+      if (slider && parseInt(slider.value) !== this.currentFrameIndex) {
+        slider.value = this.currentFrameIndex.toString();
+        // Trigger a 'input' event to update any visual indicators
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }
+
+  private applyCurrentSettingsToFrame(frameIndex: number) {
+    if (!this.selectedColor) return;
+
+    // Parse selected color
+    const colorMatch = this.selectedColor.match(
+      /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/
+    );
+    if (!colorMatch) return;
+
+    const keyColor = {
+      r: parseInt(colorMatch[1]),
+      g: parseInt(colorMatch[2]),
+      b: parseInt(colorMatch[3]),
+      a: 255,
+    };
+
+    // Get current parameter values
+    const toleranceInput = document.getElementById("toleranceInput") as HTMLInputElement;
+    const featherInput = document.getElementById("featherInput") as HTMLInputElement;
+    const contractInput = document.getElementById("contractInput") as HTMLInputElement;
+    const edgeBlurInput = document.getElementById("edgeBlurInput") as HTMLInputElement;
+
+    const tolerance = toleranceInput ? parseInt(toleranceInput.value) : 32;
+    const feather = featherInput ? parseInt(featherInput.value) : 8;
+    const contract = contractInput ? parseInt(contractInput.value) : 1;
+    const edgeBlur = edgeBlurInput ? parseInt(edgeBlurInput.value) : 1;
+
+    // Apply chroma key to the specific frame
+    try {
+      this.video2SpriteService.applyProcessingToFrame(frameIndex, {
+        chromaKey: {
+          keyColor,
+          tolerance,
+          feather,
+          contract,
+          edgeBlur
+        }
+      });
+    } catch (error) {
+      console.error('Failed to process frame:', error);
+    }
+  }
+
+  private nextFrame() {
+    if (this.currentFrameIndex < this.totalFrames - 1) {
+      this.displayFrame(this.currentFrameIndex + 1);
+    }
+  }
+
+  private previousFrame() {
+    if (this.currentFrameIndex > 0) {
+      this.displayFrame(this.currentFrameIndex - 1);
+    }
+  }
+
+  private goToFrame(frameIndex: number) {
+    if (frameIndex >= 0 && frameIndex < this.totalFrames) {
+      this.displayFrame(frameIndex);
+    }
+  }
+
+  private playAnimation() {
+    if (this.isPlaying || !this.framesLoaded) return;
+
+    this.isPlaying = true;
+    this.animationInterval = window.setInterval(() => {
+      let nextFrame = this.currentFrameIndex + 1;
+      if (nextFrame >= this.totalFrames) {
+        nextFrame = 0; // Loop back to start
+      }
+      this.displayFrame(nextFrame);
+    }, this.playbackSpeed);
+  }
+
+  private pauseAnimation() {
+    this.isPlaying = false;
+    if (this.animationInterval !== null) {
+      clearInterval(this.animationInterval);
+      this.animationInterval = null;
+    }
+  }
+
+  private togglePlayPause() {
+    if (this.isPlaying) {
+      this.pauseAnimation();
+    } else {
+      this.playAnimation();
+    }
+  }
+
+  private setPlaybackSpeed(speed: number) {
+    this.playbackSpeed = speed;
+    if (this.isPlaying) {
+      // Restart animation with new speed
+      this.pauseAnimation();
+      this.playAnimation();
     }
   }
 
@@ -325,85 +571,11 @@ export class Video2spritePage extends ComponentBase {
   }
 
   private processCurrentFrame() {
-    const canvas = document.getElementById(
-      "previewCanvas"
-    ) as HTMLCanvasElement;
-    if (!canvas || !this.originalImageData) return;
+    if (!this.framesLoaded || !this.selectedColor) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Use original image data instead of current canvas content
-    const imageData = new ImageData(
-      new Uint8ClampedArray(this.originalImageData.data),
-      this.originalImageData.width,
-      this.originalImageData.height
-    );
-
-    // Parse selected color
-    if (!this.selectedColor) return;
-    const colorMatch = this.selectedColor.match(
-      /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/
-    );
-    if (!colorMatch) return;
-
-    const keyColor = {
-      r: parseInt(colorMatch[1]),
-      g: parseInt(colorMatch[2]),
-      b: parseInt(colorMatch[3]),
-      a: 255,
-    };
-
-    // Get current parameter values
-    const toleranceInput = document.getElementById(
-      "toleranceInput"
-    ) as HTMLInputElement;
-    const featherInput = document.getElementById(
-      "featherInput"
-    ) as HTMLInputElement;
-    const contractInput = document.getElementById(
-      "contractPx"
-    ) as HTMLInputElement;
-    const edgeBlurInput = document.getElementById(
-      "edgeBlur"
-    ) as HTMLInputElement;
-
-    const tolerance = parseInt(toleranceInput?.value || "32");
-    const feather = parseInt(featherInput?.value || "8");
-    const contract = parseInt(contractInput?.value || "1");
-    const edgeBlur = parseInt(edgeBlurInput?.value || "1");
-
-    // Update value displays
-    const toleranceValue = document.getElementById(
-      "toleranceValue"
-    ) as HTMLSpanElement;
-    const featherValue = document.getElementById(
-      "featherValue"
-    ) as HTMLSpanElement;
-    const contractValue = document.getElementById(
-      "contractValue"
-    ) as HTMLSpanElement;
-    const edgeBlurValue = document.getElementById(
-      "edgeBlurValue"
-    ) as HTMLSpanElement;
-
-    if (toleranceValue) toleranceValue.textContent = tolerance.toString();
-    if (featherValue) featherValue.textContent = feather.toString();
-    if (contractValue) contractValue.textContent = contract.toString();
-    if (edgeBlurValue) edgeBlurValue.textContent = edgeBlur.toString();
-
-    // Apply chroma key
-    const processedData = this.video2SpriteService.applyChromaKey(
-      imageData,
-      keyColor,
-      tolerance,
-      feather,
-      contract,
-      edgeBlur
-    );
-
-    // Draw processed frame back to canvas
-    ctx.putImageData(processedData, 0, 0);
+    // Apply settings to current frame and redisplay
+    this.applyCurrentSettingsToFrame(this.currentFrameIndex);
+    this.displayFrame(this.currentFrameIndex);
   }
 
   private updateValueDisplays() {
@@ -534,12 +706,131 @@ export class Video2spritePage extends ComponentBase {
             )}
           </div>
 
-          ${this.hasSelectedFile && !this.isProcessing
+          ${this.framesLoaded && this.hasSelectedFile && !this.isProcessing
+            ? html`
+                <div class="frame-navigation">
+                  <label>Frame Navigation:</label>
+                  
+                  <!-- Play/Pause Controls -->
+                  <div class="playback-controls">
+                    <button 
+                      @click=${this.togglePlayPause}
+                      class="play-pause-btn"
+                    >
+                      ${this.isPlaying ? '⏸️ Pause' : '▶️ Play'}
+                    </button>
+                    <label class="speed-label">
+                      Speed:
+                      <select 
+                        @change=${(e: Event) => {
+                          const target = e.target as HTMLSelectElement;
+                          this.setPlaybackSpeed(parseInt(target.value));
+                        }}
+                        .value=${this.playbackSpeed.toString()}
+                      >
+                        <option value="50">Fast (50ms)</option>
+                        <option value="100">Normal (100ms)</option>
+                        <option value="200">Slow (200ms)</option>
+                        <option value="500">Very Slow (500ms)</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <!-- Frame Controls -->
+                  <div class="frame-controls">
+                    <button 
+                      @click=${this.previousFrame} 
+                      ?disabled=${this.currentFrameIndex <= 0}
+                    >
+                      ◀ Previous
+                    </button>
+                    <span class="frame-info">
+                      ${this.currentFrameIndex + 1} of ${this.totalFrames}
+                    </span>
+                    <button 
+                      @click=${this.nextFrame} 
+                      ?disabled=${this.currentFrameIndex >= this.totalFrames - 1}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                  
+                  <!-- Frame Slider -->
+                  <div class="frame-slider">
+                    <input
+                      type="range"
+                      min="0"
+                      max="${this.totalFrames - 1}"
+                      value="${this.currentFrameIndex}"
+                      @mousedown=${() => { this.isSliderBeingDragged = true; }}
+                      @mouseup=${() => { 
+                        this.isSliderBeingDragged = false;
+                        this.updateSliderValue(); // Ensure sync after user releases
+                      }}
+                      @touchstart=${() => { this.isSliderBeingDragged = true; }}
+                      @touchend=${() => { 
+                        this.isSliderBeingDragged = false;
+                        this.updateSliderValue(); // Ensure sync after user releases
+                      }}
+                      @mouseleave=${() => { 
+                        // Reset drag state if mouse leaves slider area
+                        this.isSliderBeingDragged = false;
+                        this.updateSliderValue();
+                      }}
+                      @input=${(e: Event) => {
+                        const target = e.target as HTMLInputElement;
+                        this.goToFrame(parseInt(target.value));
+                      }}
+                      @change=${(e: Event) => {
+                        const target = e.target as HTMLInputElement;
+                        this.goToFrame(parseInt(target.value));
+                        this.isSliderBeingDragged = false; // Ensure drag state is reset
+                      }}
+                    />
+                  </div>
+                </div>
+              `
+            : ""}
+
+          ${this.hasSelectedFile && !this.isProcessing && !this.isSavingSequence
             ? html`
                 <div id="process-controls">
                   <button @click=${this.startProcessing} class="process-btn">
-                    Save PNG sequence
+                    Save PNG sprite sheet
                   </button>
+                  ${this.framesLoaded 
+                    ? html`
+                        <button @click=${this.savePngSequence} class="process-btn sequence-btn">
+                          Save PNG sequence
+                        </button>
+                      `
+                    : ""
+                  }
+                </div>
+              `
+            : ""}
+
+          ${(this.isProcessing || this.isSavingSequence) && this.processingProgress
+            ? html`
+                <div class="processing-info">
+                  <div class="processing-text">
+                    ${this.isSavingSequence 
+                      ? `Saving frame ${this.processingProgress.currentFrame || 0} of ${this.processingProgress.totalFrames || 0}...`
+                      : this.processingProgress.stage === "loading"
+                      ? "Loading video..."
+                      : this.processingProgress.stage === "extracting"
+                      ? "Extracting frames..."
+                      : this.processingProgress.stage === "processing"
+                      ? "Processing frames..."
+                      : "Generating sprite sheet..."
+                    }
+                  </div>
+                  <div class="progress-bar">
+                    <div
+                      class="progress-fill"
+                      style="width: ${this.processingProgress.progress || 0}%"
+                    ></div>
+                  </div>
                 </div>
               `
             : ""}
