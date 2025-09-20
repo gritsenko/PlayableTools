@@ -16,6 +16,7 @@ export class NavMenu extends ComponentBase {
     { label: "Portfolio", path: "/portfolio", disabled: false },
     // { label: "FAQ", path: "/faq", disabled: true },
     { label: "Preview", path: "/preview", disabled: false },
+    { label: "Video to Sprite", path: "/video2sprite", disabled: false },
   ];
 
   private get currentPath() {
