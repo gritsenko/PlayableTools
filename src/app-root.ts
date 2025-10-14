@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import "@picocss/pico/css/pico.indigo.min.css";
+import "@picocss/pico/css/pico.blue.min.css";
 import "./app-root.css";
 import "./theme.css";
 
