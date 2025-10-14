@@ -14,10 +14,11 @@ export class MraidValidator implements Validator {
               : `File size: ${(fileSize / (1024 * 1024)).toFixed(1)}MB`
           },
           {
-            name: 'MRAID script included',
-            passed: content.includes('mraid.js') || content.includes('/mraid.js'),
-            details: !content.includes('mraid.js') && !content.includes('/mraid.js')
-              ? 'MRAID script not found in HTML'
+            name: 'MRAID script tag added',
+            passed: content.includes('mraid.js'),
+            isWarning: !content.includes('mraid.js'),
+            details: !content.includes('mraid.js')
+              ? 'Playable does not include mraid.js. This is valid but not recommended for MRAID environments.'
               : undefined
           },
           {
@@ -39,13 +40,6 @@ export class MraidValidator implements Validator {
             passed: !content.includes('document.body') || content.includes('mraid'),
             details: content.includes('document.body') && !content.includes('mraid')
               ? 'Direct body manipulation detected - use MRAID APIs instead'
-              : undefined
-          },
-          {
-            name: 'MRAID script not defined (not recommended)',
-            passed: !content.includes('mraid.js') && !content.includes('/mraid.js'),
-            details: (!content.includes('mraid.js') && !content.includes('/mraid.js'))
-              ? 'Playable does not include mraid.js. This is valid but not recommended for MRAID environments.'
               : undefined
           },
         ]

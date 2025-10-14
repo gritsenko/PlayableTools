@@ -432,7 +432,13 @@ export class PlayablePreviewer extends ComponentBase {
                 <div style="display: flex; flex-direction: column; gap: 0.3em;">
                   ${category.checks.map(check => html`
                     <div class="validation-check" style="display: flex; align-items: flex-start; gap: 0.5em; font-size: 0.9em;">
-                      <span style="font-size: 1.1em; margin-top: -2px;">${check.passed ? '✅' : '❌'}</span>
+                      <span style="font-size: 1.1em; margin-top: -2px;">
+                        ${check.passed
+                          ? '✅'
+                          : check.isWarning
+                            ? '⚠️'
+                            : '❌'}
+                      </span>
                       <div style="flex: 1;">
                         <span style="color: ${check.passed ? '#28a745' : '#dc3545'}; font-weight: ${check.passed ? 'normal' : 'bold'};">${check.name}</span>
                         ${check.details ? html`

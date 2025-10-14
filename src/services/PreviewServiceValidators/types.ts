@@ -2,6 +2,7 @@ export interface ValidationCheck {
   name: string;
   passed: boolean;
   details?: string;
+  isWarning?: boolean;
 }
 
 export interface ValidationCategory {
