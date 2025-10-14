@@ -40,7 +40,14 @@ export class MraidValidator implements Validator {
             details: content.includes('document.body') && !content.includes('mraid')
               ? 'Direct body manipulation detected - use MRAID APIs instead'
               : undefined
-          }
+          },
+          {
+            name: 'MRAID script not defined (not recommended)',
+            passed: !content.includes('mraid.js') && !content.includes('/mraid.js'),
+            details: (!content.includes('mraid.js') && !content.includes('/mraid.js'))
+              ? 'Playable does not include mraid.js. This is valid but not recommended for MRAID environments.'
+              : undefined
+          },
         ]
       }
     ];

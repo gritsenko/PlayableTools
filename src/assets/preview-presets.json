@@ -15,7 +15,7 @@
       "maxFileSizeMB": 5,
       "injectScripts": [
         {
-          "source": "/fb_validator.js",
+          "source": "fb_validator.js",
           "position": "beforeHeadEnd"
         }
       ],
@@ -31,7 +31,7 @@
       "maxFileSizeMB": 10,
       "injectScripts": [
         {
-          "source": "/mraid.js",
+          "source": "mraid.js",
           "position": "afterBodyStart"
         }
       ],

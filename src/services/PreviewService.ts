@@ -429,6 +429,23 @@ export class PreviewService {
   }
 
   /**
+   * Utility: Returns warning checks (passed but details present)
+   */
+  getWarnings(): { category: string; check: string; details: string }[] {
+    const results = this.getValidationResults();
+    if (!results) return [];
+    const warnings: { category: string; check: string; details: string }[] = [];
+    for (const cat of results.categories) {
+      for (const check of cat.checks) {
+        if (check.passed && check.details) {
+          warnings.push({ category: cat.name, check: check.name, details: check.details });
+        }
+      }
+    }
+    return warnings;
+  }
+
+  /**
    * Called when the preview page toggles a simulated screen lock.
    * This will invoke the emulated SDK helpers (currently mraid shim)
    * to raise a viewableChange event. The mraid viewableChange expects

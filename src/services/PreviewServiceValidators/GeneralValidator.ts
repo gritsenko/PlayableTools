@@ -14,10 +14,10 @@ export class GeneralValidator implements Validator {
               : undefined
           },
           {
-            name: 'No external script loading',
-            passed: !/<script[^>]*src\s*=\s*["'][^"']*["'][^>]*>/.test(content),
-            details: /<script[^>]*src\s*=\s*["'][^"']*["'][^>]*>/.test(content)
-              ? 'External scripts detected - consider bundling all scripts'
+            name: 'No external script loading (except mraid.js, exitapi.js)',
+            passed: !/<script[^>]*src\s*=\s*['"](?!.*(?:mraid\.js|\/\/tpc\.googlesyndication\.com\/pagead\/gadgets\/html5\/api\/exitapi\.js))[^'"]+['"][^>]*>/.test(content),
+            details: /<script[^>]*src\s*=\s*['"](?!.*(?:mraid\.js|\/\/tpc\.googlesyndication\.com\/pagead\/gadgets\/html5\/api\/exitapi\.js))[^'"]+['"][^>]*>/.test(content)
+              ? 'External scripts detected (except mraid.js, exitapi.js) - consider bundling all scripts'
               : undefined
           },
           {
