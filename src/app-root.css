@@ -214,6 +214,7 @@ aside li {
     transition: transform 0.3s ease;
     z-index: 1002;
     box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+    padding-top: 6rem; /* Match desktop spacing: 1.5rem padding + ~48px logo + 2rem gap */
   }
   .sidebar.open {
     transform: translateX(0);
