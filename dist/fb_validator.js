@@ -8,6 +8,7 @@ if (
       window.FbPlayableAd = {
         onCTAClick() {
           window.parent.postMessage("CTAClick", "*");
+          alert("[Facebook validator] FbPlayableAd.onCTAClick() called");
         },
         initializeLogging(endpoint_url) {},
         logGameLoad() {},
