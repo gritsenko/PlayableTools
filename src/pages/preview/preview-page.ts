@@ -198,7 +198,12 @@ export class PreviewPage extends ComponentBase {
     this.requestUpdate();
 
     try {
-      await this.previewService.handleFileUpload(file);
+      // Route by extension: ZIP archives are handled by handleZipUpload
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        await this.previewService.handleZipUpload(file);
+      } else {
+        await this.previewService.handleFileUpload(file);
+      }
       this.uploadedFileName = file.name;
     } catch (err: any) {
       this.uploadError = err.message || String(err);
@@ -302,7 +307,7 @@ export class PreviewPage extends ComponentBase {
                 <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 1em;">
                   <input 
                     type="file" 
-                    accept=".html,.htm" 
+                    accept=".html,.htm,.zip" 
                     @change="${this.handleFileUpload}"
                     style="padding: 0.5em;"
                     ?disabled="${this.isUploading}"
@@ -324,7 +329,7 @@ export class PreviewPage extends ComponentBase {
                 
                 <div style="font-size: 0.9em; color: #666;">
                   <p style="margin: 0;">
-                    • Supported formats: .html, .htm<br />
+                    • Supported formats: .html, .htm, .zip (ZIP archives containing playable assets)<br />
                     • Maximum file size: 10MB<br />
                     • Files are processed locally and not stored on our servers
                   </p>

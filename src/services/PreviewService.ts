@@ -77,6 +77,10 @@ export class PreviewService {
   private _uploadedContent: string | null = null;
   private _uploadedListeners = new Set<(content: string | null) => void>();
   
+  // When a ZIP is uploaded we create blob: URLs for contained files so the entry HTML
+  // can load assets by relative paths. Store mapping and created URLs so we can revoke them.
+  private _zipBlobUrlMap: Record<string, string> = {};
+  private _createdBlobUrls = new Set<string>();
   // Store original content separately from processed content
   private _originalUploadedContent: string | null = null;
   private _originalGithubContent: string | null = null;
@@ -311,6 +315,237 @@ export class PreviewService {
   }
 
   /**
+   * Validates if the file is a ZIP archive based on extension
+   */
+  private isZipFile(file: File): boolean {
+    return file.name.toLowerCase().endsWith('.zip');
+  }
+
+  /**
+   * Handles ZIP archive upload. Unpacks archive, creates blob: URLs for assets,
+   * rewrites the entry HTML to point to those blob URLs and sets uploaded content.
+   * The method chooses an entry HTML file (index.html or first .html) automatically.
+   */
+  async handleZipUpload(file: File): Promise<string> {
+    const preset = this.getCurrentPreset();
+
+    if (!this.isZipFile(file)) {
+      throw new Error('Please select a valid ZIP archive (.zip)');
+    }
+
+    // Validate size against preset (zipped size)
+    const maxSizeInMB = preset?.maxFileSizeMB || 10;
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+    if (file.size > maxSizeInBytes) {
+      throw new Error(`ZIP size must be less than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
+    }
+
+    // Cleanup any previous blob URLs
+    this.revokeBlobUrls();
+
+    // Load JSZip dynamically (project already uses JSZip elsewhere)
+    const JSZip = (await import('jszip')).default as any;
+    const arrayBuffer = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(arrayBuffer);
+
+    // Collect file entries and create blob URLs for each file
+    const fileEntries: { path: string; isDir: boolean }[] = Object.keys(zip.files).map(p => ({ path: p, isDir: zip.files[p].dir }));
+
+    // Create blob URLs for non-directory files
+    for (const entry of fileEntries) {
+      if (entry.isDir) continue;
+      const zfile = zip.files[entry.path];
+      // Read as uint8array for binary safety
+      const content = await zfile.async('uint8array') as Uint8Array;
+      const mime = this.getMimeType(entry.path) || 'application/octet-stream';
+  // content is Uint8Array - use its underlying ArrayBuffer for the Blob constructor
+  const blob = new Blob([content.buffer as ArrayBuffer], { type: mime });
+      const url = URL.createObjectURL(blob);
+      this._zipBlobUrlMap[entry.path] = url;
+      this._createdBlobUrls.add(url);
+    }
+
+    // Determine entry HTML file: prefer index.html at root, otherwise first .html
+    const htmlPaths = Object.keys(zip.files).filter(p => !zip.files[p].dir && p.toLowerCase().endsWith('.html'));
+    if (htmlPaths.length === 0) {
+      // cleanup created urls
+      this.revokeBlobUrls();
+      throw new Error('ZIP does not contain any HTML files');
+    }
+
+    let entryHtmlPath = htmlPaths.find(p => p.toLowerCase().endsWith('/index.html') || p.toLowerCase() === 'index.html') || htmlPaths[0];
+
+    const rawHtml = await zip.files[entryHtmlPath].async('string') as string;
+
+    // Rewrite HTML to point relative references to blob URLs
+    const rewritten = this.rewriteHtmlPaths(rawHtml, entryHtmlPath);
+
+    // Store original uploaded content as the rewritten HTML (so preview shows correctly)
+    this._originalUploadedContent = rewritten;
+    this._originalGithubContent = null;
+
+    // Run preset processing and validation on the rewritten HTML
+    const processedContent = await this.processContentWithPreset(rewritten, preset || undefined);
+    const totalSize = this.calculateZipPreviewSize(processedContent);
+    await this.runValidation(processedContent, totalSize);
+
+    // Set processed content so components can preview it
+    this.setUploadedContent(processedContent);
+
+    return processedContent;
+  }
+
+  private calculateZipPreviewSize(processedHtml: string): number {
+    // Best-effort: return processed HTML size. We could store individual asset sizes when creating blobs
+    return new Blob([processedHtml]).size;
+  }
+
+  private revokeBlobUrls() {
+    for (const url of this._createdBlobUrls) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        // ignore
+      }
+    }
+    this._createdBlobUrls.clear();
+    this._zipBlobUrlMap = {};
+  }
+
+  /**
+   * Very small mime-type map for common playable asset types
+   */
+  private getMimeType(filePath: string): string | null {
+    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    switch (ext) {
+      case 'html': return 'text/html';
+      case 'htm': return 'text/html';
+      case 'js': return 'application/javascript';
+      case 'mjs': return 'application/javascript';
+      case 'css': return 'text/css';
+      case 'png': return 'image/png';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      case 'gif': return 'image/gif';
+      case 'svg': return 'image/svg+xml';
+      case 'webp': return 'image/webp';
+      case 'mp3': return 'audio/mpeg';
+      case 'wav': return 'audio/wav';
+      case 'ogg': return 'audio/ogg';
+      case 'mp4': return 'video/mp4';
+      case 'webm': return 'video/webm';
+      case 'json': return 'application/json';
+      case 'xml': return 'application/xml';
+      case 'txt': return 'text/plain';
+      default: return null;
+    }
+  }
+
+  /**
+   * Rewrites relative asset paths in the HTML string to blob: URLs created from the ZIP.
+   * entryPath is the path (inside zip) of the HTML file we will use as the entry point.
+   */
+  private rewriteHtmlPaths(html: string, entryPath: string): string {
+    const baseDir = entryPath.includes('/') ? entryPath.slice(0, entryPath.lastIndexOf('/') + 1) : '';
+
+    // Try to preserve DOCTYPE
+    const doctypeMatch = html.match(/^<!doctype[^>]*>/i);
+    const doctype = doctypeMatch ? doctypeMatch[0] + '\n' : '';
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const attrSelectors = [
+      { sel: 'script[src]', attr: 'src' },
+      { sel: 'link[href]', attr: 'href' },
+      { sel: 'img[src]', attr: 'src' },
+      { sel: 'audio[src]', attr: 'src' },
+      { sel: 'video[src]', attr: 'src' },
+      { sel: 'source[src]', attr: 'src' },
+      { sel: 'track[src]', attr: 'src' },
+      { sel: 'iframe[src]', attr: 'src' },
+      { sel: 'embed[src]', attr: 'src' },
+      { sel: 'object[data]', attr: 'data' }
+    ];
+
+    for (const s of attrSelectors) {
+      const nodes = Array.from(doc.querySelectorAll(s.sel));
+      for (const node of nodes) {
+        const el = node as Element;
+        const original = el.getAttribute(s.attr);
+        if (!original) continue;
+        const mapped = this.mapZipPathToBlobUrl(original, baseDir);
+        if (mapped) el.setAttribute(s.attr, mapped);
+      }
+    }
+
+    // Replace url(...) in inline styles and <style> blocks
+    // Inline style attributes
+    const styled = Array.from(doc.querySelectorAll<HTMLElement>('[style]'));
+    for (const el of styled) {
+      const style = el.getAttribute('style') || '';
+      const replaced = style.replace(/url\(([^)]+)\)/g, (m, g1) => {
+        const raw = g1.replace(/^['"]|['"]$/g, '').trim();
+        const mapped = this.mapZipPathToBlobUrl(raw, baseDir);
+        return mapped ? `url(${mapped})` : m;
+      });
+      if (replaced !== style) el.setAttribute('style', replaced);
+    }
+
+    // <style> tag contents
+    const styleTags = Array.from(doc.querySelectorAll('style'));
+    for (const tag of styleTags) {
+      const text = tag.textContent || '';
+      const replaced = text.replace(/url\(([^)]+)\)/g, (m, g1) => {
+        const raw = g1.replace(/^['"]|['"]$/g, '').trim();
+        const mapped = this.mapZipPathToBlobUrl(raw, baseDir);
+        return mapped ? `url(${mapped})` : m;
+      });
+      if (replaced !== text) tag.textContent = replaced;
+    }
+
+    // Serialize back to string
+    const serialized = doc.documentElement.outerHTML;
+    return doctype + serialized;
+  }
+
+  private mapZipPathToBlobUrl(rawPath: string, baseDir: string): string | null {
+    // Ignore absolute URLs
+    if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(rawPath) || rawPath.startsWith('data:') || rawPath.startsWith('blob:')) {
+      return null;
+    }
+
+    // Remove query/hash when matching zip entries
+    const clean = rawPath.split('?')[0].split('#')[0];
+
+    const resolved = this.normalizePath(baseDir, clean);
+    // Try direct match first
+    if (this._zipBlobUrlMap[resolved]) return this._zipBlobUrlMap[resolved];
+    // Try without leading './'
+    const alt = resolved.replace(/^\.\//, '');
+    if (this._zipBlobUrlMap[alt]) return this._zipBlobUrlMap[alt];
+    // Try pathname variants
+    const withoutLeadingSlash = resolved.replace(/^\//, '');
+    if (this._zipBlobUrlMap[withoutLeadingSlash]) return this._zipBlobUrlMap[withoutLeadingSlash];
+
+    return null;
+  }
+
+  private normalizePath(baseDir: string, relative: string): string {
+    if (relative.startsWith('/')) {
+      return relative.replace(/^\//, '');
+    }
+    const parts = (baseDir + relative).split('/');
+    const out: string[] = [];
+    for (const part of parts) {
+      if (!part || part === '.') continue;
+      if (part === '..') { out.pop(); continue; }
+      out.push(part);
+    }
+    return out.join('/');
+  }
+
+  /**
    * Basic validation to check if content contains HTML
    */
   private isValidHtmlContent(content: string): boolean {
@@ -331,6 +566,8 @@ export class PreviewService {
     this.setUploadedContent(null);
     this._originalUploadedContent = null;
     this._originalGithubContent = null;
+    // Revoke any blob URLs created from a ZIP
+    this.revokeBlobUrls();
     console.log(`🧹 Cleared all content (processed and original)`);
   }
 
