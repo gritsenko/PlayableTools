@@ -4,6 +4,12 @@ import type { PreviewPreset, PreviewPresetsConfig } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
 import { GeneralValidator, FacebookValidator, MraidValidator, type ValidationResult } from "./PreviewServiceValidators";
 
+type ZipAssetPayload = {
+  path: string;
+  mime: string;
+  buffer: ArrayBuffer;
+};
+
 @injectable()
 export class PreviewService {
   // Example: fetch playable ad data, generate shareable links, etc.
@@ -69,6 +75,9 @@ export class PreviewService {
     // Run validation on the processed content
     const fileSize = new Blob([processedContent]).size;
     await this.runValidation(processedContent, fileSize);
+
+    this._lastUploadedSizeBytes = fileSize;
+    await this.clearZipSession();
     
     return processedContent;
   }
@@ -76,11 +85,14 @@ export class PreviewService {
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
   private _uploadedContent: string | null = null;
   private _uploadedListeners = new Set<(content: string | null) => void>();
+  private _lastUploadedSizeBytes: number | undefined;
   
-  // When a ZIP is uploaded we create blob: URLs for contained files so the entry HTML
-  // can load assets by relative paths. Store mapping and created URLs so we can revoke them.
-  private _zipBlobUrlMap: Record<string, string> = {};
-  private _createdBlobUrls = new Set<string>();
+  // ZIP preview session metadata served through a dedicated service worker
+  private _zipSessionId: string | null = null;
+  private _zipEntryPath: string | null = null;
+  private _zipPreviewUrl: string | null = null;
+  private _zipPreviewListeners = new Set<(url: string | null) => void>();
+  private _zipSwRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
   // Store original content separately from processed content
   private _originalUploadedContent: string | null = null;
   private _originalGithubContent: string | null = null;
@@ -107,6 +119,20 @@ export class PreviewService {
     this._uploadedListeners.add(cb);
     // return unsubscribe
     return () => this._uploadedListeners.delete(cb);
+  }
+
+  getZipPreviewUrl(): string | null {
+    return this._zipPreviewUrl;
+  }
+
+  onZipPreviewUrlChange(cb: (url: string | null) => void): () => void {
+    this._zipPreviewListeners.add(cb);
+    return () => this._zipPreviewListeners.delete(cb);
+  }
+
+  private setZipPreviewUrl(url: string | null): void {
+    this._zipPreviewUrl = url;
+    for (const cb of Array.from(this._zipPreviewListeners)) cb(url);
   }
 
   /**
@@ -238,6 +264,7 @@ export class PreviewService {
    */
   async handleFileUpload(file: File): Promise<string> {
     const preset = this.getCurrentPreset();
+    await this.clearZipSession();
     
     // Validate file type
     if (!this.isValidHtmlFile(file)) {
@@ -268,6 +295,9 @@ export class PreviewService {
 
       // Run validation on the processed content
       await this.runValidation(processedContent, file.size);
+
+      this._lastUploadedSizeBytes = file.size;
+      this.setZipPreviewUrl(null);
 
       // Set the processed content so components can access it
       this.setUploadedContent(processedContent);
@@ -322,9 +352,9 @@ export class PreviewService {
   }
 
   /**
-   * Handles ZIP archive upload. Unpacks archive, creates blob: URLs for assets,
-   * rewrites the entry HTML to point to those blob URLs and sets uploaded content.
-   * The method chooses an entry HTML file (index.html or first .html) automatically.
+   * Handles ZIP archive upload. Unpacks archive, registers all assets with the
+   * preview service worker, and serves the playable from a virtual URL so the
+   * playable can load assets by relative paths (HTML, JS, CSS, audio, video, images, etc.).
    */
   async handleZipUpload(file: File): Promise<string> {
     const preset = this.getCurrentPreset();
@@ -333,83 +363,65 @@ export class PreviewService {
       throw new Error('Please select a valid ZIP archive (.zip)');
     }
 
-    // Validate size against preset (zipped size)
     const maxSizeInMB = preset?.maxFileSizeMB || 10;
     const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
     if (file.size > maxSizeInBytes) {
       throw new Error(`ZIP size must be less than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
     }
 
-    // Cleanup any previous blob URLs
-    this.revokeBlobUrls();
+    await this.clearZipSession();
 
-    // Load JSZip dynamically (project already uses JSZip elsewhere)
     const JSZip = (await import('jszip')).default as any;
     const arrayBuffer = await file.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
 
-    // Collect file entries and create blob URLs for each file
-    const fileEntries: { path: string; isDir: boolean }[] = Object.keys(zip.files).map(p => ({ path: p, isDir: zip.files[p].dir }));
-
-    // Create blob URLs for non-directory files
-    for (const entry of fileEntries) {
-      if (entry.isDir) continue;
-      const zfile = zip.files[entry.path];
-      // Read as uint8array for binary safety
-      const content = await zfile.async('uint8array') as Uint8Array;
-      const mime = this.getMimeType(entry.path) || 'application/octet-stream';
-  // content is Uint8Array - use its underlying ArrayBuffer for the Blob constructor
-  const blob = new Blob([content.buffer as ArrayBuffer], { type: mime });
-      const url = URL.createObjectURL(blob);
-      this._zipBlobUrlMap[entry.path] = url;
-      this._createdBlobUrls.add(url);
-    }
-
-    // Determine entry HTML file: prefer index.html at root, otherwise first .html
-    const htmlPaths = Object.keys(zip.files).filter(p => !zip.files[p].dir && p.toLowerCase().endsWith('.html'));
+    const entries = Object.keys(zip.files).map(path => ({ path, isDir: zip.files[path].dir }));
+    const htmlPaths = entries.filter(e => !e.isDir && e.path.toLowerCase().endsWith('.html')).map(e => e.path);
     if (htmlPaths.length === 0) {
-      // cleanup created urls
-      this.revokeBlobUrls();
       throw new Error('ZIP does not contain any HTML files');
     }
 
-    let entryHtmlPath = htmlPaths.find(p => p.toLowerCase().endsWith('/index.html') || p.toLowerCase() === 'index.html') || htmlPaths[0];
+    const entryHtmlPath = htmlPaths.find(p => p.toLowerCase().endsWith('/index.html') || p.toLowerCase() === 'index.html') || htmlPaths[0];
+    this._zipEntryPath = entryHtmlPath;
 
-    const rawHtml = await zip.files[entryHtmlPath].async('string') as string;
-
-    // Rewrite HTML to point relative references to blob URLs
-    const rewritten = this.rewriteHtmlPaths(rawHtml, entryHtmlPath);
-
-    // Store original uploaded content as the rewritten HTML (so preview shows correctly)
-    this._originalUploadedContent = rewritten;
+    const rawEntryHtml = await zip.files[entryHtmlPath].async('string') as string;
+    this._originalUploadedContent = rawEntryHtml;
     this._originalGithubContent = null;
 
-    // Run preset processing and validation on the rewritten HTML
-    const processedContent = await this.processContentWithPreset(rewritten, preset || undefined);
-    const totalSize = this.calculateZipPreviewSize(processedContent);
-    await this.runValidation(processedContent, totalSize);
+    const processedContent = await this.processContentWithPreset(rawEntryHtml, preset || undefined);
+    await this.runValidation(processedContent, file.size);
 
-    // Set processed content so components can preview it
+    const sessionId = crypto.randomUUID();
+    this._zipSessionId = sessionId;
+
+    const encoder = new TextEncoder();
+    const assets: ZipAssetPayload[] = [];
+
+    for (const entry of entries) {
+      if (entry.isDir) continue;
+      const normalizedPath = this.normalizePath('', entry.path);
+      const mime = entry.path === entryHtmlPath ? 'text/html' : (this.getMimeType(entry.path) || 'application/octet-stream');
+
+      if (entry.path === entryHtmlPath) {
+        const htmlBuffer = encoder.encode(processedContent);
+        assets.push({ path: normalizedPath, mime, buffer: htmlBuffer.buffer });
+        continue;
+      }
+
+      const fileContent = await zip.files[entry.path].async('uint8array') as Uint8Array;
+      const fileCopy = fileContent.slice();
+      assets.push({ path: normalizedPath, mime, buffer: fileCopy.buffer });
+    }
+
+    await this.registerZipSessionAssets(sessionId, assets);
+
+    const previewUrl = this.buildZipPreviewUrl(sessionId, entryHtmlPath);
+    this.setZipPreviewUrl(previewUrl);
+
+    this._lastUploadedSizeBytes = file.size;
     this.setUploadedContent(processedContent);
 
     return processedContent;
-  }
-
-  private calculateZipPreviewSize(processedHtml: string): number {
-    // Best-effort: return processed HTML size. We could store individual asset sizes when creating blobs
-    return new Blob([processedHtml]).size;
-  }
-
-  private revokeBlobUrls() {
-    for (const url of this._createdBlobUrls) {
-      try {
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        // ignore
-      }
-    }
-    this._createdBlobUrls.clear();
-    this._zipBlobUrlMap = {};
   }
 
   /**
@@ -439,96 +451,6 @@ export class PreviewService {
       case 'txt': return 'text/plain';
       default: return null;
     }
-  }
-
-  /**
-   * Rewrites relative asset paths in the HTML string to blob: URLs created from the ZIP.
-   * entryPath is the path (inside zip) of the HTML file we will use as the entry point.
-   */
-  private rewriteHtmlPaths(html: string, entryPath: string): string {
-    const baseDir = entryPath.includes('/') ? entryPath.slice(0, entryPath.lastIndexOf('/') + 1) : '';
-
-    // Try to preserve DOCTYPE
-    const doctypeMatch = html.match(/^<!doctype[^>]*>/i);
-    const doctype = doctypeMatch ? doctypeMatch[0] + '\n' : '';
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    const attrSelectors = [
-      { sel: 'script[src]', attr: 'src' },
-      { sel: 'link[href]', attr: 'href' },
-      { sel: 'img[src]', attr: 'src' },
-      { sel: 'audio[src]', attr: 'src' },
-      { sel: 'video[src]', attr: 'src' },
-      { sel: 'source[src]', attr: 'src' },
-      { sel: 'track[src]', attr: 'src' },
-      { sel: 'iframe[src]', attr: 'src' },
-      { sel: 'embed[src]', attr: 'src' },
-      { sel: 'object[data]', attr: 'data' }
-    ];
-
-    for (const s of attrSelectors) {
-      const nodes = Array.from(doc.querySelectorAll(s.sel));
-      for (const node of nodes) {
-        const el = node as Element;
-        const original = el.getAttribute(s.attr);
-        if (!original) continue;
-        const mapped = this.mapZipPathToBlobUrl(original, baseDir);
-        if (mapped) el.setAttribute(s.attr, mapped);
-      }
-    }
-
-    // Replace url(...) in inline styles and <style> blocks
-    // Inline style attributes
-    const styled = Array.from(doc.querySelectorAll<HTMLElement>('[style]'));
-    for (const el of styled) {
-      const style = el.getAttribute('style') || '';
-      const replaced = style.replace(/url\(([^)]+)\)/g, (m, g1) => {
-        const raw = g1.replace(/^['"]|['"]$/g, '').trim();
-        const mapped = this.mapZipPathToBlobUrl(raw, baseDir);
-        return mapped ? `url(${mapped})` : m;
-      });
-      if (replaced !== style) el.setAttribute('style', replaced);
-    }
-
-    // <style> tag contents
-    const styleTags = Array.from(doc.querySelectorAll('style'));
-    for (const tag of styleTags) {
-      const text = tag.textContent || '';
-      const replaced = text.replace(/url\(([^)]+)\)/g, (m, g1) => {
-        const raw = g1.replace(/^['"]|['"]$/g, '').trim();
-        const mapped = this.mapZipPathToBlobUrl(raw, baseDir);
-        return mapped ? `url(${mapped})` : m;
-      });
-      if (replaced !== text) tag.textContent = replaced;
-    }
-
-    // Serialize back to string
-    const serialized = doc.documentElement.outerHTML;
-    return doctype + serialized;
-  }
-
-  private mapZipPathToBlobUrl(rawPath: string, baseDir: string): string | null {
-    // Ignore absolute URLs
-    if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(rawPath) || rawPath.startsWith('data:') || rawPath.startsWith('blob:')) {
-      return null;
-    }
-
-    // Remove query/hash when matching zip entries
-    const clean = rawPath.split('?')[0].split('#')[0];
-
-    const resolved = this.normalizePath(baseDir, clean);
-    // Try direct match first
-    if (this._zipBlobUrlMap[resolved]) return this._zipBlobUrlMap[resolved];
-    // Try without leading './'
-    const alt = resolved.replace(/^\.\//, '');
-    if (this._zipBlobUrlMap[alt]) return this._zipBlobUrlMap[alt];
-    // Try pathname variants
-    const withoutLeadingSlash = resolved.replace(/^\//, '');
-    if (this._zipBlobUrlMap[withoutLeadingSlash]) return this._zipBlobUrlMap[withoutLeadingSlash];
-
-    return null;
   }
 
   private normalizePath(baseDir: string, relative: string): string {
@@ -566,8 +488,8 @@ export class PreviewService {
     this.setUploadedContent(null);
     this._originalUploadedContent = null;
     this._originalGithubContent = null;
-    // Revoke any blob URLs created from a ZIP
-    this.revokeBlobUrls();
+    void this.clearZipSession();
+    this._lastUploadedSizeBytes = undefined;
     console.log(`🧹 Cleared all content (processed and original)`);
   }
 
@@ -578,6 +500,15 @@ export class PreviewService {
     console.log(`🔄 Reloading content with preset: ${preset.name}`);
     
     this.setCurrentPreset(preset);
+
+    if (this._zipSessionId && this._zipEntryPath && this._originalUploadedContent) {
+      console.log(`📦 Updating ZIP session content with ${preset.name} preset`);
+      const processedContent = await this.processContentWithPreset(this._originalUploadedContent, preset);
+      await this.runValidation(processedContent, new Blob([processedContent]).size);
+      this.setUploadedContent(processedContent);
+      await this.updateZipEntryHtmlAsset(this._zipSessionId, this._zipEntryPath, processedContent);
+      return;
+    }
     
     // If we have original uploaded content, reprocess it
     if (this._originalUploadedContent) {
@@ -605,9 +536,11 @@ export class PreviewService {
    */
   getUploadedFileInfo(): { hasContent: boolean; size?: number } {
     const content = this.getUploadedContent();
+    const hasZipPreview = !!this._zipPreviewUrl;
+    const hasContent = content !== null || hasZipPreview;
     return {
-      hasContent: content !== null,
-      size: content ? new Blob([content]).size : undefined
+      hasContent,
+      size: hasContent ? this._lastUploadedSizeBytes ?? (content ? new Blob([content]).size : undefined) : undefined
     };
   }
 
@@ -616,6 +549,110 @@ export class PreviewService {
    */
   hasOriginalContent(): boolean {
     return this._originalUploadedContent !== null || this._originalGithubContent !== null;
+  }
+
+  private getBasePath(): string {
+    const base = import.meta.env.BASE_URL || '/';
+    return base.endsWith('/') ? base : `${base}/`;
+  }
+
+  private getZipPreviewScope(): string {
+    return `${this.getBasePath()}zip-preview/`;
+  }
+
+  private getZipPreviewSwUrl(): string {
+    return `${this.getBasePath()}zip-preview-sw.js`;
+  }
+
+  private buildZipPreviewUrl(sessionId: string, entryPath: string): string {
+    const normalizedEntry = this.normalizePath('', entryPath);
+    return `${this.getZipPreviewScope()}${sessionId}/${normalizedEntry}`;
+  }
+
+  private async getZipServiceWorker(): Promise<ServiceWorker | null> {
+    if (!('serviceWorker' in navigator)) {
+      console.warn('PreviewService: Service workers are not supported in this browser');
+      return null;
+    }
+
+    if (!this._zipSwRegistrationPromise) {
+      this._zipSwRegistrationPromise = (async () => {
+        try {
+          return await navigator.serviceWorker.register(this.getZipPreviewSwUrl(), {
+            scope: this.getZipPreviewScope()
+          });
+        } catch (error) {
+          console.warn('PreviewService: Failed to register zip preview service worker', error);
+          return null;
+        }
+      })();
+    }
+
+    const registration = await this._zipSwRegistrationPromise;
+    if (!registration) return null;
+
+    const resolveWorker = async (worker: ServiceWorker | null): Promise<ServiceWorker | null> => {
+      if (!worker) return null;
+      if ((worker.state as string) === 'activated') return worker;
+      await new Promise<void>((resolve) => {
+        const listener = () => {
+          const state = worker.state as string;
+          if (state === 'activated' || state === 'redundant') {
+            worker.removeEventListener('statechange', listener);
+            resolve();
+          }
+        };
+        worker.addEventListener('statechange', listener);
+      });
+      return (worker.state as string) === 'activated' ? worker : registration.active ?? null;
+    };
+
+    return (await resolveWorker(registration.active))
+      || (await resolveWorker(registration.waiting))
+      || (await resolveWorker(registration.installing));
+  }
+
+  private async postMessageToZipSw(message: any, transferables: Transferable[] = []): Promise<void> {
+    const worker = await this.getZipServiceWorker();
+    if (!worker) return;
+    worker.postMessage(message, transferables);
+  }
+
+  private async registerZipSessionAssets(sessionId: string, assets: ZipAssetPayload[]): Promise<void> {
+    const transferables = assets.map(asset => asset.buffer);
+    await this.postMessageToZipSw({
+      type: 'ZIP_SESSION_REGISTER',
+      sessionId,
+      assets
+    }, transferables);
+  }
+
+  private async updateZipEntryHtmlAsset(sessionId: string, entryPath: string, html: string): Promise<void> {
+    const encoder = new TextEncoder();
+    const buffer = encoder.encode(html).buffer as ArrayBuffer;
+    await this.postMessageToZipSw({
+      type: 'ZIP_SESSION_UPDATE_ENTRY',
+      sessionId,
+      asset: {
+        path: this.normalizePath('', entryPath),
+        mime: 'text/html',
+        buffer
+      }
+    }, [buffer]);
+  }
+
+  private async clearZipSession(sessionId?: string): Promise<void> {
+    const targetSession = sessionId || this._zipSessionId;
+    if (!targetSession) return;
+    await this.postMessageToZipSw({
+      type: 'ZIP_SESSION_CLEAR',
+      sessionId: targetSession
+    });
+    if (!sessionId) {
+      this._zipSessionId = null;
+      this._zipEntryPath = null;
+      this.setZipPreviewUrl(null);
+    }
   }
 
   /**

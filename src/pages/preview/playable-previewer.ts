@@ -16,11 +16,13 @@ export class PlayablePreviewer extends ComponentBase {
   private uploadedContentUnsubscribe?: () => void;
   private presetUnsubscribe?: () => void;
   private validationUnsubscribe?: () => void;
+  private zipPreviewUnsubscribe?: () => void;
   @state() private currentPreset: PreviewPreset | null = null;
   @state() private availablePresets: PreviewPreset[] = [];
   @state() private isPresetSwitching: boolean = false;
   @state() private presetSuccessMessage: string = "";
   @state() private validationResults: ValidationResult | null = null;
+  @state() private zipPreviewUrl: string | null = null;
 
   devices = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -64,6 +66,12 @@ export class PlayablePreviewer extends ComponentBase {
       this.validationResults = results;
       this.requestUpdate();
     });
+
+    this.zipPreviewUnsubscribe = this.previewService.onZipPreviewUrlChange((url) => {
+      this.zipPreviewUrl = url;
+      this.requestUpdate();
+    });
+    this.zipPreviewUrl = this.previewService.getZipPreviewUrl();
     
     const existingContent = this.previewService.getUploadedContent();
     if (existingContent) {
@@ -98,6 +106,9 @@ export class PlayablePreviewer extends ComponentBase {
     }
     if (this.validationUnsubscribe) {
       this.validationUnsubscribe();
+    }
+    if (this.zipPreviewUnsubscribe) {
+      this.zipPreviewUnsubscribe();
     }
     if (this._playableLockHandler) {
       window.removeEventListener('playable-screen-lock', this._playableLockHandler as EventListener);
@@ -263,6 +274,30 @@ export class PlayablePreviewer extends ComponentBase {
       }
     };
   };
+
+  private renderPlayableIframe() {
+    if (this.zipPreviewUrl) {
+      return html`<iframe
+        src="${this.zipPreviewUrl}"
+        class="playable-iframe"
+        frameborder="0"
+        allowfullscreen
+        style="width:100%; height:100%; border:none;"
+        @load="${this._installFocusGuards}"
+      ></iframe>`;
+    }
+    if (this.pageContent) {
+      return html`<iframe
+        srcdoc="${this.pageContent}"
+        class="playable-iframe"
+        frameborder="0"
+        allowfullscreen
+        style="width:100%; height:100%; border:none;"
+        @load="${this._installFocusGuards}"
+      ></iframe>`;
+    }
+    return null;
+  }
   
   private _setPlayableLocked(locked: boolean) {
     const iframe = this._getIframeEl();
@@ -494,17 +529,10 @@ export class PlayablePreviewer extends ComponentBase {
                         ${this.error.includes('re-upload') ? '⚠️' : '❌'} ${this.error}
                       </div>
                     `
-                  : this.pageContent
+                  : (this.zipPreviewUrl || this.pageContent)
                   ? html`
                       <div style="position: relative; width: 100%; height: 100%;">
-                        <iframe
-                          srcdoc="${this.pageContent}"
-                          class="playable-iframe"
-                          frameborder="0"
-                          allowfullscreen
-                          style="width:100%; height:100%; border:none;"
-                          @load="${this._installFocusGuards}"
-                        ></iframe>
+                        ${this.renderPlayableIframe()}
                             ${this.isPresetSwitching ? html`
                               <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(25, 118, 210, 0.1); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(1px);">
                                 <div style="background: rgba(25, 118, 210, 0.9); color: white; padding: 1em 2em; border-radius: 8px; display: flex; align-items: center; gap: 1em;">

@@ -77,6 +77,12 @@ npm run dev
 - `public/test-simple-playable.html` — minimal example
 - `test-facebook-validator.html` — helper for validating Facebook output
 
+## ZIP preview flow
+- The Preview page now accepts `.zip` packages that contain an `index.html` (or any `.html`) entry point plus relative assets (JS, CSS, images, audio, video, JSON, etc.).
+- When you upload a ZIP, PlayableTools extracts the archive in-memory and passes every file to a dedicated service worker (`/zip-preview-sw.js`). The playable itself runs at a virtual URL like `/zip-preview/<session-id>/index.html`, so all relative asset requests resolve exactly as they would inside the exported ZIP.
+- This approach means scripts that perform `fetch()`/XHR/file loads by relative path continue to work without any code changes. It also avoids blob: URIs entirely, so browser devtools show real URLs for debugging.
+- To verify locally: run `npm run dev`, open the Preview page, upload a playable ZIP, and confirm the iframe src switches to `/zip-preview/...`. Clearing the preview or uploading a new file tears down the previous session and its assets automatically.
+
 
 <p align="center">
 	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
