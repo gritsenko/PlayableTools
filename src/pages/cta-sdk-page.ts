@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, route, css } from "fw";
+import { ComponentBase, customElement, html, route } from "fw";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { marked } from "marked";
 // @ts-ignore
