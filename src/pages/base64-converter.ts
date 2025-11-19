@@ -1,7 +1,6 @@
 import { ComponentBase, customElement, html, route, inject } from "fw";
 import { Base64ConverterService } from "../services/Base64ConverterService";
 import type { Base64FileModel } from "../services/Base64ConverterService";
-import "./Base64-converter.ts.css";
 
 @customElement("base64-page")
 @route("/base64", {
@@ -108,84 +107,95 @@ export class HomePage extends ComponentBase {
 
   render() {
     return html`
-      <h1>Convert assets to base64 format</h1>
-      <p>
-        This app provides a simple tool to convert media files to Base64 to use
-        in playable ads.
-      </p>
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Convert assets to base64 format</h1>
+          <p class="text-lg text-slate-600 dark:text-slate-400">
+            This app provides a simple tool to convert media files to Base64 to use
+            in playable ads.
+          </p>
+        </div>
 
-      <div
-        class="dropzone ${this.dragActive ? "dragover" : ""}"
-        @dragover=${this._onDragOver}
-        @dragleave=${this._onDragLeave}
-        @drop=${this._onDrop}
-      >
-        <p>Drop your files here or</p>
-        <label class="file-select-button">
-          Select files
-          <input type="file" multiple @change=${this._onFileChange} />
-        </label>
-      </div>
+        <div
+          class="border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+            this.dragActive
+              ? "border-primary bg-primary/5"
+              : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          }"
+          @dragover=${this._onDragOver}
+          @dragleave=${this._onDragLeave}
+          @drop=${this._onDrop}
+        >
+          <p class="text-slate-600 dark:text-slate-400 mb-4">Drop your files here or</p>
+          <label class="inline-block px-6 py-2 bg-primary text-white rounded-lg cursor-pointer hover:bg-primary-600 transition-colors font-medium">
+            Select files
+            <input type="file" multiple @change=${this._onFileChange} class="hidden" />
+          </label>
+        </div>
 
-      ${this.processing
-        ? html`
-            <div class="progress-container">
-              <div class="progress-bar-background">
-                <div
-                  class="progress-bar-fill"
-                  style="width: ${this.progress}%;"
-                ></div>
+        ${this.processing
+          ? html`
+              <div class="mt-8">
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    class="bg-primary h-2.5 rounded-full transition-all duration-300"
+                    style="width: ${this.progress}%;"
+                  ></div>
+                </div>
+                <div class="mt-2 text-sm text-slate-600 dark:text-slate-400 text-center">
+                  Processing... ${this.progress}%
+                </div>
               </div>
-              <div style="margin-top:0.5em; font-size:0.95em;">
-                Processing... ${this.progress}%
-              </div>
-            </div>
-          `
-        : null}
-      ${this.results.length > 0
-        ? html`
-            <div class="file-list">
-              ${this.results.map(
-                (r, idx) => html`
-                  <div class="file-row">
-                    <div class="file-name">
-                      <span>${r.name}</span>
-                      <div class="file-size">
-                        ${(r.originalSize / 1024).toFixed(2)} KB →
-                        ${(r.base64Size / 1024).toFixed(2)} KB
+            `
+          : null}
+        ${this.results.length > 0
+          ? html`
+              <div class="mt-8 space-y-4">
+                ${this.results.map(
+                  (r, idx) => html`
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-4">
+                      <div class="flex-1 min-w-0">
+                        <span class="font-medium text-slate-900 dark:text-white truncate block" title="${r.name}">${r.name}</span>
+                        <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                          ${(r.originalSize / 1024).toFixed(2)} KB →
+                          ${(r.base64Size / 1024).toFixed(2)} KB
+                        </div>
                       </div>
+                      ${r.dataUrl.length > 2048
+                        ? html`<span class="font-mono text-xs text-slate-500 dark:text-slate-400 italic"
+                            >content too long to display
+                            <a
+                              href="#"
+                              @click=${(e: Event) =>
+                                this._downloadDataUrl(e, r.dataUrl, r.name)}
+                              class="text-primary hover:underline ml-1"
+                              >Open in new tab</a
+                            ></span
+                          >`
+                        : html`<span
+                            class="font-mono text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 overflow-hidden text-ellipsis whitespace-nowrap max-w-xs cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700"
+                            tabindex="0"
+                            @click=${(e: Event) => this._selectDataUrl(e)}
+                            @focus=${(e: Event) => this._selectDataUrl(e)}
+                            >${r.dataUrl}</span
+                          >`}
+                      <button
+                        class="px-4 py-2 rounded text-sm font-medium transition-colors min-w-[80px] ${
+                          this.copiedIndex === idx
+                            ? "text-green-600 border border-green-600 bg-green-50 dark:bg-green-900/20"
+                            : "bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                        }"
+                        @click=${() => this._copyToClipboard(r.dataUrl, idx)}
+                      >
+                        ${this.copiedIndex === idx ? "Copied" : "Copy"}
+                      </button>
                     </div>
-                    ${r.dataUrl.length > 2048
-                      ? html`<span class="data-url long-content"
-                          >content too long to display
-                          <a
-                            href="#"
-                            @click=${(e: Event) =>
-                              this._downloadDataUrl(e, r.dataUrl, r.name)}
-                            >Open in new tab</a
-                          ></span
-                        >`
-                      : html`<span
-                          class="data-url"
-                          tabindex="0"
-                          @click=${(e: Event) => this._selectDataUrl(e)}
-                          @focus=${(e: Event) => this._selectDataUrl(e)}
-                          >${r.dataUrl}</span
-                        >`}
-                    <button
-                      class="copy-btn${this.copiedIndex === idx
-                        ? " copied"
-                        : ""}"
-                      @click=${() => this._copyToClipboard(r.dataUrl, idx)}
-                    >
-                      ${this.copiedIndex === idx ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                `
-              )}
-            </div>
-          `
-        : null}
+                  `
+                )}
+              </div>
+            `
+          : null}
+      </div>
     `;
   }
 }

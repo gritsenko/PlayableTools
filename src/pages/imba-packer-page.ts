@@ -1,6 +1,5 @@
 import { ComponentBase, customElement, html, route, inject } from "fw";
 import { ImbaPackerService } from "../services/ImbaPackerService";
-import "./imba-packer-page.ts.css";
 
 /**
  * Imba Packer is a tool designed to optimize and compress HTML files for playable ads and similar use cases.
@@ -13,7 +12,10 @@ import "./imba-packer-page.ts.css";
  */
 
 @customElement("imba-packer-page")
-@route("/imba-packer")
+@route("/imba-packer", {
+  title: "Imba Packer",
+  description: "Optimize and compress HTML files for playable ads.",
+})
 export class ImbaPackerPage extends ComponentBase {
   @inject(ImbaPackerService) imbaPackerService!: ImbaPackerService;
   dragActive = false;
@@ -25,57 +27,106 @@ export class ImbaPackerPage extends ComponentBase {
 
   render() {
     return html`
-      <div class="imba-packer-page">
-        <div style="margin-bottom:1.5rem">
-          <strong>Imba Packer (Experimental)</strong><br />
-          <div style="margin: 0.5em 0 1em 0; font-size: 0.97em; color: #555;">
-            Imba Packer optimizes and compresses HTML files for playable ads and similar use cases.<br />
-            <ul style="margin:0.5em 0 0.5em 1.2em; padding:0;">
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Imba Packer (Experimental)</h1>
+          <div class="text-lg text-slate-600 dark:text-slate-400 mb-6">
+            Imba Packer optimizes and compresses HTML files for playable ads and similar use cases.
+            <ul class="list-disc list-inside ml-4 mt-4 mb-4 space-y-2 text-base">
               <li>Upload or drop an HTML file below.</li>
               <li>The file will be processed and minified to reduce its size.</li>
               <li>Download the packed HTML and view compression statistics.</li>
               <li>All original functionality is preserved as much as possible.</li>
             </ul>
-            <span style="color:#a00">Experimental: results may vary depending on input file.</span>
+            <span class="text-red-600 dark:text-red-400 font-medium block mt-4 flex items-center gap-2">
+              <span class="material-icons-outlined text-sm">warning</span>
+              Experimental: results may vary depending on input file.
+            </span>
           </div>
-          <small>
-            Drop your file below or select it manually.
-          </small>
         </div>
+        
         ${!this.loadedFile
           ? html`
               <div
-                class="dropzone ${this.dragActive ? "dragover" : ""}"
+                class="border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+                  this.dragActive
+                    ? "border-primary bg-primary/5"
+                    : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                }"
                 @dragover=${this._onDragOver}
                 @dragleave=${this._onDragLeave}
                 @drop=${this._onDrop}
               >
-                <p>Drop your file here or</p>
-                <label class="file-select-button">
+                <p class="text-slate-600 dark:text-slate-400 mb-4">Drop your file here or</p>
+                <label class="inline-block px-6 py-2 bg-primary text-white rounded-lg cursor-pointer hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20">
                   Select file
                   <input
                     type="file"
                     @change=${this._onFileChange}
+                    class="hidden"
                   />
                 </label>
               </div>
             `
           : html`
-              <div class="file-loaded-info">
-                <strong>File loaded:</strong> ${this.loadedFile.name}
-                (${(this.loadedFile.size / 1024).toFixed(2)} KB)
-                <button style="margin-left:1em" @click=${this._resetFile}>Cancel</button>
-              </div>
-              ${this.packedFileName && this.packedHtml && this.packedSize && this.compressionInfo ? html`
-                <div class="packed-info" style="margin-top:1em;">
-                  <div><strong>Packed file:</strong> ${this.packedFileName}</div>
-                  <div><strong>Original size:</strong> ${(this.loadedFile.size / 1024).toFixed(2)} KB</div>
-                  <div><strong>Packed size:</strong> ${(this.packedSize / 1024).toFixed(2)} KB</div>
-                  <div><strong>Difference:</strong> ${(this.compressionInfo.diff / 1024).toFixed(2)} KB</div>
-                  <div><strong>Compression rate:</strong> ${this.compressionInfo.percent.toFixed(1)}%</div>
-                  <button style="margin-top:0.7em" @click=${this._downloadPacked}>Download packed file</button>
+              <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                <div class="flex items-center gap-3">
+                  <span class="material-icons-outlined text-slate-400">description</span>
+                  <div>
+                    <div class="font-medium text-slate-900 dark:text-white">${this.loadedFile.name}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">${(this.loadedFile.size / 1024).toFixed(2)} KB</div>
+                  </div>
                 </div>
-              ` : html`<div style="margin-top:1em;">Packing...</div>`}
+                <button 
+                  @click=${this._resetFile}
+                  class="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+              
+              ${this.packedFileName && this.packedHtml && this.packedSize && this.compressionInfo ? html`
+                <div class="mt-6 bg-green-50 dark:bg-green-900/10 p-6 rounded-lg border border-green-200 dark:border-green-900/30">
+                  <h3 class="text-lg font-semibold text-green-800 dark:text-green-300 mb-4 flex items-center gap-2">
+                    <span class="material-icons-outlined">check_circle</span>
+                    Compression Complete
+                  </h3>
+                  
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
+                      <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Original Size</div>
+                      <div class="text-xl font-mono text-slate-900 dark:text-white">${(this.loadedFile.size / 1024).toFixed(2)} KB</div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
+                      <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Packed Size</div>
+                      <div class="text-xl font-mono text-green-600 dark:text-green-400 font-bold">${(this.packedSize / 1024).toFixed(2)} KB</div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
+                      <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Size Reduction</div>
+                      <div class="text-xl font-mono text-slate-900 dark:text-white">${(this.compressionInfo.diff / 1024).toFixed(2)} KB</div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
+                      <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Compression Rate</div>
+                      <div class="text-xl font-mono text-green-600 dark:text-green-400 font-bold">${this.compressionInfo.percent.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  
+                  <div class="flex justify-end">
+                    <button 
+                      @click=${this._downloadPacked}
+                      class="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-lg shadow-green-600/20"
+                    >
+                      <span class="material-icons-outlined mr-2">download</span>
+                      Download Packed File
+                    </button>
+                  </div>
+                </div>
+              ` : html`
+                <div class="mt-8 flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+                  <div class="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mb-4"></div>
+                  <p>Processing and compressing file...</p>
+                </div>
+              `}
             `}
       </div>
     `;

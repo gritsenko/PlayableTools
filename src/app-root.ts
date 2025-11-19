@@ -1,15 +1,12 @@
 import "reflect-metadata";
 
-import "@picocss/pico/css/pico.blue.min.css";
-import "./app-root.css";
-import "./theme.css";
-
 import { ComponentBase, customElement, html, state } from "./fw";
 import "./Layout/nav-menu";
 import { MainLayout } from "./Layout/main-layout";
 import { VersionService } from "./services/VersionService";
 import "./fw/update-notification";
 
+import "./theme.css";
 // Eagerly import all files in pages directory
 // this will resolve all page components
 import.meta.glob("./pages/**/*.ts", { eager: true });

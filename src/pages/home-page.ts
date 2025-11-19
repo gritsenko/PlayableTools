@@ -1,5 +1,4 @@
 import { ComponentBase, customElement, html, route } from "fw";
-import "./home-page.ts.css";
 
 @customElement("home-page")
 @route("/", {
@@ -10,74 +9,103 @@ import "./home-page.ts.css";
 export class HomePage extends ComponentBase {
   render() {
     return html`
-      <h1>Gritsenko Playable Ads Tools</h1>
-
-      <p>
-        This app provides a collection of open-source, useful tools for HTML5
-        playable ads developers.
-      </p>
-
-      <h2>Available Tools:</h2>
-      <div class="feature-cards">
-        <div class="feature-card">
-          <h3>📤 Publish to Ad Networks</h3>
-          <p>Publishing workflow automation - Streamline the process of deploying your playable ads to various advertising networks.</p>
-          <a href="#publish" class="feature-card-link">Start Publishing</a>
+      <div class="max-w-7xl mx-auto">
+        <div class="mb-12 text-center">
+          <h1 class="text-4xl font-bold text-slate-900 dark:text-white mb-4">Playable Ads Tools</h1>
+          <p class="text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto">
+            This app provides a collection of open-source, useful tools for HTML5
+            playable ads developers.
+          </p>
         </div>
 
-        <div class="feature-card">
-          <h3>🔄 Base64 Converter</h3>
-          <p>File to Base64 encoding - Convert files and images to Base64 encoding for embedding in your HTML5 playable ads.</p>
-          <a href="#base64" class="feature-card-link">Convert Files</a>
-        </div>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white mb-8">Available Tools:</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          ${this.renderCard(
+            "📤 Publish to Ad Networks",
+            "Publishing workflow automation - Streamline the process of deploying your playable ads to various advertising networks.",
+            "#publish",
+            "Start Publishing"
+          )}
 
-        <div class="feature-card">
-          <h3>🎬 Video to Sprite</h3>
-          <p>MP4 to PNG sprite sequences - Transform MP4 videos into PNG sprite sequences for game development and animations.</p>
-          <a href="#video2sprite" class="feature-card-link">Convert Videos</a>
-        </div>
+          ${this.renderCard(
+            "🔄 Base64 Converter",
+            "File to Base64 encoding - Convert files and images to Base64 encoding for embedding in your HTML5 playable ads.",
+            "#base64",
+            "Convert Files"
+          )}
 
-        <div class="feature-card">
-          <h3>📊 Folder Size Map</h3>
-          <p>Interactive folder analysis - Analyze and visualize the size structure of local folders using sunburst charts, treemaps, and tree views.</p>
-          <a href="#folder-size-visualizer" class="feature-card-link">Visualize Folders</a>
-        </div>
+          ${this.renderCard(
+            "🎬 Video to Sprite",
+            "MP4 to PNG sprite sequences - Transform MP4 videos into PNG sprite sequences for game development and animations.",
+            "#video2sprite",
+            "Convert Videos"
+          )}
 
-        <div class="feature-card">
-          <h3>🗜️ Imba Packer</h3>
-          <p>Experimental HTML compression - Maximizing file size reduction while preserving functionality. Great for size-constrained ads.</p>
-          <a href="#imba-packer" class="feature-card-link">Compress HTML</a>
-        </div>
+          ${this.renderCard(
+            "📊 Folder Size Map",
+            "Interactive folder analysis - Analyze and visualize the size structure of local folders using sunburst charts, treemaps, and tree views.",
+            "#folder-size-visualizer",
+            "Visualize Folders"
+          )}
 
-        <div class="feature-card">
-          <h3>🖼️ Assets Compression</h3>
-          <p>PNG optimization tools - Optimize your PNG images and other assets to reduce file size and improve loading times using PngChpocker.</p>
-          <a href="#compress-assets" class="feature-card-link">Compress Assets</a>
-        </div>
+          ${this.renderCard(
+            "🗜️ Imba Packer",
+            "Experimental HTML compression - Maximizing file size reduction while preserving functionality. Great for size-constrained ads.",
+            "#imba-packer",
+            "Compress HTML"
+          )}
 
-        <div class="feature-card">
-          <h3>📖 CTA SDK Documentation</h3>
-          <p>Integration guides - Complete guide for integrating the Call-to-Action SDK in your playable ads. Essential for successful publishing.</p>
-          <a href="#cta-sdk" class="feature-card-link">View Documentation</a>
-        </div>
+          ${this.renderCard(
+            "🖼️ Assets Compression",
+            "PNG optimization tools - Optimize your PNG images and other assets to reduce file size and improve loading times using PngChpocker.",
+            "#compress-assets",
+            "Compress Assets"
+          )}
 
-        <div class="feature-card">
-          <h3>✅ Ad Network Requirements</h3>
-          <p>Technical specifications - Stay up-to-date with the specific technical requirements and specifications for different advertising networks.</p>
-          <a href="#validate" class="feature-card-link">Check Requirements</a>
-        </div>
+          ${this.renderCard(
+            "📖 CTA SDK Documentation",
+            "Integration guides - Complete guide for integrating the Call-to-Action SDK in your playable ads. Essential for successful publishing.",
+            "#cta-sdk",
+            "View Documentation"
+          )}
 
-        <div class="feature-card">
-          <h3>📱 Playable Preview</h3>
-          <p>Multi-device testing - Preview and share your playable ad creations from GitHub on different devices and orientations.</p>
-          <a href="#preview" class="feature-card-link">Preview Ads</a>
-        </div>
+          ${this.renderCard(
+            "✅ Ad Network Requirements",
+            "Technical specifications - Stay up-to-date with the specific technical requirements and specifications for different advertising networks.",
+            "#validate",
+            "Check Requirements"
+          )}
 
-        <div class="feature-card">
-          <h3>📂 Portfolio Management</h3>
-          <p>GitHub integration - Manage and view your portfolio of playable ads from GitHub repositories. Organize and showcase your work.</p>
-          <a href="#portfolio" class="feature-card-link">Manage Portfolio</a>
+          ${this.renderCard(
+            "📱 Playable Preview",
+            "Multi-device testing - Preview and share your playable ad creations from GitHub on different devices and orientations.",
+            "#preview",
+            "Preview Ads"
+          )}
+
+          ${this.renderCard(
+            "📂 Portfolio Management",
+            "GitHub integration - Manage and view your portfolio of playable ads from GitHub repositories. Organize and showcase your work.",
+            "#portfolio",
+            "Manage Portfolio"
+          )}
         </div>
+      </div>
+    `;
+  }
+
+  private renderCard(title: string, description: string, link: string, linkText: string) {
+    return html`
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow flex flex-col h-full">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">${title}</h3>
+        <p class="text-slate-600 dark:text-slate-400 mb-6 flex-grow">${description}</p>
+        <a 
+          href="${link}" 
+          class="inline-flex items-center justify-center px-4 py-2 bg-slate-100 dark:bg-slate-800 text-primary font-medium rounded hover:bg-primary hover:text-white transition-colors mt-auto"
+        >
+          ${linkText}
+        </a>
       </div>
     `;
   }

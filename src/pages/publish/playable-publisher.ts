@@ -1,6 +1,5 @@
 import { ComponentBase, html, inject } from "fw";
 import { PlayablePublishService } from "../../services/PlayablePublishService";
-import "./playable-publisher.ts.css";
 
 export class PlayablePublisher extends ComponentBase {
   dragActive = false;
@@ -46,50 +45,60 @@ export class PlayablePublisher extends ComponentBase {
 
   render() {
     return html`
-      <div class="playable-publisher">
-        <div style="margin-bottom:1.5rem">
-          <strong>Publish Playable Ad</strong><br />
-          <small>
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Publish Playable Ad</h1>
+          <div class="text-lg text-slate-600 dark:text-slate-400 mb-6">
             Use this tool to upload your playable ad HTML file and prepare it
             for different platforms.<br />
             Drop your .html file below or select it manually.
-          </small>
+          </div>
         </div>
 
         ${!this.loadedFile
           ? html`
               <div
-                class="dropzone ${this.dragActive ? "dragover" : ""}"
+                class="border-2 border-dashed rounded-lg p-6 md:p-12 text-center transition-colors ${
+                  this.dragActive
+                    ? "border-primary bg-primary/5"
+                    : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                }"
                 @dragover=${this._onDragOver}
                 @dragleave=${this._onDragLeave}
                 @drop=${this._onDrop}
               >
-                <p>Drop your .html file here or</p>
-                <label class="file-select-button">
+                <p class="text-slate-600 dark:text-slate-400 mb-4">Drop your .html file here or</p>
+                <label class="inline-block px-6 py-2 bg-primary text-white rounded-lg cursor-pointer hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20">
                   Select file
                   <input
                     type="file"
                     accept=".html"
                     @change=${this._onFileChange}
+                    class="hidden"
                   />
                 </label>
               </div>
             `
           : html`
-              <div class="file-loaded-info">
-                <strong>File loaded:</strong> ${this.loadedFile.name}
-                (${(this.loadedFile.size / 1024).toFixed(2)} KB)
+              <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                  <span class="material-icons-outlined text-slate-400">description</span>
+                  <div>
+                    <div class="font-medium text-slate-900 dark:text-white">File loaded: ${this.loadedFile.name}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">${(this.loadedFile.size / 1024).toFixed(2)} KB</div>
+                  </div>
+                </div>
 
                 ${this.isPublishing
                   ? html`
-                      <div class="progress-container">
-                        <div class="progress-text">
-                          Publishing... ${Math.round(this.publishProgress)}%
-                          ${this.currentPlatform ? html`<span style="margin-left:1em;">(${this.currentPlatform})</span>` : ''}
+                      <div class="mt-4">
+                        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2 flex justify-between">
+                          <span>Publishing... ${Math.round(this.publishProgress)}%</span>
+                          ${this.currentPlatform ? html`<span class="font-medium text-primary">(${this.currentPlatform})</span>` : ''}
                         </div>
-                        <div class="progress-bar-background">
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
                           <div 
-                            class="progress-bar-fill"
+                            class="bg-primary h-2.5 rounded-full transition-all duration-300"
                             style="width: ${this.publishProgress}%;"
                           ></div>
                         </div>
@@ -101,102 +110,112 @@ export class PlayablePublisher extends ComponentBase {
 
         <!-- Form inputs: only show when file is loaded -->
         ${this.loadedFile ? html`
-          <div class="form-section compact-form" style="margin-bottom: 1.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h3 style="margin: 0; font-size: 1.1rem;">Playable Configuration</h3>
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+            <div class="flex justify-between items-center mb-6">
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white">Playable Configuration</h3>
             </div>
-            <div class="form-row compact-row">
-              <label for="playableTitle">Playable Title:</label>
-              <input
-                id="playableTitle"
-                type="text"
-                .value=${this.playableTitle}
-                @input=${(e: Event) => {
-                  this.updateField('playableTitle', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="e.g., GoH_PBCustomHero3D"
-                style="margin-left: 8px;"
-              />
-            </div>
-            <div class="form-row compact-row">
-              <label for="googlePlayUrl">Google Play URL:</label>
-              <input
-                id="googlePlayUrl"
-                type="url"
-                .value=${this.googlePlayUrl}
-                @input=${(e: Event) => {
-                  this.updateField('googlePlayUrl', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="https://play.google.com/store/apps/details?id=..."
-                style="margin-left: 8px;"
-              />
-            </div>
-            <div class="form-row compact-row">
-              <label for="appStoreUrl">App Store URL:</label>
-              <input
-                id="appStoreUrl"
-                type="url"
-                .value=${this.appStoreUrl}
-                @input=${(e: Event) => {
-                  this.updateField('appStoreUrl', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="https://apps.apple.com/app/..."
-                style="margin-left: 8px;"
-              />
-            </div>
-            <div class="form-row compact-row">
-              <label for="customSuffix">Custom Suffix:</label>
-              <input
-                id="customSuffix"
-                type="text"
-                .value=${this.customSuffix}
-                @input=${(e: Event) => {
-                  this.updateField('customSuffix', (e.target as HTMLInputElement).value);
-                }}
-                placeholder="EN"
-                style="width: 60px; margin-left: 8px;"
-              />
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label for="playableTitle" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Playable Title:</label>
+                <input
+                  id="playableTitle"
+                  type="text"
+                  .value=${this.playableTitle}
+                  @input=${(e: Event) => {
+                    this.updateField('playableTitle', (e.target as HTMLInputElement).value);
+                  }}
+                  placeholder="e.g., GoH_PBCustomHero3D"
+                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+              
+              <div>
+                <label for="customSuffix" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Suffix:</label>
+                <input
+                  id="customSuffix"
+                  type="text"
+                  .value=${this.customSuffix}
+                  @input=${(e: Event) => {
+                    this.updateField('customSuffix', (e.target as HTMLInputElement).value);
+                  }}
+                  placeholder="EN"
+                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+              
+              <div>
+                <label for="googlePlayUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Google Play URL:</label>
+                <input
+                  id="googlePlayUrl"
+                  type="url"
+                  .value=${this.googlePlayUrl}
+                  @input=${(e: Event) => {
+                    this.updateField('googlePlayUrl', (e.target as HTMLInputElement).value);
+                  }}
+                  placeholder="https://play.google.com/store/apps/details?id=..."
+                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+              
+              <div>
+                <label for="appStoreUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">App Store URL:</label>
+                <input
+                  id="appStoreUrl"
+                  type="url"
+                  .value=${this.appStoreUrl}
+                  @input=${(e: Event) => {
+                    this.updateField('appStoreUrl', (e.target as HTMLInputElement).value);
+                  }}
+                  placeholder="https://apps.apple.com/app/..."
+                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
             </div>
 
             <!-- Platform checklist -->
-            <div class="form-row compact-row platform-section">
-              <label class="platform-label">Platforms:</label>
-              <div class="platform-content">
-                <div class="platform-actions">
-                  <a href="#" @click=${this._selectAllPlatforms} class="platform-link">Select all</a>
-                  <a href="#" @click=${this._clearAllPlatforms} class="platform-link">Clear all</a>
+            <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+              <div class="flex justify-between items-center mb-4">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Platforms:</label>
+                <div class="flex gap-4 text-sm">
+                  <a href="#" @click=${this._selectAllPlatforms} class="text-primary hover:underline">Select all</a>
+                  <a href="#" @click=${this._clearAllPlatforms} class="text-primary hover:underline">Clear all</a>
                 </div>
-                <div class="platform-grid">
-                  ${this.availablePlatforms.map(platform => html`
-                    <label class="platform-checkbox">
-                      <input
-                        type="checkbox"
-                        .checked=${this.selectedPlatforms.includes(platform)}
-                        @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
-                      />
-                      <span>${platform}</span>
-                    </label>
-                  `)}
-                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                ${this.availablePlatforms.map(platform => html`
+                  <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <input
+                      type="checkbox"
+                      .checked=${this.selectedPlatforms.includes(platform)}
+                      @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
+                      class="rounded text-primary focus:ring-primary"
+                    />
+                    <span class="text-sm text-slate-700 dark:text-slate-300">${platform}</span>
+                  </label>
+                `)}
               </div>
             </div>
           </div>
         ` : null}
 
         <!-- Publish/Cancel buttons below the form -->
-        <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; justify-content: center;">
+        <div class="mb-8 flex gap-4 justify-center">
           ${this.loadedFile && this.playableTitle && !this.isPublishing ? html`
             <button 
               @click=${this._publishPlayable}
-              style="margin-right: 0.5rem;"
+              class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               ?disabled=${!this.selectedPlatforms.length}
             >
+              <span class="material-icons-outlined">publish</span>
               Publish
             </button>
           ` : null}
           ${this.loadedFile && !this.isPublishing ? html`
             <button 
               @click=${this._resetFile}
+              class="px-8 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium"
             >
               Cancel
             </button>

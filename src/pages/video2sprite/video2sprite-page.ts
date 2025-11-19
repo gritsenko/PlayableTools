@@ -1,4 +1,3 @@
-import "./video2sprite-page.ts.css";
 import { ComponentBase, customElement, html, route, state, inject } from "fw";
 import {
   Video2SpriteService,
@@ -650,353 +649,396 @@ export class Video2spritePage extends ComponentBase {
     setTimeout(() => this.updateValueDisplays(), 0);
 
     return html`
-      <h1>Video to Sprite Converter</h1>
-      <p>
-        Convert your MP4 videos into PNG sprite sequences for game development
-        and animation.
-      </p>
-      <div class="page-layout">
-        <div class="left-column">
-          <div id="preview-container">
-            <div class="background-container">
-              ${this.selectedBackground
-                ? html`<img src=${this.selectedBackground} alt="background" />`
+      <div class="max-w-6xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Video to Sprite Converter</h1>
+          <p class="text-lg text-slate-600 dark:text-slate-400">
+            Convert your MP4 videos into PNG sprite sequences for game development
+            and animation.
+          </p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+          <!-- Left Column: Preview & Controls -->
+          <div class="flex-1 min-w-0">
+            <div id="preview-container" class="relative bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden aspect-square flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-inner mb-4">
+              <div class="absolute inset-0 z-0">
+                ${this.selectedBackground
+                  ? html`<img src=${this.selectedBackground} alt="background" class="w-full h-full object-cover" />`
+                  : ""}
+              </div>
+              <canvas
+                id="previewCanvas"
+                aria-label="First frame preview canvas"
+                @click=${this.handleCanvasClick}
+                class="relative z-10 max-w-full max-h-full object-contain cursor-crosshair"
+              ></canvas>
+
+              ${!this.hasSelectedFile && !this.isProcessing
+                ? html`
+                    <div
+                      id="upload-area"
+                      class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-50/90 dark:bg-slate-900/90 cursor-pointer transition-colors border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-100/90 dark:hover:bg-slate-800/90 ${this.isDragOver ? "border-primary bg-primary/5" : ""}"
+                      @dragover=${this.handleDragOver}
+                      @dragleave=${this.handleDragLeave}
+                      @drop=${this.handleDrop}
+                      @click=${this.handleClick}
+                    >
+                      <div class="text-6xl mb-4">📹</div>
+                      <div class="text-xl font-medium text-slate-900 dark:text-white mb-2">Drop your MP4 video here</div>
+                      <div class="text-slate-500 dark:text-slate-400">or click to browse files</div>
+                      <input
+                        id="file-input"
+                        type="file"
+                        accept=".mp4,video/mp4"
+                        @change=${this.handleFileInputChange}
+                        class="hidden"
+                      />
+                    </div>
+                  `
+                : ""}
+              ${this.isProcessing
+                ? html`
+                    <div class="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                      <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-4 text-center">
+                        <div class="text-4xl mb-4 animate-bounce">⏳</div>
+                        <div class="font-medium text-slate-900 dark:text-white mb-2">
+                          ${this.processingProgress?.stage === "loading"
+                            ? "Loading video..."
+                            : this.processingProgress?.stage === "processing"
+                            ? "Extracting frames..."
+                            : "Generating sprite sheet..."}
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+                          <div
+                            class="bg-primary h-2.5 rounded-full transition-all duration-300"
+                            style="width: ${this.processingProgress?.progress || 0}%"
+                          ></div>
+                        </div>
+                        ${this.processingProgress?.currentFrame &&
+                        this.processingProgress?.totalFrames
+                          ? html`<div class="text-sm text-slate-500 dark:text-slate-400">
+                              Frame ${this.processingProgress.currentFrame} of
+                              ${this.processingProgress.totalFrames}
+                            </div>`
+                          : ""}
+                      </div>
+                    </div>
+                  `
                 : ""}
             </div>
-            <canvas
-              id="previewCanvas"
-              aria-label="First frame preview canvas"
-              @click=${this.handleCanvasClick}
-            ></canvas>
 
-            ${!this.hasSelectedFile && !this.isProcessing
-              ? html`
-                  <div
-                    id="upload-area"
-                    class=${this.isDragOver ? "drag-over" : ""}
-                    @dragover=${this.handleDragOver}
-                    @dragleave=${this.handleDragLeave}
-                    @drop=${this.handleDrop}
-                    @click=${this.handleClick}
+            <div id="background-presets" class="flex flex-wrap gap-2 mb-6">
+              ${this.backgrounds.map(
+                (bg) =>
+                  html`<button
+                    class="w-10 h-10 rounded overflow-hidden border-2 transition-all ${this.selectedBackground === bg ? 'border-primary ring-2 ring-primary/20' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600'}"
+                    @click=${() => this.selectBackground(bg)}
                   >
-                    <div class="upload-icon">📹</div>
-                    <div class="upload-text">Drop your MP4 video here</div>
-                    <div class="upload-subtext">or click to browse files</div>
-                    <input
-                      id="file-input"
-                      type="file"
-                      accept=".mp4,video/mp4"
-                      @change=${this.handleFileInputChange}
-                    />
+                    <img src=${bg} alt="background" class="w-full h-full object-cover" />
+                  </button>`
+              )}
+            </div>
+
+            ${this.framesLoaded && this.hasSelectedFile && !this.isProcessing
+              ? html`
+                  <div class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 mb-6 space-y-4">
+                    <div class="flex justify-between items-center mb-2">
+                      <label class="font-medium text-slate-700 dark:text-slate-300">Frame Navigation</label>
+                      
+                      <!-- Play/Pause Controls -->
+                      <div class="flex items-center gap-4">
+                        <button 
+                          @click=${this.togglePlayPause}
+                          class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-2"
+                        >
+                          ${this.isPlaying ? '⏸️ Pause' : '▶️ Play'}
+                        </button>
+                        <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          Speed:
+                          <select 
+                            @change=${(e: Event) => {
+                              const target = e.target as HTMLSelectElement;
+                              this.setPlaybackSpeed(parseInt(target.value));
+                            }}
+                            .value=${this.playbackSpeed.toString()}
+                            class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="50">Fast (50ms)</option>
+                            <option value="100">Normal (100ms)</option>
+                            <option value="200">Slow (200ms)</option>
+                            <option value="500">Very Slow (500ms)</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Frame Controls -->
+                    <div class="flex items-center justify-center gap-4">
+                      <button 
+                        @click=${this.previousFrame} 
+                        ?disabled=${this.currentFrameIndex <= 0}
+                        class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span class="material-icons-outlined">chevron_left</span>
+                      </button>
+                      <span class="font-mono text-slate-700 dark:text-slate-300 min-w-[100px] text-center">
+                        ${this.currentFrameIndex + 1} / ${this.totalFrames}
+                      </span>
+                      <button 
+                        @click=${this.nextFrame} 
+                        ?disabled=${this.currentFrameIndex >= this.totalFrames - 1}
+                        class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span class="material-icons-outlined">chevron_right</span>
+                      </button>
+                    </div>
+                    
+                    <!-- Frame Slider -->
+                    <div class="px-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="${this.totalFrames - 1}"
+                        value="${this.currentFrameIndex}"
+                        @mousedown=${() => { this.isSliderBeingDragged = true; }}
+                        @mouseup=${() => { 
+                          this.isSliderBeingDragged = false;
+                          this.updateSliderValue();
+                        }}
+                        @touchstart=${() => { this.isSliderBeingDragged = true; }}
+                        @touchend=${() => { 
+                          this.isSliderBeingDragged = false;
+                          this.updateSliderValue();
+                        }}
+                        @mouseleave=${() => { 
+                          this.isSliderBeingDragged = false;
+                          this.updateSliderValue();
+                        }}
+                        @input=${(e: Event) => {
+                          const target = e.target as HTMLInputElement;
+                          this.goToFrame(parseInt(target.value));
+                        }}
+                        @change=${(e: Event) => {
+                          const target = e.target as HTMLInputElement;
+                          this.goToFrame(parseInt(target.value));
+                          this.isSliderBeingDragged = false;
+                        }}
+                        class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                    </div>
                   </div>
                 `
               : ""}
-            ${this.isProcessing
+
+            ${this.hasSelectedFile && !this.isProcessing && !this.isSavingSequence
               ? html`
-                  <div class="processing-overlay">
-                    <div class="processing-content">
-                      <div class="processing-spinner">⏳</div>
-                      <div class="processing-text">
-                        ${this.processingProgress?.stage === "loading"
+                  <div class="flex flex-wrap gap-4">
+                    <button 
+                      @click=${this.startProcessing} 
+                      class="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+                    >
+                      <span class="material-icons-outlined">grid_view</span>
+                      Save PNG sprite sheet
+                    </button>
+                    ${this.framesLoaded 
+                      ? html`
+                          <button 
+                            @click=${this.savePngSequence} 
+                            class="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
+                          >
+                            <span class="material-icons-outlined">collections</span>
+                            Save PNG sequence
+                          </button>
+                        `
+                      : ""
+                    }
+                  </div>
+                `
+              : ""}
+
+            ${(this.isProcessing || this.isSavingSequence) && this.processingProgress
+              ? html`
+                  <div class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 mt-6">
+                    <div class="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
+                      <span>
+                        ${this.isSavingSequence 
+                          ? `Saving frame ${this.processingProgress.currentFrame || 0} of ${this.processingProgress.totalFrames || 0}...`
+                          : this.processingProgress.stage === "loading"
                           ? "Loading video..."
-                          : this.processingProgress?.stage === "processing"
+                          : this.processingProgress.stage === "extracting"
                           ? "Extracting frames..."
-                          : "Generating sprite sheet..."}
-                      </div>
-                      <div class="progress-bar">
-                        <div
-                          class="progress-fill"
-                          style="width: ${this.processingProgress?.progress ||
-                          0}%"
-                        ></div>
-                      </div>
-                      ${this.processingProgress?.currentFrame &&
-                      this.processingProgress?.totalFrames
-                        ? html`<div class="progress-text">
-                            Frame ${this.processingProgress.currentFrame} of
-                            ${this.processingProgress.totalFrames}
-                          </div>`
-                        : ""}
+                          : this.processingProgress.stage === "processing"
+                          ? "Processing frames..."
+                          : "Generating sprite sheet..."
+                        }
+                      </span>
+                      <span>${Math.round(this.processingProgress.progress || 0)}%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        class="bg-primary h-2.5 rounded-full transition-all duration-300"
+                        style="width: ${this.processingProgress.progress || 0}%"
+                      ></div>
                     </div>
                   </div>
                 `
               : ""}
           </div>
 
-          <div id="background-presets">
-            ${this.backgrounds.map(
-              (bg) =>
-                html`<button
-                  class="preset-btn"
-                  @click=${() => this.selectBackground(bg)}
-                >
-                  <img src=${bg} alt="background" width="40" height="40" />
-                </button>`
-            )}
+          <!-- Right Column: Settings -->
+          <div class="w-full lg:w-80 space-y-6">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 class="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-icons-outlined">palette</span>
+                Chroma Key Settings
+              </h3>
+              
+              <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                  <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Background Color</label>
+                  ${this.selectedColor ? html`
+                    <button 
+                      @click=${this.resetColor}
+                      class="text-xs text-red-500 hover:text-red-600 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  ` : ''}
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  Click the preview to pick a color to remove
+                </p>
+                <div class="relative">
+                  <div
+                    class="w-full h-12 rounded border border-slate-300 dark:border-slate-600 shadow-inner"
+                    style="background-color: ${this.selectedColor || 'transparent'}; background-image: ${!this.selectedColor ? 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none'}; background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;"
+                  ></div>
+                  ${!this.selectedColor ? html`
+                    <div class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm pointer-events-none">
+                      No color selected
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <label for="toleranceInput" class="text-sm font-medium text-slate-700 dark:text-slate-300">Tolerance</label>
+                    <span id="toleranceValue" class="text-sm font-mono text-slate-500">50</span>
+                  </div>
+                  <input
+                    id="toleranceRange"
+                    type="range"
+                    min="0"
+                    max="255"
+                    value="50"
+                    @input=${(e: Event) => {
+                      const target = e.target as HTMLInputElement;
+                      const number = document.getElementById("toleranceInput") as HTMLInputElement;
+                      const valueDisplay = document.getElementById("toleranceValue") as HTMLSpanElement;
+                      if (number) number.value = target.value;
+                      if (valueDisplay) valueDisplay.textContent = target.value;
+                      this.processCurrentFrame();
+                    }}
+                    class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary mb-2"
+                  />
+                  <input
+                    id="toleranceInput"
+                    type="number"
+                    min="0"
+                    max="255"
+                    value="50"
+                    @input=${(e: Event) => {
+                      const target = e.target as HTMLInputElement;
+                      const range = document.getElementById("toleranceRange") as HTMLInputElement;
+                      const valueDisplay = document.getElementById("toleranceValue") as HTMLSpanElement;
+                      if (range) range.value = target.value;
+                      if (valueDisplay) valueDisplay.textContent = target.value;
+                      this.processCurrentFrame();
+                    }}
+                    class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Higher values remove more similar colors
+                  </p>
+                </div>
+
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <label for="featherInput" class="text-sm font-medium text-slate-700 dark:text-slate-300">Feather</label>
+                    <span id="featherValue" class="text-sm font-mono text-slate-500">8</span>
+                  </div>
+                  <input
+                    id="featherInput"
+                    type="range"
+                    min="0"
+                    max="64"
+                    value="2"
+                    @input=${(e: Event) => {
+                      const target = e.target as HTMLInputElement;
+                      const valueDisplay = document.getElementById("featherValue") as HTMLSpanElement;
+                      if (valueDisplay) valueDisplay.textContent = target.value;
+                      this.processCurrentFrame();
+                    }}
+                    class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Softens edges for natural blending
+                  </p>
+                </div>
+
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <label for="contractPx" class="text-sm font-medium text-slate-700 dark:text-slate-300">Contract/Erode</label>
+                    <span id="contractValue" class="text-sm font-mono text-slate-500">1</span>
+                  </div>
+                  <input
+                    id="contractPx"
+                    type="range"
+                    min="-2"
+                    max="5"
+                    value="1"
+                    @input=${(e: Event) => {
+                      const target = e.target as HTMLInputElement;
+                      const valueDisplay = document.getElementById("contractValue") as HTMLSpanElement;
+                      if (valueDisplay) valueDisplay.textContent = target.value;
+                      this.processCurrentFrame();
+                    }}
+                    class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Positive shrinks mask, negative expands
+                  </p>
+                </div>
+
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <label for="edgeBlur" class="text-sm font-medium text-slate-700 dark:text-slate-300">Edge Blur</label>
+                    <span id="edgeBlurValue" class="text-sm font-mono text-slate-500">1</span>
+                  </div>
+                  <input
+                    id="edgeBlur"
+                    type="range"
+                    min="0"
+                    max="5"
+                    value="1"
+                    @input=${(e: Event) => {
+                      const target = e.target as HTMLInputElement;
+                      const valueDisplay = document.getElementById("edgeBlurValue") as HTMLSpanElement;
+                      if (valueDisplay) valueDisplay.textContent = target.value;
+                      this.processCurrentFrame();
+                    }}
+                    class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Smooths rough edges in the mask
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-
-          ${this.framesLoaded && this.hasSelectedFile && !this.isProcessing
-            ? html`
-                <div class="frame-navigation">
-                  <label>Frame Navigation:</label>
-                  
-                  <!-- Play/Pause Controls -->
-                  <div class="playback-controls">
-                    <button 
-                      @click=${this.togglePlayPause}
-                      class="play-pause-btn"
-                    >
-                      ${this.isPlaying ? '⏸️ Pause' : '▶️ Play'}
-                    </button>
-                    <label class="speed-label">
-                      Speed:
-                      <select 
-                        @change=${(e: Event) => {
-                          const target = e.target as HTMLSelectElement;
-                          this.setPlaybackSpeed(parseInt(target.value));
-                        }}
-                        .value=${this.playbackSpeed.toString()}
-                      >
-                        <option value="50">Fast (50ms)</option>
-                        <option value="100">Normal (100ms)</option>
-                        <option value="200">Slow (200ms)</option>
-                        <option value="500">Very Slow (500ms)</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <!-- Frame Controls -->
-                  <div class="frame-controls">
-                    <button 
-                      @click=${this.previousFrame} 
-                      ?disabled=${this.currentFrameIndex <= 0}
-                    >
-                      ◀ Previous
-                    </button>
-                    <span class="frame-info">
-                      ${this.currentFrameIndex + 1} of ${this.totalFrames}
-                    </span>
-                    <button 
-                      @click=${this.nextFrame} 
-                      ?disabled=${this.currentFrameIndex >= this.totalFrames - 1}
-                    >
-                      Next ▶
-                    </button>
-                  </div>
-                  
-                  <!-- Frame Slider -->
-                  <div class="frame-slider">
-                    <input
-                      type="range"
-                      min="0"
-                      max="${this.totalFrames - 1}"
-                      value="${this.currentFrameIndex}"
-                      @mousedown=${() => { this.isSliderBeingDragged = true; }}
-                      @mouseup=${() => { 
-                        this.isSliderBeingDragged = false;
-                        this.updateSliderValue(); // Ensure sync after user releases
-                      }}
-                      @touchstart=${() => { this.isSliderBeingDragged = true; }}
-                      @touchend=${() => { 
-                        this.isSliderBeingDragged = false;
-                        this.updateSliderValue(); // Ensure sync after user releases
-                      }}
-                      @mouseleave=${() => { 
-                        // Reset drag state if mouse leaves slider area
-                        this.isSliderBeingDragged = false;
-                        this.updateSliderValue();
-                      }}
-                      @input=${(e: Event) => {
-                        const target = e.target as HTMLInputElement;
-                        this.goToFrame(parseInt(target.value));
-                      }}
-                      @change=${(e: Event) => {
-                        const target = e.target as HTMLInputElement;
-                        this.goToFrame(parseInt(target.value));
-                        this.isSliderBeingDragged = false; // Ensure drag state is reset
-                      }}
-                    />
-                  </div>
-                </div>
-              `
-            : ""}
-
-          ${this.hasSelectedFile && !this.isProcessing && !this.isSavingSequence
-            ? html`
-                <div id="process-controls">
-                  <button @click=${this.startProcessing} class="process-btn">
-                    Save PNG sprite sheet
-                  </button>
-                  ${this.framesLoaded 
-                    ? html`
-                        <button @click=${this.savePngSequence} class="process-btn sequence-btn">
-                          Save PNG sequence
-                        </button>
-                      `
-                    : ""
-                  }
-                </div>
-              `
-            : ""}
-
-          ${(this.isProcessing || this.isSavingSequence) && this.processingProgress
-            ? html`
-                <div class="processing-info">
-                  <div class="processing-text">
-                    ${this.isSavingSequence 
-                      ? `Saving frame ${this.processingProgress.currentFrame || 0} of ${this.processingProgress.totalFrames || 0}...`
-                      : this.processingProgress.stage === "loading"
-                      ? "Loading video..."
-                      : this.processingProgress.stage === "extracting"
-                      ? "Extracting frames..."
-                      : this.processingProgress.stage === "processing"
-                      ? "Processing frames..."
-                      : "Generating sprite sheet..."
-                    }
-                  </div>
-                  <div class="progress-bar">
-                    <div
-                      class="progress-fill"
-                      style="width: ${this.processingProgress.progress || 0}%"
-                    ></div>
-                  </div>
-                </div>
-              `
-            : ""}
-        </div>
-
-        <div class="right-column">
-          <label for="colorSwatch">Background Color:</label>
-          <p class="hint">
-            Click the preview to pick a color to remove (chroma key)
-          </p>
-          <div
-            id="colorSwatch"
-            class="color-swatch"
-            title="Selected color"
-            style="background-color: ${this.selectedColor};"
-          ></div>
-          <button 
-            @click=${this.resetColor}
-            class="reset-color-btn"
-            title="Clear selected color"
-          >
-            ✕
-          </button>
-
-          <label for="toleranceInput"
-            >Tolerance: <span id="toleranceValue">50</span></label
-          >
-          <p class="hint">
-            How similar colors are considered for removal (0-255). Higher = more
-            colors removed
-          </p>
-          <input
-            id="toleranceInput"
-            type="number"
-            min="0"
-            max="255"
-            value="50"
-            @input=${(e: Event) => {
-              const target = e.target as HTMLInputElement;
-              const range = document.getElementById(
-                "toleranceRange"
-              ) as HTMLInputElement;
-              const valueDisplay = document.getElementById(
-                "toleranceValue"
-              ) as HTMLSpanElement;
-              if (range) range.value = target.value;
-              if (valueDisplay) valueDisplay.textContent = target.value;
-              this.processCurrentFrame();
-            }}
-          />
-          <input
-            id="toleranceRange"
-            type="range"
-            min="0"
-            max="255"
-            value="50"
-            @input=${(e: Event) => {
-              const target = e.target as HTMLInputElement;
-              const number = document.getElementById(
-                "toleranceInput"
-              ) as HTMLInputElement;
-              const valueDisplay = document.getElementById(
-                "toleranceValue"
-              ) as HTMLSpanElement;
-              if (number) number.value = target.value;
-              if (valueDisplay) valueDisplay.textContent = target.value;
-              this.processCurrentFrame();
-            }}
-          />
-
-          <label for="featherInput"
-            >Feather: <span id="featherValue">8</span></label
-          >
-          <p class="hint">
-            Softens edges for natural blending (0-64). Higher = smoother
-            transitions
-          </p>
-          <input
-            id="featherInput"
-            type="range"
-            min="0"
-            max="64"
-            value="2"
-            @input=${(e: Event) => {
-              const target = e.target as HTMLInputElement;
-              const valueDisplay = document.getElementById(
-                "featherValue"
-              ) as HTMLSpanElement;
-              if (valueDisplay) valueDisplay.textContent = target.value;
-              this.processCurrentFrame();
-            }}
-          />
-
-          <label for="contractPx"
-            >Contract/Erode: <span id="contractValue">1</span></label
-          >
-          <p class="hint">
-            Refines mask edges: positive values (0-5) shrink/tighten, negative
-            values (-2-0) expand/soften
-          </p>
-          <input
-            id="contractPx"
-            type="range"
-            min="-2"
-            max="5"
-            value="1"
-            @input=${(e: Event) => {
-              const target = e.target as HTMLInputElement;
-              const valueDisplay = document.getElementById(
-                "contractValue"
-              ) as HTMLSpanElement;
-              if (valueDisplay) valueDisplay.textContent = target.value;
-              this.processCurrentFrame();
-            }}
-          />
-
-          <label for="edgeBlur"
-            >Edge Blur: <span id="edgeBlurValue">1</span></label
-          >
-          <p class="hint">
-            Smooths rough edges in the mask (0-5). Higher = cleaner edges
-          </p>
-          <input
-            id="edgeBlur"
-            type="range"
-            min="0"
-            max="5"
-            value="1"
-            @input=${(e: Event) => {
-              const target = e.target as HTMLInputElement;
-              const valueDisplay = document.getElementById(
-                "edgeBlurValue"
-              ) as HTMLSpanElement;
-              if (valueDisplay) valueDisplay.textContent = target.value;
-              this.processCurrentFrame();
-            }}
-          />
         </div>
       </div>
     `;

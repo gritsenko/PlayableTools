@@ -1,4 +1,5 @@
 import { ComponentBase, customElement, html, route as route } from "fw";
+import "./playable-publisher";
 
 @customElement("publish-page")
 @route("/publish", {
@@ -8,21 +9,12 @@ import { ComponentBase, customElement, html, route as route } from "fw";
 export class HomePage extends ComponentBase {
   render() {
     return html`
-      <div class="warning-notice">
-        <strong>Important:</strong> You must integrate the CTA SDK into your playable ad for successful publishing. See <a href="#cta-sdk" >cta-sdk</a> for instructions.
+      <div class="max-w-6xl mx-auto">
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 mb-6 rounded-r text-yellow-700 dark:text-yellow-300">
+          <strong>Important:</strong> You must integrate the CTA SDK into your playable ad for successful publishing. See <a href="#cta-sdk" class="underline hover:text-yellow-800 dark:hover:text-yellow-200">cta-sdk</a> for instructions.
+        </div>
+        <playable-publisher></playable-publisher>
       </div>
-      <playable-publisher></playable-publisher>
-
-      <style>
-        .warning-notice {
-          background: var(--pico-mark-background-color);
-          color: var(--pico-mark-color);
-          border: 1px solid var(--pico-mark-background-color);
-          padding: 1em;
-          margin-bottom: 1em;
-          border-radius: var(--pico-border-radius);
-        }
-      </style>
     `;
   }
 }

@@ -3,7 +3,6 @@ import { PreviewService } from "../../services/PreviewService";
 import type { PreviewPreset } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
-import "./playable-previewer.ts.css";
 
 @customElement("playable-previewer")
 export class PlayablePreviewer extends ComponentBase {
@@ -39,6 +38,10 @@ export class PlayablePreviewer extends ComponentBase {
   ];
   selectedDeviceIdx: number = 2;
   isPortrait: boolean = true;
+
+  get selectedDevice() {
+    return this.devices[this.selectedDeviceIdx];
+  }
 
   connectedCallback() {
     super.connectedCallback();
@@ -342,10 +345,6 @@ export class PlayablePreviewer extends ComponentBase {
     this.requestUpdate();
   }
 
-  get selectedDevice() {
-    return this.devices[this.selectedDeviceIdx] || this.devices[0];
-  }
-
   handleDeviceChange(e: Event) {
     const idx = Number((e.target as HTMLSelectElement).value);
     this.selectedDeviceIdx = idx;
@@ -390,171 +389,193 @@ export class PlayablePreviewer extends ComponentBase {
 
   render() {
     const device = this.selectedDevice;
-    const width = this.isPortrait ? device.width : device.height;
-    const height = this.isPortrait ? device.height : device.width;
+    const width = (this.isPortrait ? device.width : device.height) || 375;
+    const height = (this.isPortrait ? device.height : device.width) || 667;
     
     return html`
-      <!-- Device Controls -->
-      <div class="device-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; flex-wrap: wrap;">
-        <!-- Preset Selection -->
-        <div style="display: flex; align-items: center; gap: 0.5em;">
-          <label for="preset-select" style="font-weight: bold; color: #1976d2;">Validator:</label>
-          <select 
-            id="preset-select"
-            @change="${this.handlePresetChange.bind(this)}" 
-            style="margin-bottom: 0; min-width: 150px; ${this.isPresetSwitching ? 'opacity: 0.7;' : ''}"
-            title="${this.currentPreset?.description || ''}"
-            ?disabled="${this.isPresetSwitching}"
-          >
-            ${this.availablePresets.map(preset =>
-              html`<option 
-                value="${preset.id}" 
-                ?selected="${preset.id === this.currentPreset?.id}"
+      <div class="flex flex-col gap-8">
+        <!-- Controls Bar -->
+        <div class="flex items-center gap-6 flex-wrap">
+          <!-- Validator Select -->
+          <div class="flex items-center gap-2">
+            <label for="preset-select" class="text-sm font-medium text-slate-500 dark:text-slate-400">Validator:</label>
+            <div class="relative">
+              <select 
+                id="preset-select"
+                @change="${this.handlePresetChange.bind(this)}" 
+                class="w-48 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
+                title="${this.currentPreset?.description || ''}"
+                ?disabled="${this.isPresetSwitching}"
               >
-                ${preset.name}
-              </option>`
-            )}
-          </select>
-          ${this.isPresetSwitching ? html`
-            <div style="display: flex; align-items: center; gap: 0.5em; color: #1976d2;">
-              <div class="preset-spinner"></div>
-              <span style="font-size: 0.9em;">Switching...</span>
+                ${this.availablePresets.map(preset =>
+                  html`<option 
+                    value="${preset.id}" 
+                    ?selected="${preset.id === this.currentPreset?.id}"
+                  >
+                    ${preset.name}
+                  </option>`
+                )}
+              </select>
+              <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
+            </div>
+            ${this.isPresetSwitching ? html`
+              <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+            ` : ''}
+          </div>
+          
+          <!-- Device Select -->
+          <div class="flex items-center gap-2">
+            <label for="device-select" class="text-sm font-medium text-slate-500 dark:text-slate-400">Device:</label>
+            <div class="relative">
+              <select 
+                id="device-select" 
+                @change="${this.handleDeviceChange.bind(this)}" 
+                class="w-48 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              >
+                ${this.devices.map((d, i) =>
+                  d.disabled
+                    ? html`<option disabled> ${d.name} </option>`
+                    : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${d.name}</option>`
+                )}
+              </select>
+              <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
+            </div>
+          </div>
+          
+          <!-- Info -->
+          ${this.currentPreset ? html`
+            <div class="ml-auto text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+              <span>
+                Max size: ${this.currentPreset.maxFileSizeMB}MB
+                ${this.currentPreset.injectScripts.length > 0 ? html`• Scripts: ${this.currentPreset.injectScripts.length}` : ''}
+              </span>
+              ${this.presetSuccessMessage ? html`
+                <span class="text-green-500 font-medium animate-fade-in-out">
+                  ${this.presetSuccessMessage}
+                </span>
+              ` : ''}
             </div>
           ` : ''}
         </div>
         
-        <!-- Device Selection -->
-        <div style="display: flex; align-items: center; gap: 0.5em;">
-          <label for="device-select" style="font-weight: bold; color: #1976d2;">Device:</label>
-          <select id="device-select" @change="${this.handleDeviceChange.bind(this)}" style="margin-bottom: 0;">
-            ${this.devices.map((d, i) =>
-              d.disabled
-                ? html`<option disabled> ${d.name} </option>`
-                : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${d.name}</option>`
-            )}
-          </select>
-        </div>
-        
-        <!-- Preset Info -->
-        ${this.currentPreset ? html`
-          <div style="font-size: 0.9em; color: #666; margin-left: auto; display: flex; align-items: center; gap: 1em;">
-            <span>
-              Max size: ${this.currentPreset.maxFileSizeMB}MB
-              ${this.currentPreset.injectScripts.length > 0 ? html`• Scripts: ${this.currentPreset.injectScripts.length}` : ''}
-            </span>
-            ${this.presetSuccessMessage ? html`
-              <span style="color: #4CAF50; font-weight: bold; animation: fadeInOut 3s ease-in-out;">
-                ${this.presetSuccessMessage}
-              </span>
-            ` : ''}
-          </div>
-        ` : ''}
-      </div>
-      
-      <!-- Main Content Layout -->
-      <div class="preview-layout" style="display: grid; grid-template-columns: 350px 1fr; gap: 2em; align-items: start; margin-top: 1em;">
-        
-        <!-- Validation Results Sidebar -->
-        ${this.validationResults && this.validationResults.categories.length > 0 ? html`
-          <div class="validation-results" style="padding: 1em; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; height: fit-content;">
-            <h3 style="margin: 0 0 1em 0; color: #495057; font-size: 1.1em;">Validation Results</h3>
-            ${this.validationResults.categories.map(category => html`
-              <div class="validation-category" style="margin-bottom: 1em;">
-                <h4 style="margin: 0 0 0.5em 0; color: #1976d2; font-size: 1em; display: flex; align-items: center; gap: 0.5em;">
-                  <span style="font-size: 1.2em;">${category.checks.every(check => check.passed) ? '✅' : '⚠️'}</span>
-                  ${category.name}
-                </h4>
-                <div style="display: flex; flex-direction: column; gap: 0.3em;">
-                  ${category.checks.map(check => html`
-                    <div class="validation-check" style="display: flex; align-items: flex-start; gap: 0.5em; font-size: 0.9em;">
-                      <span style="font-size: 1.1em; margin-top: -2px;">
-                        ${check.passed
-                          ? '✅'
-                          : check.isWarning
-                            ? '⚠️'
-                            : '❌'}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          <!-- Validation Results -->
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Validation Results</h2>
+            
+            ${this.validationResults && this.validationResults.categories.length > 0 ? html`
+              <div class="space-y-6">
+                ${this.validationResults.categories.map(category => html`
+                  <div>
+                    <div class="flex items-center gap-2 mb-4">
+                      <span class="material-icons-outlined ${category.checks.every(check => check.passed) ? 'text-green-500' : 'text-yellow-500'}">
+                        ${category.checks.every(check => check.passed) ? 'check_circle' : 'warning'}
                       </span>
-                      <div style="flex: 1;">
-                        <span style="color: ${check.passed ? '#28a745' : '#dc3545'}; font-weight: ${check.passed ? 'normal' : 'bold'};">${check.name}</span>
-                        ${check.details ? html`
-                          <div style="color: #6c757d; font-size: 0.85em; margin-top: 0.2em;">${check.details}</div>
-                        ` : ''}
-                      </div>
+                      <h3 class="font-semibold text-slate-800 dark:text-slate-200">${category.name}</h3>
                     </div>
-                  `)}
-                </div>
+                    <ul class="space-y-3 pl-7">
+                      ${category.checks.map(check => html`
+                        <li class="flex items-start gap-3">
+                          <span class="material-icons-outlined ${check.passed ? 'text-green-500' : check.isWarning ? 'text-yellow-500' : 'text-red-500'}">
+                            ${check.passed ? 'check_circle' : check.isWarning ? 'warning' : 'cancel'}
+                          </span>
+                          <div>
+                            <p class="${check.passed ? '' : 'font-medium text-red-600 dark:text-red-500'}">
+                              ${check.name}
+                            </p>
+                            ${check.details ? html`
+                              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${check.details}</p>
+                            ` : ''}
+                          </div>
+                        </li>
+                      `)}
+                    </ul>
+                  </div>
+                `)}
               </div>
-            `)}
+            ` : html`
+              <div class="text-center text-slate-500 dark:text-slate-400 italic">
+                No validation results available
+              </div>
+            `}
           </div>
-        ` : html`
-          <!-- Placeholder for validation sidebar when no results -->
-          <div style="padding: 1em; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; color: #6c757d; text-align: center; font-style: italic;">
-            No validation results available
-          </div>
-        `}
-        
-      <!-- Preview Frame -->
-        <div class="preview-frame-container">
-
-          <!-- Simulator Controls -->
-          <div class="simulator-controls" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em; justify-content: center;">
-            <button @click=${() => this.toggleOrientation()} title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}" aria-label="${this.isPortrait ? 'Switch to landscape orientation' : 'Switch to portrait orientation'}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
-              ${this.isPortrait ? '↕️' : '↔️'}
-            </button>
-            <button @click=${() => this._toggleLock()} title="Lock / Unlock" aria-pressed="${this._locked}" aria-label="Lock or unlock screen" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
-              ${this._locked ? '🔒' : '🔓'}
-            </button>
-            <button @click=${() => this._toggleMute()} title="${this._muted ? 'Unmute audio' : 'Mute audio'}" aria-pressed="${this._muted}" aria-label="${this._muted ? 'Unmute audio' : 'Mute audio'}" style="width:38px;height:38px;border-radius:6px;border:1px solid #1976d2;background:#fff;color:#1976d2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">
-              ${this._muted ? '🔇' : '🔊'}
-            </button>
-          </div>
-
-
-          <div style="display:flex; justify-content:center;">
-            <div class="phone-simulator">
-              <div class="phone-simulator-bg">
-                <div class="phone-frame" style="width:${width}px; height:${height}px;">
+          
+          <!-- Phone Preview -->
+          <div class="flex flex-col items-center">
+            <!-- Simulator Controls -->
+            <div class="flex items-center gap-2 mb-4 self-end">
+              <button 
+                @click=${() => this.toggleOrientation()} 
+                title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}"
+                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <span class="material-icons-outlined">swap_vert</span>
+              </button>
+              <button 
+                @click=${() => this._toggleLock()} 
+                title="Lock / Unlock"
+                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <span class="material-icons-outlined">${this._locked ? 'lock' : 'lock_open'}</span>
+              </button>
+              <button 
+                @click=${() => this._toggleMute()} 
+                title="${this._muted ? 'Unmute audio' : 'Mute audio'}"
+                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <span class="material-icons-outlined">${this._muted ? 'volume_off' : 'volume_up'}</span>
+              </button>
+            </div>
+            
+            <!-- Phone Frame -->
+            <div class="bg-slate-800 dark:bg-black rounded-[40px] p-2.5 shadow-2xl transition-all duration-300" style="width: ${width + 20}px; height: ${height + 20}px;">
+              <div class="w-full h-full bg-slate-900 rounded-[30px] overflow-hidden relative">
                 ${this.loading
                   ? html`
-                      <div class="spinner-container">
-                        <div class="spinner"></div>
-                        <div class="loading-message" style="margin-top: 1em; font-size: 1.1em; color: #bdbdbd;">
+                      <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                        <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
+                        <div class="text-lg">
                           ${this.isPresetSwitching ? `Applying ${this.currentPreset?.name} preset...` : 'Loading playable content...'}
                         </div>
                       </div>
                     `
                   : this.error
                   ? html`
-                      <div style="color: ${this.error.includes('re-upload') ? '#ff9800' : 'red'}; padding: 1em; background: ${this.error.includes('re-upload') ? '#fff3e0' : '#ffebee'}; border-radius: 4px; margin: 1em;">
-                        ${this.error.includes('re-upload') ? '⚠️' : '❌'} ${this.error}
+                      <div class="absolute inset-0 flex items-center justify-center p-4">
+                        <div class="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded text-center">
+                          <p class="font-bold mb-2">${this.error.includes('re-upload') ? '⚠️ Warning' : '❌ Error'}</p>
+                          <p>${this.error}</p>
+                        </div>
                       </div>
                     `
                   : (this.zipPreviewUrl || this.pageContent)
                   ? html`
-                      <div style="position: relative; width: 100%; height: 100%;">
+                      <div class="w-full h-full relative">
                         ${this.renderPlayableIframe()}
-                            ${this.isPresetSwitching ? html`
-                              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(25, 118, 210, 0.1); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(1px);">
-                                <div style="background: rgba(25, 118, 210, 0.9); color: white; padding: 1em 2em; border-radius: 8px; display: flex; align-items: center; gap: 1em;">
-                                  <div class="preset-spinner"></div>
-                                  <span>Applying ${this.currentPreset?.name} preset...</span>
-                                </div>
-                              </div>
-                            ` : ''}
-                            ${this._locked ? html`
-                              <div style="position: absolute; left:0; top:0; right:0; bottom:0; background: rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index: 2147483646;">
-                                <div style="color:#fff; padding:12px 18px; background:rgba(0,0,0,0.6); border-radius:8px; font-size:18px;">Screen is locked</div>
-                              </div>
-                            ` : null}
-
+                        
+                        ${this.isPresetSwitching ? html`
+                          <div class="absolute inset-0 bg-primary/10 backdrop-blur-[1px] flex items-center justify-center z-50">
+                            <div class="bg-primary/90 text-white px-6 py-3 rounded-lg flex items-center gap-3 shadow-lg">
+                              <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              <span>Applying ${this.currentPreset?.name} preset...</span>
                             </div>
+                          </div>
+                        ` : ''}
+                        
+                        ${this._locked ? html`
+                          <div class="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+                            <div class="bg-black/60 text-white px-6 py-3 rounded-lg text-lg backdrop-blur-sm">
+                              Screen is locked
+                            </div>
+                          </div>
+                        ` : null}
                       </div>
                     `
-                  : html`<div style="padding: 1em; color: #666; text-align: center;">
-                      Ready to preview content.
-                    </div>`}
-              </div>
-                </div>
+                  : html`
+                      <div class="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                        Ready to preview content
+                      </div>
+                    `}
               </div>
             </div>
           </div>

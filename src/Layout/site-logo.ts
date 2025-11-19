@@ -1,7 +1,6 @@
 import { html, customElement, ComponentBase, state } from "fw";
 import { UrlUtils } from "../utils/url-utils";
 import { VersionService } from "../services/VersionService";
-import "./site-logo.ts.css";
 
 @customElement("site-logo")
 export class SiteLogo extends ComponentBase {
@@ -28,17 +27,16 @@ export class SiteLogo extends ComponentBase {
 
   render() {
     return html`
-      <a href="${UrlUtils.getBaseDir()}" class="site-logo-link">
+      <a href="${UrlUtils.getBaseDir()}" class="flex items-center gap-4 text-decoration-none">
         <img
           src="${UrlUtils.buildFetchUrl("", "small-logo.jpg")}"
           alt="Logo"
-          class="site-logo-img"
+          class="w-10 h-10 rounded-full"
         />
-        <span class="site-logo-title">
-          <div class="site-logo-subheader">Gritsenko</div>
-          Playable Ads Tools
-          ${this.currentVersion ? html`<div class="site-logo-version">v${this.currentVersion}</div>` : ''}
-        </span>
+        <div>
+          <h1 class="text-base font-semibold text-slate-900 dark:text-white m-0">Playable Ads Tools</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 m-0">v${this.currentVersion || 'dev'}</p>
+        </div>
       </a>
     `;
   }

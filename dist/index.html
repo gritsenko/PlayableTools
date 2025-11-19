@@ -19,9 +19,39 @@
   <meta name="twitter:title" content="Gritsenko Playable Ads Tools" />
   <meta name="twitter:description" content="Open-source tools for HTML5 playable ads developers. Publish, validate, compress, convert, and share your ads easily. Features Base64 conversion, video to sprite, and more." />
   <meta name="twitter:image" content="https://gritsenko.biz/PlayableTools/large-image.jpg" />
+  
+  <!-- Fonts and Tailwind -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#2563EB",
+            "background-light": "#F8FAFC",
+            "background-dark": "#0F172A",
+          },
+          fontFamily: {
+            display: ["Inter", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    .material-icons-outlined {
+      font-size: 20px;
+    }
+  </style>
+
   <base href="/PlayableTools/">
-  <script type="module" crossorigin src="/PlayableTools/assets/index-CHLhddme.js"></script>
-  <link rel="stylesheet" crossorigin href="/PlayableTools/assets/index-BJ5wLS_P.css">
+  <script type="module" crossorigin src="/PlayableTools/assets/index-CmrdDZyS.js"></script>
 <link rel="manifest" href="/PlayableTools/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/PlayableTools/registerSW.js"></script></head>
 <body>
   <!-- Yandex.Metrika counter -->
@@ -44,7 +74,7 @@
 
 <dev id="static-content-description" >
   <!-- not sure if it help for seo, but i fill static index.html with some content that can be parsed with search engines anyway -->
-      <h1>Gritsenko Playable Ads Tools</h1>
+      <h1>Playable Ads Tools</h1>
 
       <p>
         This app provides a collection of open-source, useful tools for HTML5

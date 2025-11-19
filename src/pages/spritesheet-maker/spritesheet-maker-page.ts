@@ -154,47 +154,106 @@ export class SpritesheetMakerPage extends ComponentBase {
 
   render() {
     return html`
-      <link rel="stylesheet" href="./spritesheet-maker-page.ts.css">
-      <h1>Spritesheet Maker</h1>
-      <p>
-        Upload or drop multiple PNG files. The tool will group files by prefix (e.g. "01_walk_", "02_run_") and
-        create a separate spritesheet for each group. It calculates an optimal rows/columns layout and exports a single
-        spritesheet PNG per group. Progress indicators are shown per job.
-      </p>
-
-      <div class="uploader">
-        <div
-          class="dropzone ${this.dropActive ? 'dragover' : ''}"
-          @dragover=${this.handleDragOver}
-          @dragleave=${this.handleDragLeave}
-          @drop=${this.handleDrop}
-        >
-          <p>Drop PNG files here or</p>
-          <label class="file-select-button">
-            Select files
-            <input id="fileInput" type="file" multiple accept="image/png" @change=${(e: Event) => this.onFilesSelected((e.target as HTMLInputElement).files)} />
-          </label>
-        </div>
-      </div>
-
-      <div class="sheets-container">
-        ${this.generatedSheets.length > 0 ? html`
-          <div class="download-all">
-            <button @click=${this.downloadAll}>Download All as ZIP</button>
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Spritesheet Maker</h1>
+          <div class="text-lg text-slate-600 dark:text-slate-400 mb-6">
+            Upload or drop multiple PNG files. The tool will group files by prefix (e.g. "01_walk_", "02_run_") and
+            create a separate spritesheet for each group. It calculates an optimal rows/columns layout and exports a single
+            spritesheet PNG per group.
           </div>
-        ` : ''}
-        ${this.generatedSheets.length === 0
-          ? html`<div class="empty">No spritesheets generated yet</div>`
-          : this.generatedSheets.map((sheet) => html`
-              <div class="sheet-item">
-                <h3>${sheet.group}</h3>
-                <img src="${sheet.imageUrl}" alt="${sheet.group} spritesheet" style="max-width: 200px; cursor: pointer;" @click=${() => this.showFull(sheet)} />
-                <p>Size: ${sheet.width} x ${sheet.height} px</p>
-                <p>Frame: ${sheet.frameWidth} x ${sheet.frameHeight} px</p>
-                <p>Layout: ${sheet.cols} cols x ${sheet.rows} rows</p>
-                <a href="${sheet.downloadUrl}" download="${sheet.group}.png">Download</a>
-              </div>
-            `)}
+        </div>
+
+        <div class="mb-8">
+          <div
+            class="border-2 border-dashed rounded-lg p-6 md:p-12 text-center transition-colors ${
+              this.dropActive
+                ? "border-primary bg-primary/5"
+                : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            }"
+            @dragover=${this.handleDragOver}
+            @dragleave=${this.handleDragLeave}
+            @drop=${this.handleDrop}
+          >
+            <p class="text-slate-600 dark:text-slate-400 mb-4">Drop PNG files here or</p>
+            <label class="inline-block px-6 py-2 bg-primary text-white rounded-lg cursor-pointer hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20">
+              Select files
+              <input
+                id="fileInput"
+                type="file"
+                multiple
+                accept="image/png"
+                @change=${(e: Event) => this.onFilesSelected((e.target as HTMLInputElement).files)}
+                class="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          ${this.generatedSheets.length > 0 ? html`
+            <div class="flex justify-end mb-4">
+              <button 
+                @click=${this.downloadAll}
+                class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 flex items-center gap-2"
+              >
+                <span class="material-icons-outlined">download</span>
+                Download All as ZIP
+              </button>
+            </div>
+          ` : ''}
+          
+          ${this.generatedSheets.length === 0
+            ? html`
+                <div class="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <span class="material-icons-outlined text-4xl text-slate-300 dark:text-slate-600 mb-2">image</span>
+                  <p class="text-slate-500 dark:text-slate-400">No spritesheets generated yet</p>
+                </div>
+              `
+            : html`
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  ${this.generatedSheets.map((sheet) => html`
+                    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                        <h3 class="font-semibold text-slate-900 dark:text-white truncate" title="${sheet.group}">${sheet.group}</h3>
+                        <a 
+                          href="${sheet.downloadUrl}" 
+                          download="${sheet.group}.png"
+                          class="text-primary hover:text-primary-600 p-1 rounded hover:bg-primary/10 transition-colors"
+                          title="Download PNG"
+                        >
+                          <span class="material-icons-outlined">download</span>
+                        </a>
+                      </div>
+                      
+                      <div class="p-4">
+                        <div 
+                          class="bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 mb-4 flex items-center justify-center overflow-hidden h-48 cursor-zoom-in"
+                          @click=${() => this.showFull(sheet)}
+                        >
+                          <img 
+                            src="${sheet.imageUrl}" 
+                            alt="${sheet.group} spritesheet" 
+                            class="max-w-full max-h-full object-contain" 
+                          />
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                          <div class="text-slate-500 dark:text-slate-400">Sheet Size:</div>
+                          <div class="text-slate-900 dark:text-white font-mono text-right">${sheet.width} x ${sheet.height} px</div>
+                          
+                          <div class="text-slate-500 dark:text-slate-400">Frame Size:</div>
+                          <div class="text-slate-900 dark:text-white font-mono text-right">${sheet.frameWidth} x ${sheet.frameHeight} px</div>
+                          
+                          <div class="text-slate-500 dark:text-slate-400">Layout:</div>
+                          <div class="text-slate-900 dark:text-white font-mono text-right">${sheet.cols} cols x ${sheet.rows} rows</div>
+                        </div>
+                      </div>
+                    </div>
+                  `)}
+                </div>
+              `}
+        </div>
       </div>
     `;
   }

@@ -1,6 +1,6 @@
 import { ComponentBase, customElement, html, property } from "fw";
 import * as d3 from "d3";
-import "./folder-sunburst-view.ts.css";
+
 
 interface FileNode {
   name: string;
@@ -140,7 +140,17 @@ export class FolderSunburstView extends ComponentBase {
       .style('position', 'absolute')
       .style('pointer-events', 'none')
       .style('display', 'none')
-      .style('z-index', '20000');
+      .style('z-index', '20000')
+      .style('background', 'rgba(15, 23, 42, 0.9)')
+      .style('color', '#fff')
+      .style('padding', '8px 12px')
+      .style('border-radius', '6px')
+      .style('box-shadow', '0 10px 15px -3px rgba(0, 0, 0, 0.1)')
+      .style('font-size', '12px')
+      .style('line-height', '1.4')
+      .style('max-width', '320px')
+      .style('word-break', 'break-word')
+      .style('backdrop-filter', 'blur(4px)');
 
     g.selectAll('path')
       .data(renderRoot.descendants().filter((d: any) => d.depth > 0))
@@ -239,7 +249,7 @@ export class FolderSunburstView extends ComponentBase {
     g.append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', '0.35em')
-      .attr('class', 'sunburst-center')
+      .attr('class', 'text-sm font-bold fill-slate-900 dark:fill-white')
       .text(this._formatSize((renderRoot && renderRoot.value) || 0));
   }
 
@@ -309,21 +319,44 @@ export class FolderSunburstView extends ComponentBase {
 
   render() {
     if (!this.fileTree || this.fileTree.length === 0) {
-      return html`<div class="sunburst-section">No data to display</div>`;
+      return html`
+        <div class="flex flex-col items-center justify-center h-full p-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800">
+          <span class="material-icons-outlined text-4xl mb-2">data_usage</span>
+          <p>No data to display</p>
+        </div>
+      `;
     }
 
     const pathDisplay = this._currentRootPath && this._currentRootPath.length ? this._currentRootPath.join(' / ') : '';
 
     return html`
-      <div class="sunburst-section">
-        <div class="sunburst-header">
-          <div class="sunburst-path">${pathDisplay}</div>
-          ${!this.preview ? html`<div class="sunburst-controls">
-            <button @click=${() => this._goToRoot()} ?disabled=${!this._originalHierarchy || (this._currentRootData === null)}>Root</button>
-            <button @click=${() => this._goUpOne()} ?disabled=${!this._currentRootData || (this._currentRootPath.length <= 1)}>Up</button>
-          </div>` : ''}
+      <div class="flex flex-col h-full">
+        <div class="flex justify-between items-center mb-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+          <div class="text-sm font-mono text-slate-700 dark:text-slate-300 truncate flex-1 mr-4" title="${pathDisplay}">
+            <span class="text-slate-400 dark:text-slate-500 mr-2">Path:</span>
+            ${pathDisplay}
+          </div>
+          ${!this.preview ? html`
+            <div class="flex gap-2 shrink-0">
+              <button 
+                @click=${() => this._goToRoot()} 
+                ?disabled=${!this._originalHierarchy || (this._currentRootData === null)}
+                class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-slate-700 dark:text-slate-300 shadow-sm"
+              >
+                Root
+              </button>
+              <button 
+                @click=${() => this._goUpOne()} 
+                ?disabled=${!this._currentRootData || (this._currentRootPath.length <= 1)}
+                class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-slate-700 dark:text-slate-300 shadow-sm flex items-center gap-1"
+              >
+                <span class="material-icons-outlined text-[14px]">arrow_upward</span>
+                Up
+              </button>
+            </div>
+          ` : ''}
         </div>
-        <div class="sunburst-container"></div>
+        <div class="sunburst-container flex-1 min-h-0 relative flex items-center justify-center overflow-hidden"></div>
       </div>
     `;
   }

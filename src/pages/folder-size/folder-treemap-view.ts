@@ -1,6 +1,6 @@
 import { ComponentBase, customElement, html, property } from "fw";
 import * as d3 from "d3";
-import "./folder-treemap-view.ts.css";
+
 
 interface FileNode {
   name: string;
@@ -83,7 +83,8 @@ export class FolderTreemapView extends ComponentBase {
 
     const dirGroup = svg
       .append("g")
-      .attr("class", "treemap-directories");
+      .attr("class", "treemap-directories")
+      .style("mix-blend-mode", "multiply");
 
     const dir = dirGroup
       .selectAll("g.dir")
@@ -220,17 +221,22 @@ export class FolderTreemapView extends ComponentBase {
 
   render() {
     if (this.fileTree.length === 0) {
-      return html`<div class="treemap-section">No data to display</div>`;
+      return html`
+        <div class="flex flex-col items-center justify-center h-full p-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800">
+          <span class="material-icons-outlined text-4xl mb-2">data_usage</span>
+          <p>No data to display</p>
+        </div>
+      `;
     }
 
     return html`
-      <div class="treemap-section">
-        <div class="treemap-container">
-          <svg id="treemap-svg" width="100%" height="${this.height}"></svg>
+      <div class="flex flex-col h-full">
+        <div class="flex-1 min-h-0 relative bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <svg id="treemap-svg" width="100%" height="${this.height}" class="w-full h-full"></svg>
         </div>
-        <div class="treemap-legend">
-          <div class="legend-item">
-            <div class="legend-color folder"></div>
+        <div class="flex gap-4 mt-4 text-sm text-slate-600 dark:text-slate-400 justify-end">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 border-2 border-blue-500 rounded-sm"></div>
             <span>Folders</span>
           </div>
         </div>

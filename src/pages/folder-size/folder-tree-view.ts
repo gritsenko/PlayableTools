@@ -1,5 +1,5 @@
 import { ComponentBase, customElement, html, property } from "fw";
-import "./folder-tree-view.ts.css";
+
 
 interface FileNode {
   name: string;
@@ -35,24 +35,43 @@ export class FolderTreeView extends ComponentBase {
       const pct = maxSize > 0 ? Math.max(0.5, (nodeTotal / maxSize) * 100) : 0.5;
 
       return html`
-        <div class="tree-node" style="margin-left:${level * 12}px">
-          <div class="node-info">
-            <div class="size-bar" style="width: ${pct}%" aria-hidden="true"></div>
-            ${node.isDirectory ? html`
-              <button class="toggle-btn" @click=${() => this._toggle(nodePath)} aria-expanded="${isExpanded}">
-                ${isExpanded ? '▾' : '▸'}
-              </button>
-            ` : html`<span class="file-spacer"></span>`}
+        <div class="relative">
+          <div class="flex items-center py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded relative group transition-colors" style="padding-left:${level * 12}px">
+            <div class="absolute left-0 top-0 bottom-0 bg-primary/5 dark:bg-primary/10 rounded pointer-events-none transition-all duration-300" style="width: ${pct}%" aria-hidden="true"></div>
+            
+            <div class="relative z-10 flex items-center w-full">
+              ${node.isDirectory ? html`
+                <button 
+                  class="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer select-none transition-colors" 
+                  @click=${() => this._toggle(nodePath)} 
+                  aria-expanded="${isExpanded}"
+                >
+                  <span class="material-icons-outlined text-[16px] transform transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
+                </button>
+              ` : html`<span class="w-6"></span>`}
 
-            <span class="node-name ${node.isDirectory ? 'directory' : 'file'}" @click=${() => node.isDirectory && this._toggle(nodePath)}>
-              ${node.isDirectory ? '📁' : '📄'} ${node.name}
-            </span>
-            <span class="node-size">${this._formatSize(node.size)}</span>
+              <span 
+                class="flex-1 truncate px-2 cursor-pointer text-sm ${node.isDirectory ? 'font-semibold text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'} flex items-center gap-2" 
+                @click=${() => node.isDirectory && this._toggle(nodePath)}
+                title="${node.name}"
+              >
+                <span class="material-icons-outlined text-[18px] ${node.isDirectory ? 'text-yellow-500' : 'text-slate-400'}">
+                  ${node.isDirectory ? (isExpanded ? 'folder_open' : 'folder') : 'description'}
+                </span>
+                ${node.name}
+              </span>
+              <span class="text-xs font-mono text-slate-500 dark:text-slate-400 px-2 whitespace-nowrap bg-white/50 dark:bg-black/20 rounded ml-2">
+                ${this._formatSize(node.size)}
+              </span>
+            </div>
           </div>
 
-            ${node.isDirectory ? html`
-            <div class="directory-content">
-              ${node.children && node.children.length > 0 ? (isExpanded ? this._renderTree(node.children, level + 1, nodePath, maxSize) : html``) : html`<div class="empty-directory">(empty)</div>`}
+          ${node.isDirectory && isExpanded ? html`
+            <div class="border-l border-slate-200 dark:border-slate-700 ml-[11px]">
+              ${node.children && node.children.length > 0 
+                ? this._renderTree(node.children, level + 1, nodePath, maxSize) 
+                : html`<div class="text-xs text-slate-400 italic py-1 pl-8">Empty directory</div>`
+              }
             </div>
           ` : ''}
         </div>
@@ -110,12 +129,17 @@ export class FolderTreeView extends ComponentBase {
 
   render() {
     if (this.fileTree.length === 0) {
-      return html`<div class="tree-container">No data to display</div>`;
+      return html`
+        <div class="flex flex-col items-center justify-center h-full p-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800">
+          <span class="material-icons-outlined text-4xl mb-2">data_usage</span>
+          <p>No data to display</p>
+        </div>
+      `;
     }
 
     const maxSize = this._getMaxSize(this.fileTree);
     return html`
-      <div class="tree-container">
+      <div class="overflow-auto h-full pr-2 custom-scrollbar">
         ${this._renderTree(this._sortNodesDescending(this.fileTree), 0, '', maxSize)}
       </div>
     `;

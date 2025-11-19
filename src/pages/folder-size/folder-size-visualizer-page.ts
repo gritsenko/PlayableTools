@@ -1,5 +1,4 @@
 import { ComponentBase, customElement, html, route, state } from "fw";
-import "./folder-size-visualizer-page.ts.css";
 import "./folder-tree-view";
 import "./folder-treemap-view";
 import "./folder-sunburst-view";
@@ -251,94 +250,100 @@ export class FolderSizeVisualizerPage extends ComponentBase {
 
   render() {
     return html`
-      <h1>Folder Size Visualizer</h1>
-      <p>
-        Select a local folder to visualize the size structure of its contents.
-      </p>
+      <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Folder Size Visualizer</h1>
+        <p class="text-lg text-slate-600 dark:text-slate-400 mb-6">
+          Select a local folder to visualize the size structure of its contents.
+        </p>
 
-      ${!this.isSupported ? html`
-        <div class="warning">
-          <strong>Browser Compatibility:</strong> This feature requires a Chromium-based browser (Chrome, Edge, etc.) with File System Access API support.
-        </div>
-      ` : ''}
+        ${!this.isSupported ? html`
+          <div class="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 my-6 rounded-r text-yellow-700 dark:text-yellow-300">
+            <strong>Browser Compatibility:</strong> This feature requires a Chromium-based browser (Chrome, Edge, etc.) with File System Access API support.
+          </div>
+        ` : ''}
 
-      ${this.fileTree.length > 0 ? html`
-        <div class="folder-preview-row">
-          <div class="picker-column">
-            <div class="folder-picker-container">
-              <button
-                class="folder-select-button"
-                @click=${this._onSelectFolder}
-                ?disabled=${!this.isSupported || this.processing}
-              >
-                ${this.processing ? 'Analyzing...' : 'Select Folder'}
-              </button>
-              ${this.selectedFolderName ? html`
-                <div class="selected-folder">
-                  Selected: <strong>${this.selectedFolderName}</strong>
-                </div>
-              ` : ''}
+        ${this.fileTree.length > 0 ? html`
+          <div class="flex flex-col md:flex-row gap-8 items-start mb-8">
+            <div class="flex-1 w-full">
+              <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+                <button
+                  class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto"
+                  @click=${this._onSelectFolder}
+                  ?disabled=${!this.isSupported || this.processing}
+                >
+                  ${this.processing ? 'Analyzing...' : 'Select Folder'}
+                </button>
+                ${this.selectedFolderName ? html`
+                  <div class="mt-4 text-slate-700 dark:text-slate-300">
+                    Selected: <strong>${this.selectedFolderName}</strong>
+                  </div>
+                ` : ''}
+              </div>
             </div>
-          </div>
 
-          <div class="preview-column">
-            <div class="sunburst-preview" @click=${this._onOpenSunburst} title="Open Sunburst (Full Screen)">
-              <folder-sunburst-view .fileTree=${this.fileTree} preview .previewStretch=${true} .previewSize=${360} .hideLabels=${true} .hideTooltip=${true}></folder-sunburst-view>
-            </div>
-          </div>
-        </div>
-      ` : html`
-        <div class="folder-picker-container">
-          <button
-            class="folder-select-button"
-            @click=${this._onSelectFolder}
-            ?disabled=${!this.isSupported || this.processing}
-          >
-            ${this.processing ? 'Analyzing...' : 'Select Folder'}
-          </button>
-          ${this.selectedFolderName ? html`
-            <div class="selected-folder">
-              Selected: <strong>${this.selectedFolderName}</strong>
-            </div>
-          ` : ''}
-        </div>
-      `}
-
-      ${this.processing ? html`
-        <div class="processing">Analyzing folder structure...</div>
-      ` : ''}
-
-      ${this.errorMessage ? html`
-        <div class="error">${this.errorMessage}</div>
-      ` : ''}
-
-      ${this.fileTree.length > 0 ? html`
-        <div class="results">
-          <h3>Total Size: ${this._formatSize(this.totalSize)}</h3>
-
-          <div class="view-actions">
-            <!-- Action buttons moved to the top for full-width layout -->
-          </div>
-
-          <div class="tree-view">
-            <folder-tree-view .fileTree=${this.fileTree}></folder-tree-view>
-          </div>
-
-          ${this.sunburstOpen ? html`
-            <div class="treemap-modal-backdrop" @click=${this._onCloseSunburst}>
-              <div class="treemap-modal" @click=${(e: Event) => e.stopPropagation()}>
-                <div class="treemap-modal-header">
-                  <h3>Folder Size Sunburst</h3>
-                  <button class="treemap-close" aria-label="Close" @click=${this._onCloseSunburst}>✕</button>
-                </div>
-                <div class="treemap-modal-content">
-                  <folder-sunburst-view .fileTree=${this.fileTree} .height=${this.sunburstHeight}></folder-sunburst-view>
+            <div class="w-full md:w-auto flex justify-center">
+              <div class="w-[360px] h-[360px] bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 shadow-lg cursor-pointer hover:scale-105 transition-transform overflow-hidden relative group" @click=${this._onOpenSunburst} title="Open Sunburst (Full Screen)">
+                <folder-sunburst-view .fileTree=${this.fileTree} preview .previewStretch=${true} .previewSize=${360} .hideLabels=${true} .hideTooltip=${true}></folder-sunburst-view>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <span class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-1 rounded-full text-sm font-medium shadow-md">Click to expand</span>
                 </div>
               </div>
             </div>
-          ` : ''}
-        </div>
-      ` : ''}
+          </div>
+        ` : html`
+          <div class="bg-white dark:bg-slate-900 p-6 md:p-12 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 text-center">
+            <button
+              class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click=${this._onSelectFolder}
+              ?disabled=${!this.isSupported || this.processing}
+            >
+              ${this.processing ? 'Analyzing...' : 'Select Folder'}
+            </button>
+            ${this.selectedFolderName ? html`
+              <div class="mt-4 text-slate-700 dark:text-slate-300">
+                Selected: <strong>${this.selectedFolderName}</strong>
+              </div>
+            ` : ''}
+          </div>
+        `}
+
+        ${this.processing ? html`
+          <div class="mt-8 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+            <div class="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mb-4"></div>
+            Analyzing folder structure...
+          </div>
+        ` : ''}
+
+        ${this.errorMessage ? html`
+          <div class="mt-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r text-red-700 dark:text-red-300">${this.errorMessage}</div>
+        ` : ''}
+
+        ${this.fileTree.length > 0 ? html`
+          <div class="mt-8">
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Total Size: ${this._formatSize(this.totalSize)}</h3>
+
+            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+              <folder-tree-view .fileTree=${this.fileTree}></folder-tree-view>
+            </div>
+
+            ${this.sunburstOpen ? html`
+              <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" @click=${this._onCloseSunburst}>
+                <div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden" @click=${(e: Event) => e.stopPropagation()}>
+                  <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Folder Size Sunburst</h3>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors" aria-label="Close" @click=${this._onCloseSunburst}>
+                      <span class="material-icons-outlined">close</span>
+                    </button>
+                  </div>
+                  <div class="flex-1 overflow-auto p-4">
+                    <folder-sunburst-view .fileTree=${this.fileTree} .height=${this.sunburstHeight}></folder-sunburst-view>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
     `;
   }
 }

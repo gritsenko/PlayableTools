@@ -130,7 +130,6 @@ src/
 ### Styling Guidelines
 - **Pico CSS base** with extensive custom theme overrides in `theme.css`
 - Component-specific styles in co-located `.ts.css` files
-- Global styles in `app-root.css`
 - **Custom Theme**: Tailwind-inspired aesthetic with Inter font, shadows, and modern styling
 - CSS custom properties pattern: `var(--pico-*)`
 

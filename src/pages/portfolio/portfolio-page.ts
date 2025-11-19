@@ -54,32 +54,71 @@ export class PortfolioPage extends ComponentBase {
 
   render() {
     return html`
-      <div class="portfolio-container">
-        <section style="margin-bottom: 1.5em;">
-          <h3>GitHub Token Setup</h3>
-          <p>
-            To access your repository, you need a GitHub <b>Personal Access Token</b> with <code>public_repo</code> scope.<br />
-            <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=PlayableTools" target="_blank" rel="noopener">Generate a token here</a>.<br />
+      <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Portfolio Manager</h1>
+        
+        <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 mb-8 shadow-sm">
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">GitHub Token Setup</h3>
+          <p class="text-slate-600 dark:text-slate-400 mb-4">
+            To access your repository, you need a GitHub <b>Personal Access Token</b> with <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-sm font-mono">public_repo</code> scope.<br />
+            <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=PlayableTools" target="_blank" rel="noopener" class="text-primary hover:underline">Generate a token here</a>.<br />
             <b>Keep your token secure!</b> It will be stored in your browser's local storage.
           </p>
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 1em;">
-            <label for="github-token-input" style="margin-right: 8px;">GitHub Token:</label>
-          <input id="github-token-input" type="password" placeholder="ghp_..." style="width: 300px;" @input=${this.handleTokenInput} />
-          <button @click=${this.saveGithubToken}>Save Token</button>
+          <div class="flex flex-col md:flex-row md:items-end gap-4">
+            <div class="flex-1">
+              <label for="github-token-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">GitHub Token:</label>
+              <input 
+                id="github-token-input" 
+                type="password" 
+                placeholder="ghp_..." 
+                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                @input=${this.handleTokenInput} 
+              />
+            </div>
+            <button 
+              @click=${this.saveGithubToken}
+              class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 whitespace-nowrap"
+            >
+              Save Token
+            </button>
           </div>
         </section>
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 1em;">
-          <label for="repo-url-input" style="margin-right: 8px;">GitHub Repository URL:</label>
-          <input id="repo-url-input" type="text" .value=${this.repoUrl} @input=${this.handleInput} placeholder="https://github.com/user/repo" style="width: 400px;" />
-          <button @click=${this.saveRepoUrl}>Save</button>
-        </div>
-        <div class="playables-list">
-          <h3>Playable Ads:</h3>
-          <ul>
+
+        <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 mb-8 shadow-sm">
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Repository Settings</h3>
+          <div class="flex flex-col md:flex-row md:items-end gap-4">
+            <div class="flex-1">
+              <label for="repo-url-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">GitHub Repository URL:</label>
+              <input 
+                id="repo-url-input" 
+                type="text" 
+                .value=${this.repoUrl} 
+                @input=${this.handleInput} 
+                placeholder="https://github.com/user/repo" 
+                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              />
+            </div>
+            <button 
+              @click=${this.saveRepoUrl}
+              class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 whitespace-nowrap"
+            >
+              Load Repository
+            </button>
+          </div>
+        </section>
+
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Playable Ads:</h3>
+          <ul class="space-y-2">
             ${this.playables.length === 0
-              ? html`<li>No playables found.</li>`
+              ? html`<li class="text-slate-500 dark:text-slate-400 italic">No playables found.</li>`
               : this.playables.map(
-                  (playable) => html`<li>${playable}</li>`
+                  (playable) => html`
+                    <li class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <span class="material-icons-outlined text-slate-400">folder</span>
+                      ${playable}
+                    </li>
+                  `
                 )}
           </ul>
         </div>

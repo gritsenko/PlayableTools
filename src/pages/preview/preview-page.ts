@@ -234,58 +234,63 @@ export class PreviewPage extends ComponentBase {
     const showInputSections = !hasContent;
 
     return html`
-      <div class="preview-container">
-        <div style="display: flex; align-items: center; gap: 1em;">
-          <h2 style="margin: 0;">Playable Ad Preview</h2>
-          ${this.isEncoded && this.decodedUrl
-            ? html`
-                <button
-                  @click=${this.handleShare.bind(this)}
-                  style="background: none; border: none; color: #1976d2; cursor: pointer; padding: 0; font: inherit; display: flex; align-items: center; gap: 0.5em; text-decoration: underline;"
-                >
-                  ${this.linkCopied ? "Link copied" : "Share"}
-                </button>
-              `
-            : null}
-          ${hasContent
-            ? html`
-                <button
-                  @click=${() => {
-                    // Clear all content and return to input mode
-                    this.previewService.clearUploadedContent();
-                    this.uploadedFileName = "";
-                    this.uploadError = "";
-                    this.isEncoded = false;
-                    this.decodedUrl = "";
-                    this._encodedUrlInternal = undefined;
-                    window.history.pushState({}, "", window.location.pathname + "#preview");
-                    this.requestUpdate();
-                  }}
-                  style="background: #ff6b6b; color: white; border: none; padding: 0.5em 1em; border-radius: 4px; cursor: pointer;"
-                >
-                  Load New Content
-                </button>
-              `
-            : null}
-        </div>
+      <div class="max-w-7xl mx-auto">
+        <header class="flex items-center justify-between pb-6 border-b border-slate-200 dark:border-slate-800 mb-6">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Playable Ad Preview</h1>
+          
+          <div class="flex items-center gap-4">
+            ${this.isEncoded && this.decodedUrl
+              ? html`
+                  <button
+                    @click=${this.handleShare.bind(this)}
+                    class="text-primary hover:text-blue-700 font-medium flex items-center gap-2"
+                  >
+                    <span class="material-icons-outlined">share</span>
+                    ${this.linkCopied ? "Link copied" : "Share"}
+                  </button>
+                `
+              : null}
+            
+            ${hasContent
+              ? html`
+                  <button
+                    @click=${() => {
+                      // Clear all content and return to input mode
+                      this.previewService.clearUploadedContent();
+                      this.uploadedFileName = "";
+                      this.uploadError = "";
+                      this.isEncoded = false;
+                      this.decodedUrl = "";
+                      this._encodedUrlInternal = undefined;
+                      window.history.pushState({}, "", window.location.pathname + "#preview");
+                      this.requestUpdate();
+                    }}
+                    class="px-6 py-2.5 rounded bg-red-500 text-white font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors"
+                  >
+                    Load New Content
+                  </button>
+                `
+              : null}
+          </div>
+        </header>
         
         ${showInputSections
           ? html`
-              <div style="margin: 1em 0; color: #555;">
-                <p>
-                  This page lets you preview playable ads from either a public GitHub repository or by uploading an HTML file directly.<br />
-                </p>
-                <p>
-                  <b>Option 1:</b> Paste a GitHub URL below to preview and create shareable links.<br />
-                  <b>Option 2:</b> Upload an HTML file from your computer for immediate preview.
-                </p>
-                <details style="margin-top: 1em;">
-                  <summary style="cursor: pointer; font-weight: bold; color: #1976d2;">Show sample GitHub URL</summary>
-                  <div style="margin: 0.5em 0 0 1em;">
-                    <div style="display: flex; align-items: center; gap: 0.5em;">
-                      <code style="background: #f5f5f5; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.95em;">https://github.com/gritsenko/playables/blob/main/Customize3d/index.html</code>
+              <div class="space-y-8">
+                <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <p class="text-slate-600 dark:text-slate-400 mb-4">
+                    This page lets you preview playable ads from either a public GitHub repository or by uploading an HTML file directly.
+                  </p>
+                  
+                  <details class="group">
+                    <summary class="cursor-pointer font-medium text-primary hover:text-blue-700 list-none flex items-center gap-2">
+                      <span class="material-icons-outlined group-open:rotate-90 transition-transform">chevron_right</span>
+                      Show sample GitHub URL
+                    </summary>
+                    <div class="mt-4 ml-6 flex items-center gap-4">
+                      <code class="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded text-sm font-mono text-slate-700 dark:text-slate-300">https://github.com/gritsenko/playables/blob/main/Customize3d/index.html</code>
                       <button
-                        style="background: #1976d2; color: #fff; border: none; border-radius: 4px; padding: 0.2em 0.8em; cursor: pointer; font-size: 0.95em;"
+                        class="px-3 py-1 bg-primary text-white rounded text-sm font-medium hover:bg-blue-600 transition-colors"
                         @click=${() => {
                           this.decodedUrl = "https://github.com/gritsenko/playables/blob/main/Customize3d/index.html";
                           this.handleLoad();
@@ -294,98 +299,108 @@ export class PreviewPage extends ComponentBase {
                         Try
                       </button>
                     </div>
-                  </div>
-                </details>
-              </div>
+                  </details>
+                </div>
 
-              <!-- File Upload Section -->
-              <div class="upload-section" style="margin-bottom: 1.5em; padding: 1em; border: 2px dashed #ddd; border-radius: 8px; background: #f9f9f9;">
-                <h3 style="margin-top: 0; margin-bottom: 1em; color: #1976d2;">
-                  📁 Upload HTML File
-                </h3>
-                
-                <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 1em;">
-                  <input 
-                    type="file" 
-                    accept=".html,.htm,.zip" 
-                    @change="${this.handleFileUpload}"
-                    style="padding: 0.5em;"
-                    ?disabled="${this.isUploading}"
-                  />
-                  
-                  ${this.isUploading ? html`
-                    <div style="display: flex; align-items: center; gap: 0.5em; color: #1976d2;">
-                      <div style="width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #1976d2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                      <span>Uploading...</span>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <!-- File Upload Section -->
+                  <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span class="material-icons-outlined">upload_file</span>
+                      Upload HTML File
+                    </h3>
+                    
+                    <div class="mb-4">
+                      <label class="block w-full cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept=".html,.htm,.zip" 
+                          @change="${this.handleFileUpload}"
+                          class="block w-full text-sm text-slate-500 dark:text-slate-400
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-primary file:text-white
+                            hover:file:bg-blue-600
+                            cursor-pointer"
+                          ?disabled="${this.isUploading}"
+                        />
+                      </label>
+                      
+                      ${this.isUploading ? html`
+                        <div class="mt-2 flex items-center gap-2 text-primary">
+                          <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                          <span class="text-sm">Uploading...</span>
+                        </div>
+                      ` : ''}
                     </div>
-                  ` : ''}
-                </div>
-                
-                ${this.uploadError ? html`
-                  <div style="color: red; margin-bottom: 1em; padding: 0.5em; background: #ffe6e6; border-radius: 4px;">
-                    ${this.uploadError}
+                    
+                    ${this.uploadError ? html`
+                      <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded text-sm">
+                        ${this.uploadError}
+                      </div>
+                    ` : ''}
+                    
+                    <div class="text-sm text-slate-500 dark:text-slate-400 space-y-1">
+                      <p>• Supported formats: .html, .htm, .zip</p>
+                      <p>• Maximum file size: 10MB</p>
+                      <p>• Files are processed locally</p>
+                    </div>
                   </div>
-                ` : ''}
-                
-                <div style="font-size: 0.9em; color: #666;">
-                  <p style="margin: 0;">
-                    • Supported formats: .html, .htm, .zip (ZIP archives containing playable assets)<br />
-                    • Maximum file size: 10MB<br />
-                    • Files are processed locally and not stored on our servers
-                  </p>
-                </div>
-              </div>
 
-              <!-- GitHub URL Section -->
-              <div class="github-section" style="margin-bottom: 1.5em; padding: 1em; border: 2px dashed #ddd; border-radius: 8px; background: #f0f8ff;">
-                <h3 style="margin-top: 0; margin-bottom: 1em; color: #1976d2;">
-                  🔗 Load from GitHub
-                </h3>
-                
-                <div class="preview-controls">
-                  <input
-                    type="text"
-                    placeholder="Paste GitHub playable URL..."
-                    .value=${this.decodedUrl}
-                    @input=${this.handleInput.bind(this)}
-                    style="width: 400px; padding: 0.5em;"
-                  />
-                  <button @click=${this.handleLoad.bind(this)} style="margin-left: 0.5em; padding: 0.5em 1em;">Load</button>
+                  <!-- GitHub URL Section -->
+                  <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span class="material-icons-outlined">link</span>
+                      Load from GitHub
+                    </h3>
+                    
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Paste GitHub playable URL..."
+                        .value=${this.decodedUrl}
+                        @input=${this.handleInput.bind(this)}
+                        class="flex-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <button 
+                        @click=${this.handleLoad.bind(this)} 
+                        class="px-4 py-2 bg-primary text-white rounded font-medium hover:bg-blue-600 transition-colors"
+                      >
+                        Load
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              ${this.recentUrls.length > 0
-                ? html`
-                    <div style="margin-bottom: 1.5em;">
-                      <h3 style="margin-bottom: 0.5em; font-size: 1.1em; color: #1976d2;">Recent GitHub URLs</h3>
-                      <div>
-                        ${this.recentUrls.map(
-                          url => html`
-                            <div style="margin-bottom: 0.5em;">
+                ${this.recentUrls.length > 0
+                  ? html`
+                      <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Recent GitHub URLs</h3>
+                        <div class="space-y-2">
+                          ${this.recentUrls.map(
+                            url => html`
                               <button
-                                style="width: 100%; display: flex; align-items: center; justify-content: space-between; background: #f5f5f5; color: #222; border: none; border-radius: 4px; padding: 0.4em 0.8em; font-size: 0.95em; cursor: pointer; text-align: left;"
+                                class="w-full flex items-center justify-between p-3 rounded bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left group"
                                 @click=${() => {
                                   this.decodedUrl = url;
                                   this.handleLoad();
                                 }}
                               >
-                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${url}</span>
-                                <span style="margin-left: 1em; color: #1976d2; font-weight: bold;">Preview</span>
+                                <span class="text-sm text-slate-600 dark:text-slate-300 truncate flex-1 mr-4">${url}</span>
+                                <span class="text-sm font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">Preview</span>
                               </button>
-                            </div>
-                          `
-                        )}
+                            `
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  `
-                : null}
+                    `
+                  : null}
+              </div>
             `
           : null}
           
-        <div
-          class="preview-frame"
-          style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 60vh;"
-        >
+        <div class="mt-6">
           ${this.isEncoded && this.decodedUrl
             ? html`<playable-previewer
                 githubUrl="${this.decodedUrl}"
@@ -393,18 +408,7 @@ export class PreviewPage extends ComponentBase {
             : hasUploadedContent || this.uploadedFileName
             ? html`<playable-previewer></playable-previewer>`
             : null}
-
-          
         </div>
-
-        
-        <!-- CSS Animation for spinner -->
-        <style>
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        </style>
       </div>
     `;
   }
