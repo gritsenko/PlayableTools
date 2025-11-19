@@ -95,6 +95,14 @@
   font-weight: 600;
 }
 
+/* Gamepad icon for menu */
+.icon-gamepad {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-block;
+  fill: currentColor;
+}
+
 @media (prefers-color-scheme: dark) {
   .markdown-body {
     color: #94a3b8;
