@@ -1,14 +1,5 @@
 # <img src="./media/small-logo.jpg" width="28" style="border-radius:16px;"/> PlayableTools
 
-PlayableTools is a web-based toolkit for preparing and publishing HTML5 playable ads across multiple ad platforms. It's a developer-focused single-page app built with Vite, TypeScript and Lit web components and packaged as a Progressive Web App for easy local testing and offline use.
-
-Quick link: https://gritsenko.biz/PlayableTools/
-<p align="center">
-	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
-</p>
-
-## Screenshots
-
 <p align="center">
 	<img src="media/app-screenshots/previewer.jpg" alt="Playable Previewer Screenshot" width="600"/>
 </p>
@@ -17,84 +8,171 @@ Quick link: https://gritsenko.biz/PlayableTools/
 	<img src="media/app-screenshots/base64.png" alt="Base64 Converter Screenshot" width="600"/>
 </p>
 
-## What this repo provides
-- A Vite + TypeScript app using Lit components (light DOM) and a small in-repo framework under `src/fw/`.
-- Tools for: converting files to Base64, compressing HTML (Imba-style packing), and publishing/playable packaging per platform rules.
-- PWA support (service worker + version checking) and example test files under `public/`.
+<p align="center">
+	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
+</p>
 
-## Tech stack
-- Vite (dev server & build)
-- TypeScript (strict)
-- Lit for web components
-- Pico.css for lightweight styling
-- Small in-repo framework in `src/fw/` for DI and routing
-- JSZip + Pako (used at runtime for ZIP/deflate tasks)
+PlayableTools is a comprehensive web-based toolkit for preparing, publishing, and managing HTML5 playable ads across multiple advertising platforms. Built with modern web technologies and packaged as a Progressive Web App for seamless local development and offline use.
 
-## Main features
-- Upload or drag-and-drop an HTML playable file and related assets
-- Configure metadata (title, store URLs, optional suffix)
-- Publish for multiple ad platforms with platform-specific transforms (single HTML outputs or ZIP packages)
-- Progress reporting per-platform and per-step
-- Preview playable in-browser and quick export/download of generated artifacts
+## 🚀 Main Features
 
-## Supported / included platforms (current)
-The app contains platform adapters and packaging scripts for a number of common ad networks. Current adapters in the repo include (non-exhaustive):
+### 📤 **Multi-Platform Publishing**
+- Publish HTML5 playable ads to 10+ major ad networks
+- Automated platform-specific transformations and optimizations
+- Support for both single HTML and ZIP package outputs
+- Real-time progress tracking and detailed logging
 
-- Facebook (single HTML)
-- Facebook ZIP variant
-- Google (ZIP with multi-size variants)
-- Moloco
-- Mintegral
-- IronSource
-- AdColony
-- Unity
-- Applovin
-- Vungle
-- TikTok
+### 🔄 **Base64 Converter**
+- Convert any file type to Base64 encoding
+- Drag-and-drop interface for easy file processing
+- Optimized for embedding assets in HTML5 playables
 
-Note: Some platforms require extra configuration or platform-specific assets; check the `src/pages/publish` UI for details and platform options.
+### 🎬 **Video to Sprite Converter**
+- Transform MP4 videos into PNG sprite sequences
+- Perfect for game development and animations
+- Configurable frame rates and output formats
 
-## File naming convention
-By default outputs are named like: {PlayableTitle}_{Platform}_{Suffix}.{html|zip}
+### 📊 **Folder Size Visualizer**
+- Interactive folder analysis and visualization
+- Multiple view types: sunburst charts, treemaps, and tree views
+- Built with D3.js for smooth, interactive experiences
 
-## Run locally
-1. Install dependencies
+### 🗜️ **HTML Compression (Imba Packer)**
+- Advanced HTML compression using Pako library
+- Maximizes file size reduction while preserving functionality
+- Ideal for size-constrained advertising requirements
+
+### 🖼️ **Asset Compression**
+- PNG optimization and compression tools
+- Integrates with PngChpocker for high-quality compression
+- Reduces file sizes without quality loss
+
+### 🎨 **Sprite Sheet Maker**
+- Create optimized sprite sheets from individual images
+- Supports multiple output formats and configurations
+- Perfect for game development and animation workflows
+
+### 📖 **CTA SDK Integration**
+- Complete documentation for Call-to-Action SDK
+- Integration guides and best practices
+- Platform-specific implementation examples
+
+### ✅ **Ad Network Validation**
+- Technical requirement specifications for different platforms
+- Automated validation tools for Facebook and other networks
+- Stay compliant with latest platform requirements
+
+### 📱 **Playable Preview**
+- Multi-device testing and preview capabilities
+- ZIP file support with virtual URLs for accurate testing
+- GitHub integration for easy portfolio management
+
+### 📂 **Portfolio Management**
+- GitHub repository integration
+- Organize and showcase your playable ad portfolio
+- Quick preview and publishing from your existing projects
+
+## 🛠️ Tech Stack
+
+- **Build Tool**: Vite 7.x with TypeScript 5.8
+- **Frontend Framework**: Lit 3.x web components
+- **CSS Framework**: Pico CSS 2.x with custom theme
+- **PWA**: Vite PWA plugin with service worker
+- **Dependencies**: JSZip, Pako, Marked, D3.js
+- **Routing**: Custom hash-based router with metadata support
+
+## 🌐 Supported Ad Platforms
+
+- **Facebook** (Single HTML + ZIP variants)
+- **Google** (ZIP with multi-size variants)
+- **Moloco**
+- **Mintegral**
+- **IronSource**
+- **AdColony**
+- **Unity Ads**
+- **AppLovin**
+- **Vungle**
+- **TikTok**
+
+*Note: Each platform has specific requirements and optimizations built-in. Check the platform-specific options in the publish page for details.*
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
 
 ```powershell
 npm install
 ```
 
-2. Start dev server (Vite)
+### 2. Start Development Server
 
 ```powershell
 npm run dev
 ```
 
-3. Open http://localhost:5173/ (or the URL shown by Vite). The app supports installing as a PWA and will show a version/update prompt when a new build is available (see `src/fw/version-checker.ts`).
+### 3. Open Your Browser
 
-## Quick test files
-- `public/test-playable.html` — a simple playable to exercise the publisher
-- `public/test-simple-playable.html` — minimal example
-- `test-facebook-validator.html` — helper for validating Facebook output
+Navigate to `http://localhost:5173/` (or the URL shown by Vite). The app supports PWA installation and will show update prompts when new versions are available.
 
-## ZIP preview flow
-- The Preview page now accepts `.zip` packages that contain an `index.html` (or any `.html`) entry point plus relative assets (JS, CSS, images, audio, video, JSON, etc.).
-- When you upload a ZIP, PlayableTools extracts the archive in-memory and passes every file to a dedicated service worker (`/zip-preview-sw.js`). The playable itself runs at a virtual URL like `/zip-preview/<session-id>/index.html`, so all relative asset requests resolve exactly as they would inside the exported ZIP.
-- This approach means scripts that perform `fetch()`/XHR/file loads by relative path continue to work without any code changes. It also avoids blob: URIs entirely, so browser devtools show real URLs for debugging.
-- To verify locally: run `npm run dev`, open the Preview page, upload a playable ZIP, and confirm the iframe src switches to `/zip-preview/...`. Clearing the preview or uploading a new file tears down the previous session and its assets automatically.
+### 4. Build for Production
 
+```powershell
+npm run build
+```
+
+## 📁 Project Structure
+
+```
+src/
+├── fw/                    # Custom lightweight framework
+├── Layout/               # Layout components (main layout, navigation)
+├── pages/               # Page components
+│   ├── publish/         # Publishing tools
+│   ├── preview/         # Preview and testing tools
+│   ├── portfolio/       # GitHub portfolio integration
+│   ├── folder-size/     # Folder analysis visualizations
+│   ├── spritesheet-maker/ # Sprite sheet creation
+│   └── video2sprite/    # Video to sprite conversion
+├── services/            # Business logic and services
+├── utils/               # Utility functions
+└── assets/              # Static assets and configurations
+```
+
+## 🧪 Test Files
+
+Test your publishing workflow with included examples:
+
+- `public/test-playable.html` — Complete playable example
+- `public/test-simple-playable.html` — Minimal working example
+- `test-facebook-validator.html` — Facebook-specific validation helper
+
+## 🔄 ZIP Preview System
+
+The preview system supports ZIP packages with complete asset extraction:
+
+- Upload ZIP files containing HTML entry points and relative assets
+- Assets are served via dedicated service worker at virtual URLs
+- All relative path references work exactly as in the exported ZIP
+- Perfect for testing multi-file playables with complex asset structures
+
+## 📚 Developer Resources
+
+- **Framework Documentation**: See `AGENTS.md` for detailed architecture and patterns
+- **Service Worker**: Version checking and caching handled via `src/sw-version-handler.js`
+- **Platform Adapters**: Add new platforms by following existing patterns in `src/services/PlayablePublishService.ts`
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Open an issue describing the proposed feature or bug fix
+2. Include test cases or sample assets where applicable
+3. Follow the existing code patterns and TypeScript conventions
+
+## 📄 License
+
+MIT License - see LICENSE file for details
 
 <p align="center">
 	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 </p>
-
-## Developer notes
-- Project conventions and small framework are documented in `.github/copilot-instructions.md` (component patterns, DI, routing). Keep components under `src/pages/` and services under `src/services/`.
-- Service worker and version checking live under `src/sw-version-handler.js` and `src/fw/version-checker.ts`.
-- To add a platform adapter, follow existing `publish` page adapters and leverage `PlayablePublishService`.
-
-## Contributing
-Contributions welcome. Open an issue or PR outlining the change and tests or sample assets where applicable.
-
-## License
-MIT
