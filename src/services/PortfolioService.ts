@@ -1,385 +1,266 @@
 import { injectable, ServiceLifetime } from "fw";
-import { initializeApp } from "firebase/app";
-import {
-  getAuth,
-  signOut,
-  setPersistence,
-  browserLocalPersistence,
-  GoogleAuthProvider,
-  signInWithPopup,
-  type Auth,
-  type User,
-} from "firebase/auth";
-import {
-  getDatabase,
-  ref,
-  push,
-  get,
-  set,
-  remove,
-  type Database,
-} from "firebase/database";
 
 export interface PlayableAdData {
   id: string;
   name: string;
-  content: string;
+  content?: string;
   description?: string;
   createdAt: number;
   updatedAt: number;
   shortLink?: string;
+  originalName?: string;
+  contentType?: string;
+}
+
+export interface User {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+  token?: string;
+}
+
+interface FileMeta {
+  id: number;
+  storageName: string;
+  originalName: string;
+  contentType: string;
+  uploadedAt: string;
+  ownerUserId: number;
 }
 
 @injectable(ServiceLifetime.Singleton)
 export class PortfolioService {
-  private auth: Auth | null = null;
-  private database: Database | null = null;
   private currentUser: User | null = null;
+  private token: string | null = null;
   private isInitialized = false;
 
-  /**
-   * Initialize Firebase with the provided configuration
-   */
+  private get baseUrl() {
+    return import.meta.env.DEV ? "http://localhost:5189" : "https://api.gritsenko.biz";
+  }
+
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
-
-    const firebaseConfig = {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_APP_ID,
-      databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-    };
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      this.auth = getAuth(app);
-      this.database = getDatabase(app);
-
-      // Set persistence to LOCAL so user stays logged in
-      await setPersistence(this.auth, browserLocalPersistence);
-
-      // Check if already authenticated
-      await this.checkAuth();
-
-      this.isInitialized = true;
-    } catch (error) {
-      console.error("Firebase initialization error:", error);
-      throw error;
+    
+    const storedToken = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("authUser");
+    
+    if (storedToken && storedUser) {
+      this.token = storedToken;
+      try {
+        this.currentUser = JSON.parse(storedUser);
+      } catch (e) {
+        console.error("Failed to parse stored user", e);
+        this.signOut();
+      }
     }
+    this.isInitialized = true;
   }
 
-  /**
-   * Check if user is already authenticated
-   */
-  private async checkAuth(): Promise<void> {
-    if (!this.auth) return;
-
-    return new Promise((resolve) => {
-      const unsubscribe = this.auth!.onAuthStateChanged((user) => {
-        this.currentUser = user;
-        unsubscribe();
-        resolve();
-      });
-    });
-  }
-
-  /**
-   * Wait for Firebase to restore authentication state
-   */
   async waitForAuthState(): Promise<void> {
-    if (!this.auth) return;
+    return Promise.resolve();
+  }
 
-    return new Promise((resolve) => {
-      const unsubscribe = this.auth!.onAuthStateChanged((user) => {
-        this.currentUser = user;
-        unsubscribe();
-        resolve();
+  async authenticateWithGoogle(): Promise<User> {
+    return new Promise((resolve, reject) => {
+      // @ts-ignore
+      if (!window.google || !window.google.accounts) {
+        reject(new Error("Google Identity Services not loaded"));
+        return;
+      }
+
+      // @ts-ignore
+      google.accounts.id.initialize({
+        client_id: "167482240202-07ubec5htg60p01320nplrtnbkhoiani.apps.googleusercontent.com",
+        use_fedcm_for_prompt: false,
+        callback: async (response: any) => {
+          try {
+            const user = await this.loginWithBackend(response.credential);
+            resolve(user);
+          } catch (err) {
+            reject(err);
+          }
+        },
+        auto_select: true
+      });
+
+      // @ts-ignore
+      google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.log("Google One Tap not displayed:", notification.getNotDisplayedReason());
+          // If One Tap fails, we can't do much here programmatically to force it.
+          // The UI should have a button that calls renderButton or similar.
+          // But since this method is called by a button click in the current UI,
+          // we should reject so the UI knows it failed, OR we should rely on the button flow.
+          reject(new Error("Google One Tap not displayed. Please use the Sign In button."));
+        }
       });
     });
   }
 
-  /**
-   * Authenticate user with Google Sign-In
-   */
-  async authenticateWithGoogle(): Promise<User> {
-    await this.initialize();
-
-    if (!this.auth) {
-      throw new Error("Firebase auth not initialized");
+  renderSignInButton(elementId: string, onSuccess: (user: User) => void, onError: (error: any) => void) {
+    // @ts-ignore
+    if (!window.google || !window.google.accounts) {
+      onError(new Error("Google Identity Services not loaded"));
+      return;
     }
 
-    if (this.currentUser) {
-      return this.currentUser;
-    }
+    // @ts-ignore
+    google.accounts.id.initialize({
+      client_id: "167482240202-07ubec5htg60p01320nplrtnbkhoiani.apps.googleusercontent.com",
+      use_fedcm_for_prompt: false,
+      callback: async (response: any) => {
+        try {
+          const user = await this.loginWithBackend(response.credential);
+          onSuccess(user);
+        } catch (err) {
+          onError(err);
+        }
+      },
+      auto_select: true
+    });
 
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(this.auth, provider);
-      this.currentUser = result.user;
-      return result.user;
-    } catch (error) {
-      console.error("Google authentication error:", error);
-      throw error;
+    const element = document.getElementById(elementId);
+    if (element) {
+      // @ts-ignore
+      google.accounts.id.renderButton(element, {
+        theme: "outline",
+        size: "large",
+        width: "100%"
+      });
     }
   }
 
-  /**
-   * Get current authenticated user
-   */
+  private async loginWithBackend(idToken: string): Promise<User> {
+    const res = await fetch(`${this.baseUrl}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ IdToken: idToken })
+    });
+    
+    if (!res.ok) throw new Error("Backend login failed");
+    
+    const data = await res.json();
+    this.token = data.token;
+    
+    const user: User = {
+      uid: "backend_user",
+      displayName: data.username,
+      email: null,
+      photoURL: null,
+      token: data.token
+    };
+    
+    this.currentUser = user;
+    localStorage.setItem("authToken", this.token!);
+    localStorage.setItem("authUser", JSON.stringify(user));
+    return user;
+  }
+
   getCurrentUser(): User | null {
     return this.currentUser;
   }
 
-  /**
-   * Fetch all playable ads for the current user
-   */
   async getPlayables(): Promise<PlayableAdData[]> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const userPlayablesRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/playables`
-      );
-      const snapshot = await get(userPlayablesRef);
-
-      if (!snapshot.exists()) {
-        return [];
-      }
-
-      const playablesData = snapshot.val();
-      return Object.keys(playablesData).map((key) => ({
-        id: key,
-        ...playablesData[key],
-      }));
-    } catch (error) {
-      console.error("Error fetching playables:", error);
-      throw error;
-    }
+    if (!this.token) throw new Error("Not authenticated");
+    
+    const res = await fetch(`${this.baseUrl}/api/files/my`, {
+      headers: { "Authorization": `Bearer ${this.token}` }
+    });
+    
+    if (!res.ok) throw new Error("Failed to fetch files");
+    
+    const files: FileMeta[] = await res.json();
+    return files.map(f => ({
+      id: f.storageName,
+      name: f.originalName,
+      content: undefined,
+      description: "",
+      createdAt: new Date(f.uploadedAt).getTime(),
+      updatedAt: new Date(f.uploadedAt).getTime(),
+      originalName: f.originalName,
+      contentType: f.contentType
+    }));
   }
 
-  /**
-   * Get all projects for the current user
-   */
+  async getPlayableContent(id: string): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/api/files/${id}`);
+    if (!res.ok) throw new Error("Failed to fetch content");
+    return await res.text();
+  }
+
+  async uploadPlayable(name: string, content: string, description?: string): Promise<PlayableAdData> {
+    if (!this.token) throw new Error("Not authenticated");
+    
+    const blob = new Blob([content], { type: "text/html" });
+    const formData = new FormData();
+    formData.append("file", blob, name.endsWith(".html") ? name : `${name}.html`);
+    
+    const res = await fetch(`${this.baseUrl}/api/files/upload`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${this.token}` },
+      body: formData
+    });
+    
+    if (!res.ok) throw new Error("Upload failed");
+    
+    const f: FileMeta = await res.json();
+    return {
+      id: f.storageName,
+      name: f.originalName,
+      content: content,
+      description: description,
+      createdAt: new Date(f.uploadedAt).getTime(),
+      updatedAt: new Date(f.uploadedAt).getTime(),
+      originalName: f.originalName,
+      contentType: f.contentType
+    };
+  }
+
   async getProjects(): Promise<any[]> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const userProjectsRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/projects`
-      );
-      const snapshot = await get(userProjectsRef);
-
-      if (!snapshot.exists()) {
-        return [];
-      }
-
-      const projectsData = snapshot.val();
-      return Object.keys(projectsData).map((key) => ({
-        id: key,
-        ...projectsData[key],
-      }));
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-      throw error;
-    }
+    return [];
   }
 
-  /**
-   * Save a project for the current user
-   */
   async saveProject(project: any): Promise<void> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const projectId = project.id || `proj_${Date.now()}`;
-      const projectRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/projects/${projectId}`
-      );
-
-      const { id, ...projectData } = project;
-      await set(projectRef, projectData);
-    } catch (error) {
-      console.error("Error saving project:", error);
-      throw error;
-    }
+    console.warn("Projects not supported in backend", project);
   }
 
-  /**
-   * Delete a project for the current user
-   */
   async deleteProject(projectId: string): Promise<void> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const projectRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/projects/${projectId}`
-      );
-
-      await remove(projectRef);
-    } catch (error) {
-      console.error("Error deleting project:", error);
-      throw error;
-    }
+    console.warn("Projects not supported in backend", projectId);
   }
 
-  /**
-   * Upload a new playable ad
-   */
-  async uploadPlayable(
-    name: string,
-    content: string,
-    description?: string
-  ): Promise<PlayableAdData> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const userPlayablesRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/playables`
-      );
-      const newPlayableRef = push(userPlayablesRef);
-
-      const playableData: Omit<PlayableAdData, "id"> = {
-        name,
-        content,
-        description,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        shortLink: newPlayableRef.key || undefined,
-      };
-
-      await set(newPlayableRef, playableData);
-
-      return {
-        id: newPlayableRef.key!,
-        ...playableData,
-      };
-    } catch (error) {
-      console.error("Error uploading playable:", error);
-      throw error;
-    }
+  async updatePlayable(id: string, _name: string, _content: string, _description?: string): Promise<void> {
+    throw new Error(`Update not supported by backend. Please create new. (Attempted to update ${id})`);
   }
 
-  /**
-   * Update an existing playable ad
-   */
-  async updatePlayable(
-    id: string,
-    name: string,
-    content: string,
-    description?: string
-  ): Promise<void> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const playableRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/playables/${id}`
-      );
-
-      await set(playableRef, {
-        name,
-        content,
-        description,
-        updatedAt: Date.now(),
-      });
-    } catch (error) {
-      console.error("Error updating playable:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a playable ad
-   */
   async deletePlayable(id: string): Promise<void> {
-    if (!this.currentUser || !this.database) {
-      throw new Error("Not authenticated or database not initialized");
-    }
-
-    try {
-      const playableRef = ref(
-        this.database,
-        `users/${this.currentUser.uid}/playables/${id}`
-      );
-
-      await remove(playableRef);
-    } catch (error) {
-      console.error("Error deleting playable:", error);
-      throw error;
-    }
+    throw new Error(`Delete not supported by backend. (Attempted to delete ${id})`);
   }
 
-  /**
-   * Get a public playable by short link
-   */
   async getPlayableByShortLink(shortLink: string): Promise<PlayableAdData | null> {
-    if (!this.database) {
-      await this.initialize();
-    }
-
-    if (!this.database) {
-      throw new Error("Database not initialized");
-    }
-
     try {
-      // This would require a public playables index
-      // For now, searching across all users (optional: implement security rules)
-      const playablesRef = ref(this.database, "playables");
-      const snapshot = await get(playablesRef);
-
-      if (!snapshot.exists()) {
-        return null;
-      }
-
-      const playablesData = snapshot.val();
-      for (const key in playablesData) {
-        if (playablesData[key].shortLink === shortLink) {
-          return {
-            id: key,
-            ...playablesData[key],
-          };
-        }
-      }
-
+      const content = await this.getPlayableContent(shortLink);
+      return {
+        id: shortLink,
+        name: "Shared Playable",
+        content: content,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+    } catch {
       return null;
-    } catch (error) {
-      console.error("Error fetching public playable:", error);
-      throw error;
     }
   }
 
-  /**
-   * Sign out the current user
-   */
   async signOut(): Promise<void> {
-    if (!this.auth) return;
-
-    try {
-      await signOut(this.auth);
-      this.currentUser = null;
-    } catch (error) {
-      console.error("Sign out error:", error);
-      throw error;
+    this.currentUser = null;
+    this.token = null;
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    // @ts-ignore
+    if (window.google && window.google.accounts) {
+      // @ts-ignore
+      google.accounts.id.disableAutoSelect();
     }
   }
 }

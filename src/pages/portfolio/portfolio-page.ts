@@ -53,6 +53,30 @@ export class PortfolioPage extends ComponentBase {
     }
   }
 
+  updated(changedProperties: Map<string, any>) {
+    super.updated(changedProperties);
+    if (!this.isAuthenticated && !this.isLoading) {
+      this.renderGoogleButton();
+    }
+  }
+
+  renderGoogleButton() {
+    this.portfolioService.renderSignInButton(
+      "google-signin-button",
+      (user) => {
+        this.isAuthenticated = true;
+        this.requestUpdate();
+        console.log("Authenticated with Google as:", user.uid);
+        this.loadPlayables();
+      },
+      (error) => {
+        console.error("Google authentication error:", error);
+        this.errorMessage = error instanceof Error ? error.message : "Google authentication failed";
+        this.isAuthenticated = false;
+      }
+    );
+  }
+
   async handleGoogleAuthenticate() {
     this.isLoading = true;
     this.errorMessage = "";
@@ -160,16 +184,7 @@ export class PortfolioPage extends ComponentBase {
               Sign in to manage and share your playable ads. Your playables will be stored securely and accessible via
               short links.
             </p>
-            <button
-              @click=${this.handleGoogleAuthenticate}
-              ?disabled=${this.isLoading}
-              class="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-              </svg>
-              ${this.isLoading ? "Signing in..." : "Sign in with Google"}
-            </button>
+            <div id="google-signin-button" class="flex justify-center"></div>
           </section>
         </div>
       `;

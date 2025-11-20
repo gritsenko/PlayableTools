@@ -20,6 +20,20 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
 export default defineConfig(({ command }) => ({
   base: command === "serve" ? "/" : "/PlayableTools/",
+  server: {
+    port: 5173,
+    strictPort: true,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
+  },
+  preview: {
+    port: 5173,
+    strictPort: true,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
+  },
   resolve: {
     alias: {
       fw: resolve(__dirname, "src/fw"),
