@@ -58,8 +58,6 @@ export default defineConfig(({ command }) => ({
       includeAssets: ["playable-tools.svg"],
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
-        // Exclude version.json, sw.js and workbox chunks from precaching
-        globIgnores: ["**/version.json", "**/sw.js", "**/workbox-*.js"],
         runtimeCaching: [
           {
             // Ensure version.json is never cached
