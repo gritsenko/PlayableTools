@@ -158,6 +158,22 @@ export class PortfolioPage extends ComponentBase {
     this.handleEditorClosed();
   };
 
+  getPlayableDirectLink = (playableId: string): string => {
+    const baseUrl = import.meta.env.DEV ? "http://localhost:5189" : "https://api.gritsenko.biz";
+    return `${baseUrl}/api/files/${playableId}`;
+  };
+
+  handleCopyLink = async (playableId: string) => {
+    const link = this.getPlayableDirectLink(playableId);
+    try {
+      await navigator.clipboard.writeText(link);
+      alert("Link copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      alert("Failed to copy link");
+    }
+  };
+
   handleShowProjects = () => {
     this.currentView = "projects";
   };
@@ -276,6 +292,21 @@ export class PortfolioPage extends ComponentBase {
                               </p>
                             </div>
                             <div class="flex gap-2">
+                              <a
+                                href="${this.getPlayableDirectLink(playable.id)}"
+                                download
+                                class="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium"
+                                title="Download playable ad file"
+                              >
+                                Download
+                              </a>
+                              <button
+                                @click=${() => this.handleCopyLink(playable.id)}
+                                class="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                                title="Copy direct link to clipboard"
+                              >
+                                Copy Link
+                              </button>
                               <button
                                 @click=${() => this.handleEditPlayable(playable)}
                                 class="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
