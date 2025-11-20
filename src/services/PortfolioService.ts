@@ -24,6 +24,7 @@ export interface PlayableAdData {
   id: string;
   name: string;
   content: string;
+  description?: string;
   createdAt: number;
   updatedAt: number;
   shortLink?: string;
@@ -241,7 +242,8 @@ export class PortfolioService {
    */
   async uploadPlayable(
     name: string,
-    content: string
+    content: string,
+    description?: string
   ): Promise<PlayableAdData> {
     if (!this.currentUser || !this.database) {
       throw new Error("Not authenticated or database not initialized");
@@ -257,6 +259,7 @@ export class PortfolioService {
       const playableData: Omit<PlayableAdData, "id"> = {
         name,
         content,
+        description,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         shortLink: newPlayableRef.key || undefined,
@@ -280,7 +283,8 @@ export class PortfolioService {
   async updatePlayable(
     id: string,
     name: string,
-    content: string
+    content: string,
+    description?: string
   ): Promise<void> {
     if (!this.currentUser || !this.database) {
       throw new Error("Not authenticated or database not initialized");
@@ -295,6 +299,7 @@ export class PortfolioService {
       await set(playableRef, {
         name,
         content,
+        description,
         updatedAt: Date.now(),
       });
     } catch (error) {

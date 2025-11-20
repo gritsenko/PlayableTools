@@ -80,7 +80,7 @@ export class PlayableEditor extends ComponentBase {
     this.loadProjects();
     if (this.existingPlayable) {
       this.title = this.existingPlayable.name;
-      this.details = this.existingPlayable.content;
+      this.details = this.existingPlayable.description || "";
       this.fileName = this.existingPlayable.name;
     }
   }
@@ -237,12 +237,13 @@ export class PlayableEditor extends ComponentBase {
         await this.portfolioService.updatePlayable(
           this.existingPlayable.id,
           this.title,
-          this.fileContent
+          this.fileContent,
+          this.details
         );
         this.successMessage = "Playable updated successfully!";
       } else {
         // Create new
-        await this.portfolioService.uploadPlayable(this.title, this.fileContent);
+        await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details);
         this.successMessage = "Playable created successfully!";
       }
 
@@ -258,6 +259,31 @@ export class PlayableEditor extends ComponentBase {
 
   handleCancel() {
     this.dispatchEvent(new CustomEvent("editor-closed", { bubbles: true }));
+  }
+
+  async handleDeletePlayable() {
+    if (!this.existingPlayable) return;
+
+    const confirmed = confirm(
+      `Are you sure you want to delete "${this.existingPlayable.name}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    this.isLoading = true;
+    this.errorMessage = "";
+
+    try {
+      await this.portfolioService.deletePlayable(this.existingPlayable.id);
+      this.successMessage = "Playable deleted successfully!";
+      setTimeout(() => {
+        this.dispatchEvent(new CustomEvent("playable-deleted", { bubbles: true }));
+      }, 1000);
+    } catch (error) {
+      this.errorMessage = error instanceof Error ? error.message : "Failed to delete playable";
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   render() {
@@ -497,6 +523,17 @@ export class PlayableEditor extends ComponentBase {
                 >
                   Cancel
                 </button>
+                ${this.existingPlayable
+                  ? html`
+                      <button
+                        @click=${this.handleDeletePlayable}
+                        ?disabled=${this.isLoading}
+                        class="w-full px-4 py-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Delete Playable
+                      </button>
+                    `
+                  : ""}
               </div>
             </section>
 

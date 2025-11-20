@@ -40,13 +40,12 @@ export class NavMenu extends ComponentBase {
   ];
 
   private get currentPath() {
-    // Get current hash path, default to first menu item if not found
+    // Get current hash path
     let hash = window.location.hash ? window.location.hash.substring(1) : '';
     if (!hash.startsWith('/')) hash = '/' + hash;
-    // Handle root path
-    if (hash === '/') return '/preview'; // Default to preview or home? The mockup shows Preview active.
-    // Actually, let's just return the hash as is, but handle empty hash
-    if (hash === '') return '/preview'; // Default
+    
+    // Return null for root path (home page) so no items are selected
+    if (hash === '/' || hash === '') return null;
     
     // Remove query params
     const queryIndex = hash.indexOf('?');

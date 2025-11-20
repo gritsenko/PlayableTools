@@ -180,6 +180,7 @@ export class PortfolioPage extends ComponentBase {
         <playable-editor
           .existingPlayable=${this.selectedPlayable}
           @playable-saved=${this.handlePlayableSaved}
+          @playable-deleted=${this.handlePlayableSaved}
           @editor-closed=${this.handleEditorClosed}
         ></playable-editor>
       `;
