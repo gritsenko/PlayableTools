@@ -159,9 +159,19 @@ export class PortfolioPage extends ComponentBase {
   };
 
   getPlayableDirectLink = (playableId: string): string => {
-    const baseUrl = import.meta.env.DEV ? "http://localhost:5189" : "https://api.gritsenko.biz";
+    const baseUrl = this.portfolioService.getApiBaseUrl();
     return `${baseUrl}/api/files/${playableId}`;
   };
+
+  private renderDevInfo() {
+    if (!import.meta.env.DEV) return null;
+
+    return html`
+      <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        API base URL: <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${this.portfolioService.getApiBaseUrl()}</code>
+      </div>
+    `;
+  }
 
   handleCopyLink = async (playableId: string) => {
     const link = this.getPlayableDirectLink(playableId);
@@ -174,6 +184,11 @@ export class PortfolioPage extends ComponentBase {
     }
   };
 
+  handlePreviewPlayable = (playable: PlayableAdData) => {
+    // Redirect to preview page with playable ID
+    window.location.hash = `preview/${playable.id}`;
+  };
+
   handleShowProjects = () => {
     this.currentView = "projects";
   };
@@ -183,6 +198,7 @@ export class PortfolioPage extends ComponentBase {
       return html`
         <div class="max-w-4xl mx-auto">
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Portfolio Manager</h1>
+          ${this.renderDevInfo()}
 
           ${this.errorMessage
             ? html`
@@ -225,6 +241,7 @@ export class PortfolioPage extends ComponentBase {
       <div class="max-w-6xl mx-auto">
         <div class="flex justify-between items-center mb-8">
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Portfolio Manager</h1>
+          ${this.renderDevInfo()}
           <div class="flex gap-3">
             <button
               @click=${this.handleShowProjects}
@@ -306,6 +323,13 @@ export class PortfolioPage extends ComponentBase {
                                 title="Copy direct link to clipboard"
                               >
                                 Copy Link
+                              </button>
+                              <button
+                                @click=${() => this.handlePreviewPlayable(playable)}
+                                class="px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-sm font-medium"
+                                title="Preview playable ad"
+                              >
+                                Preview
                               </button>
                               <button
                                 @click=${() => this.handleEditPlayable(playable)}

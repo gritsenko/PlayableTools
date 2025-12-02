@@ -31,10 +31,6 @@ export class VersionService {
       // @ts-ignore - navigator.standalone is iOS specific
       (window.navigator as any).standalone === true ||
       document.referrer.includes('android-app://');
-    
-    if (this.isPWA) {
-      console.log('VersionService: Running in PWA mode');
-    }
   }
 
   /**
@@ -43,15 +39,6 @@ export class VersionService {
   async initialize(): Promise<void> {
     try {
       this.currentVersion = await this.fetchVersionInfo();
-      
-      // Log version information prominently
-      console.log(`🚀 PlayableTools v${this.currentVersion.version}`);
-      console.log(`📦 Build: ${this.currentVersion.buildTime}`);
-      console.log(`🔖 Hash: ${this.currentVersion.hash}`);
-      if (this.isPWA) {
-        console.log('📱 Running in PWA mode');
-      }
-      
       this.startPeriodicCheck();
     } catch (error) {
       console.warn('Failed to initialize version service:', error);
@@ -61,10 +48,6 @@ export class VersionService {
         buildTime: new Date().toISOString(),
         hash: 'fallback'
       };
-      
-      // Log fallback version
-      console.log(`🚀 PlayableTools v${this.currentVersion.version} (fallback)`);
-      console.log('⚠️ Could not fetch version from server, using fallback');
     }
   }
 
@@ -99,14 +82,8 @@ export class VersionService {
       const latestVersion = await this.fetchVersionInfo();
       
       if (this.currentVersion && this.hasNewVersion(this.currentVersion, latestVersion)) {
-        console.log('🆕 Update available!');
-        console.log(`📍 Current: v${this.currentVersion.version} (${this.currentVersion.hash})`);
-        console.log(`🎯 Latest: v${latestVersion.version} (${latestVersion.hash})`);
-        
         this.notifyListeners(true);
         return true;
-      } else {
-        console.log('✅ App is up to date');
       }
       
       return false;
@@ -120,8 +97,6 @@ export class VersionService {
    * Test cache busting - useful for debugging
    */
   async testCacheBusting(): Promise<void> {
-    console.log('🧪 Testing cache busting...');
-    
     try {
       // Make multiple requests to see if we get cached responses
       const requests = [];
@@ -132,23 +107,16 @@ export class VersionService {
       
       const results = await Promise.all(requests);
       
-      console.log('🧪 Cache busting test results:');
-      results.forEach((result, index) => {
-        console.log(`Request ${index + 1}:`, result);
-      });
-      
       // Check if all requests returned the same build time (good - means no caching)
       const buildTimes = results.map(r => r.buildTime);
       const uniqueBuildTimes = new Set(buildTimes);
       
-      if (uniqueBuildTimes.size === 1) {
-        console.log('✅ Cache busting working correctly - all requests returned same data');
-      } else {
-        console.log('⚠️ Inconsistent responses - possible caching issues');
+      if (uniqueBuildTimes.size !== 1) {
+        console.warn('Inconsistent responses - possible caching issues');
       }
       
     } catch (error) {
-      console.error('🧪 Cache busting test failed:', error);
+      console.error('Cache busting test failed:', error);
     }
   }
 
@@ -177,12 +145,8 @@ export class VersionService {
 
     for (let i = 0; i < strategies.length; i++) {
       try {
-        console.log(`📡 Trying fetch strategy ${i + 1}/${strategies.length}`);
-        const result = await strategies[i]();
-        console.log(`✅ Strategy ${i + 1} succeeded`);
-        return result;
+        return await strategies[i]();
       } catch (error) {
-        console.warn(`❌ Strategy ${i + 1} failed:`, error);
         if (i === strategies.length - 1) {
           throw error; // Throw the last error if all strategies fail
         }
@@ -243,44 +207,36 @@ export class VersionService {
     const cacheBuster = `?v=${Date.now()}&cb=${Math.random().toString(36).substring(2)}&nc=${performance.now()}`;
     const finalUrl = versionUrl + cacheBuster;
     
-    console.log(`📡 Fetching version from: ${finalUrl}`);
-    
     const response = await fetch(finalUrl, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
-        // Remove conditional headers that cause 304 responses
       },
       cache: 'no-store',
-      // Force a fresh request
       mode: 'cors',
       credentials: 'same-origin'
     });
 
     // Handle both 200 and 304 responses as success
     if (!response.ok && response.status !== 304) {
-      throw new Error(`Failed to fetch version info from ${finalUrl}: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch version info: ${response.status} ${response.statusText}`);
     }
 
     // For 304 responses, we might not get a body, so handle gracefully
     let data;
     try {
       data = await response.json();
-      console.log('📡 Version info fetched from server:', data);
     } catch (jsonError) {
       // If we can't parse JSON (possibly due to 304), create fallback data
-      console.warn('📡 Could not parse JSON response, using fallback version data');
       data = {
-        version: '1.0.4', // Use current package.json version
+        version: '1.0.4',
         buildTime: new Date().toISOString(),
         hash: 'fallback'
       };
     }
     
-    console.log('🔍 Response status:', response.status);
-    console.log('🔍 Response headers cache-control:', response.headers.get('cache-control'));
     return data;
   }
 
@@ -310,7 +266,6 @@ export class VersionService {
           if (xhr.status === 200 || xhr.status === 304) {
             try {
               const data = JSON.parse(xhr.responseText);
-              console.log('📡 XHR version fetch successful:', data);
               resolve(data);
             } catch (error) {
               reject(new Error('Failed to parse JSON from XHR response'));
@@ -330,7 +285,6 @@ export class VersionService {
    * Final fallback - return current package version
    */
   private async fetchVersionFallback(): Promise<VersionInfo> {
-    console.log('📡 Using final fallback version');
     return {
       version: '1.0.4',
       buildTime: new Date().toISOString(),
@@ -438,10 +392,7 @@ export class VersionService {
       promises.push(
         caches.keys().then(cacheNames => 
           Promise.all(
-            cacheNames.map(cacheName => {
-              console.log(`Clearing cache: ${cacheName}`);
-              return caches.delete(cacheName);
-            })
+            cacheNames.map(cacheName => caches.delete(cacheName))
           )
         )
       );

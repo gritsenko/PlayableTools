@@ -30,24 +30,28 @@ export class MainLayout extends LayoutComponentBase {
     super.connectedCallback();
     window.addEventListener('beforeinstallprompt', (event) => {
       const beforeInstallEvent = event as BeforeInstallPromptEvent; // Explicitly cast the event
-      beforeInstallEvent.preventDefault(); // Prevent the default browser prompt
+      // DO NOT prevent default - let browser show its banner too
+      // beforeInstallEvent.preventDefault(); // Prevent the default browser prompt
       this.deferredPrompt = beforeInstallEvent; // Save the event for later use
+      console.log('📱 beforeinstallprompt event captured, ready for manual prompt');
     });
   }
 
   private suggestPWAInstall() {
     if (this.deferredPrompt) {
+      console.log('📱 Showing PWA install prompt...');
       this.deferredPrompt.prompt(); // Show the install prompt
       this.deferredPrompt.userChoice.then((choiceResult: { outcome: 'accepted' | 'dismissed' }) => {
         if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
+          console.log('✅ User accepted the install prompt');
         } else {
-          console.log('User dismissed the install prompt');
+          console.log('❌ User dismissed the install prompt');
         }
         this.deferredPrompt = null; // Reset the prompt
       });
     } else {
-      alert('The install prompt is not available. Please use the browser menu to install the app.');
+      console.warn('⚠️ Install prompt not available - PWA may not meet installation criteria or user already has app installed');
+      alert('The install prompt is not available. Please use the browser menu to install the app, or ensure this is served over HTTPS.');
     }
   }
 

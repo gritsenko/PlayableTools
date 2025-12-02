@@ -35,8 +35,24 @@ export class PortfolioService {
   private token: string | null = null;
   private isInitialized = false;
 
-  private get baseUrl() {
+  private get baseUrl(): string {
+    // Allow overriding the API base URL via Vite env var VITE_API_BASE_URL
+    // Example: create a .env.local with VITE_API_BASE_URL=https://my-custom-api.example
+    const envUrl = (import.meta.env as any).VITE_API_BASE_URL;
+    if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
+      return envUrl;
+    }
+
+    // Default to localhost for dev, otherwise the public API
     return import.meta.env.DEV ? "http://localhost:5189" : "https://api.gritsenko.biz";
+  }
+
+  /**
+   * Public accessor for components/pages that need to know which API base URL is used.
+   * This is the same value used by internal methods.
+   */
+  public getApiBaseUrl(): string {
+    return this.baseUrl;
   }
 
   async initialize(): Promise<void> {
@@ -187,6 +203,22 @@ export class PortfolioService {
     const res = await fetch(`${this.baseUrl}/api/files/${id}`);
     if (!res.ok) throw new Error("Failed to fetch content");
     return await res.text();
+  }
+
+  async getPlayableById(id: string): Promise<PlayableAdData | null> {
+    try {
+      const content = await this.getPlayableContent(id);
+      return {
+        id: id,
+        name: "Portfolio Playable",
+        content: content,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+    } catch (error) {
+      console.error("Failed to fetch playable by ID:", error);
+      return null;
+    }
   }
 
   async uploadPlayable(name: string, content: string, description?: string): Promise<PlayableAdData> {

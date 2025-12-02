@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, property, inject, state } from "fw";
+import { ComponentBase, customElement, html, inject, state } from "fw";
 import { PreviewService } from "../../services/PreviewService";
 import type { PreviewPreset } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
@@ -6,7 +6,6 @@ import "../../assets/pako_inflate.min.js";
 
 @customElement("playable-previewer")
 export class PlayablePreviewer extends ComponentBase {
-  @property({ type: String }) githubUrl = "";
   @inject(PreviewService) previewService!: PreviewService;
 
   pageContent: string = "";
@@ -50,13 +49,18 @@ export class PlayablePreviewer extends ComponentBase {
     this.currentPreset = this.previewService.getCurrentPreset();
     
     this.uploadedContentUnsubscribe = this.previewService.onUploadedContentChange((content) => {
+      console.log(`📁 playable-previewer: onUploadedContentChange fired, content length: ${content?.length || 0}`);
       if (content) {
         this.pageContent = content;
         this.loading = false;
         this.error = "";
+        console.log(`✅ playable-previewer: Content set, loading=false`);
         this.requestUpdate();
       } else {
         console.log(`📁 Uploaded content cleared`);
+        this.pageContent = "";
+        this.loading = false;
+        this.error = "";
       }
     });
     
@@ -77,9 +81,12 @@ export class PlayablePreviewer extends ComponentBase {
     this.zipPreviewUrl = this.previewService.getZipPreviewUrl();
     
     const existingContent = this.previewService.getUploadedContent();
+    console.log(`🔍 playable-previewer: checking existing content at connectedCallback, length: ${existingContent?.length || 0}`);
     if (existingContent) {
       this.pageContent = existingContent;
       this.loading = false;
+      this.error = "";
+      console.log(`✅ playable-previewer: Set existing content, loading=false`);
       this.requestUpdate();
     }
 
@@ -314,37 +321,7 @@ export class PlayablePreviewer extends ComponentBase {
       }, 50);
     }
   }
-  async updated(changedProps: Map<string, any>) {
-    if (changedProps.has("githubUrl") && this.githubUrl) {
-      await this.loadFromGithub();
-    }
-  }
-
-  private async loadFromGithub() {
-    this.loading = true;
-    this.error = "";
-    this.pageContent = "";
-    
-    const rawUrl = this.previewService.githubToRawUrl(this.githubUrl);
-    if (!rawUrl) {
-      console.error(`❌ Invalid GitHub URL: ${this.githubUrl}`);
-      this.error = "Invalid GitHub URL";
-      this.loading = false;
-      this.requestUpdate();
-      return;
-    }
-    
-    try {
-      this.pageContent = await this.previewService.fetchRawContent(rawUrl);
-    } catch (err: any) {
-      console.error(`❌ Failed to load from GitHub:`, err);
-      this.error = err.message || String(err);
-    }
-    
-    this.loading = false;
-    this.requestUpdate();
-  }
-
+  
   handleDeviceChange(e: Event) {
     const idx = Number((e.target as HTMLSelectElement).value);
     this.selectedDeviceIdx = idx;
@@ -391,6 +368,12 @@ export class PlayablePreviewer extends ComponentBase {
     const device = this.selectedDevice;
     const width = (this.isPortrait ? device.width : device.height) || 375;
     const height = (this.isPortrait ? device.height : device.width) || 667;
+    
+    // Log render state for debugging
+    const hasZip = !!this.zipPreviewUrl;
+    const hasPageContent = !!this.pageContent;
+    const shouldShowContent = hasZip || hasPageContent;
+    console.log(`🎨 playable-previewer render: loading=${this.loading}, error='${this.error}', zipPreview=${hasZip}, pageContent=${hasPageContent}, shouldShow=${shouldShowContent}`);
     
     return html`
       <div class="flex flex-col gap-8">

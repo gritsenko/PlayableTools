@@ -62,23 +62,30 @@ export class PreviewService {
    * Downloads the content of a raw URL as a string.
    */
   async fetchRawContent(rawUrl: string): Promise<string> {
+    console.log(`📥 PreviewService: Fetching raw content from ${rawUrl}`);
     const response = await fetch(rawUrl);
     if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
     const originalContent = await response.text();
+    
+    console.log(`📥 PreviewService: Fetched ${originalContent.length} chars from GitHub`);
     
     // Store original content and URL for preset switching
     this._originalGithubContent = originalContent;
     
     // Process content with current preset
+    console.log(`⚙️ PreviewService: Processing content with preset`);
     const processedContent = await this.processContentWithPreset(originalContent);
+    console.log(`⚙️ PreviewService: Processed content is ${processedContent.length} chars`);
     
     // Run validation on the processed content
     const fileSize = new Blob([processedContent]).size;
+    console.log(`✅ PreviewService: Running validation (${fileSize} bytes)`);
     await this.runValidation(processedContent, fileSize);
 
     this._lastUploadedSizeBytes = fileSize;
     await this.clearZipSession();
     
+    console.log(`✅ PreviewService: fetchRawContent complete, returning ${processedContent.length} chars`);
     return processedContent;
   }
 
@@ -189,9 +196,12 @@ export class PreviewService {
    */
   private async processContentWithPreset(content: string, preset?: PreviewPreset): Promise<string> {
     const activePreset = preset || this.getCurrentPreset();
-    if (!activePreset) return content;
+    if (!activePreset) {
+      console.log(`⚙️ PreviewService: No active preset, returning content as-is`);
+      return content;
+    }
 
-    console.log('Processing content with preset:', activePreset.name);
+    console.log(`⚙️ PreviewService: Processing content with preset: ${activePreset.name}`);
     let processedContent = content;
 
     // Apply token replacements
@@ -199,7 +209,7 @@ export class PreviewService {
       const regex = new RegExp(find, 'g');
       const matches = processedContent.match(regex);
       if (matches) {
-        console.log(`Replacing ${matches.length} occurrences of "${find}" with "${replace}"`);
+        console.log(`  🔄 Replacing ${matches.length} occurrences of "${find}" with "${replace}"`);
         processedContent = processedContent.replace(regex, replace);
       }
     }
@@ -207,21 +217,22 @@ export class PreviewService {
     // Inject scripts
     for (const script of activePreset.injectScripts) {
       try {
-        console.log(`📜 Injecting script from ${script.source} at position ${script.position}`);
+        console.log(`  📜 Injecting script from ${script.source} at position ${script.position}`);
         const startTime = performance.now();
         
         const scriptContent = await this.loadScriptContent(script.source);
         const loadTime = performance.now() - startTime;
-        console.log(`📥 Script loaded in ${loadTime.toFixed(2)}ms (${scriptContent.length} chars)`);
+        console.log(`  📥 Script loaded in ${loadTime.toFixed(2)}ms (${scriptContent.length} chars)`);
         
         processedContent = this.injectScript(processedContent, scriptContent, script.position);
         const totalTime = performance.now() - startTime;
-        console.log(`✅ Script injection completed in ${totalTime.toFixed(2)}ms`);
+        console.log(`  ✅ Script injection completed in ${totalTime.toFixed(2)}ms`);
       } catch (error) {
-        console.warn(`❌ Failed to inject script ${script.source}:`, error);
+        console.warn(`  ❌ Failed to inject script ${script.source}:`, error);
       }
     }
 
+    console.log(`✅ PreviewService: Processing complete, ${processedContent.length} chars`);
     return processedContent;
   }
 
@@ -659,32 +670,57 @@ export class PreviewService {
    * Runs validation on the current content using appropriate validators
    */
   private async runValidation(content: string, fileSize: number): Promise<void> {
-    const preset = this.getCurrentPreset();
-    const results: ValidationResult = { categories: [] };
+    try {
+      console.log(`🔍 PreviewService: Running validation on ${fileSize} bytes`);
+      const preset = this.getCurrentPreset();
+      const results: ValidationResult = { categories: [] };
 
-    // Always run general validation
-    const generalValidator = new GeneralValidator();
-    const generalResults = generalValidator.validate(content, fileSize);
-    results.categories.push(...generalResults.categories);
+      // Always run general validation
+      const generalValidator = new GeneralValidator();
+      const generalResults = generalValidator.validate(content, fileSize);
+      results.categories.push(...generalResults.categories);
+      console.log(`✅ PreviewService: General validation complete, ${generalResults.categories.length} categories`);
 
-    // Run preset-specific validation
-    if (preset) {
-      switch (preset.id) {
-        case 'facebook':
-          const facebookValidator = new FacebookValidator();
-          const facebookResults = facebookValidator.validate(content, fileSize);
-          results.categories.push(...facebookResults.categories);
-          break;
-        case 'mraid':
-          const mraidValidator = new MraidValidator();
-          const mraidResults = mraidValidator.validate(content, fileSize);
-          results.categories.push(...mraidResults.categories);
-          break;
+      // Run preset-specific validation
+      if (preset) {
+        console.log(`⚙️ PreviewService: Running ${preset.name} preset validation`);
+        switch (preset.id) {
+          case 'facebook':
+            const facebookValidator = new FacebookValidator();
+            const facebookResults = facebookValidator.validate(content, fileSize);
+            results.categories.push(...facebookResults.categories);
+            console.log(`✅ PreviewService: Facebook validation complete`);
+            break;
+          case 'mraid':
+            const mraidValidator = new MraidValidator();
+            const mraidResults = mraidValidator.validate(content, fileSize);
+            results.categories.push(...mraidResults.categories);
+            console.log(`✅ PreviewService: MRAID validation complete`);
+            break;
+          default:
+            console.log(`ℹ️ PreviewService: No preset-specific validation for ${preset.id}`);
+        }
       }
-    }
 
-    this._validationResults = results;
-    for (const cb of Array.from(this._validationListeners)) cb(results);
+      console.log(`✅ PreviewService: Validation complete, ${results.categories.length} total categories, notifying ${this._validationListeners.size} listeners`);
+      this._validationResults = results;
+      for (const cb of Array.from(this._validationListeners)) cb(results);
+    } catch (err) {
+      console.error(`❌ PreviewService: Validation error:`, err);
+      const errorResults: ValidationResult = {
+        categories: [{
+          name: 'Validation Error',
+          checks: [{
+            name: 'Validation Process',
+            passed: false,
+            isWarning: false,
+            details: err instanceof Error ? err.message : String(err)
+          }]
+        }]
+      };
+      this._validationResults = errorResults;
+      for (const cb of Array.from(this._validationListeners)) cb(errorResults);
+    }
   }
 
   /**
