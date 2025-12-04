@@ -19,7 +19,7 @@ const packageJsonPath = resolve(__dirname, 'package.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
 export default defineConfig(({ command }) => ({
-  base: command === "serve" ? "/" : "/PlayableTools/",
+  base: command === "serve" ? "/" : "/",
   server: {
     port: 5173,
     strictPort: true,
@@ -51,19 +51,19 @@ export default defineConfig(({ command }) => ({
       manifest: {
         name: "Playable Ads Tools",
         short_name: "PlayableTools",
-        start_url: "/PlayableTools/",
+        start_url: "/",
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#3b82f6",
         description: "Open-source tools for HTML5 playable ads developers.",
         icons: [
           {
-            src: "/PlayableTools/playable-tools.svg",
+            src: "/playable-tools.svg",
             sizes: "192x192",
             type: "image/svg+xml"
           },
           {
-            src: "/PlayableTools/playable-tools.svg",
+            src: "/playable-tools.svg",
             sizes: "512x512",
             type: "image/svg+xml"
           }

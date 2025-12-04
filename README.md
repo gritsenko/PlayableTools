@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
+	<a href="https://tools.gritsenko.biz/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 </p>
 
 PlayableTools is a comprehensive web-based toolkit for preparing, publishing, and managing HTML5 playable ads across multiple advertising platforms. Built with modern web technologies and packaged as a Progressive Web App for seamless local development and offline use.
@@ -174,5 +174,5 @@ Contributions are welcome! Please:
 MIT License - see LICENSE file for details
 
 <p align="center">
-	<a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
+	<a href="https://tools.gritsenko.biz/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 </p>

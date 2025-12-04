@@ -197,10 +197,9 @@ export class VersionService {
     // Build the proper URL for production
     let versionUrl = this.versionEndpoint;
     
-    // If running on https://gritsenko.biz/PlayableTools/, ensure proper path
-    if (window.location.origin === 'https://gritsenko.biz' && 
-        window.location.pathname.startsWith('/PlayableTools/')) {
-      versionUrl = '/PlayableTools/version.json';
+// If running on https://tools.gritsenko.biz/, ensure proper path
+    if (window.location.origin === 'https://tools.gritsenko.biz') {
+      versionUrl = '/version.json';
     }
     
     // Add aggressive cache busting with timestamp and random number
@@ -247,9 +246,8 @@ export class VersionService {
     return new Promise((resolve, reject) => {
       let versionUrl = this.versionEndpoint;
       
-      if (window.location.origin === 'https://gritsenko.biz' && 
-          window.location.pathname.startsWith('/PlayableTools/')) {
-        versionUrl = '/PlayableTools/version.json';
+if (window.location.origin === 'https://tools.gritsenko.biz') {
+        versionUrl = '/version.json';
       }
       
       const cacheBuster = `?xhr=${Date.now()}&rand=${Math.random()}`;

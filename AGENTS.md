@@ -163,7 +163,7 @@ Example recommended header layout (Markdown):
 </p>
 
 <p align="center">
-  <a href="https://gritsenko.biz/PlayableTools/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
+  <a href="https://tools.gritsenko.biz/"><img src="./media/pwa.png" width="200" alt="PWA Badge"/></a>
 </p>
 
 PlayableTools is a web-based toolkit for preparing and publishing HTML5 playables... (continue intro)
