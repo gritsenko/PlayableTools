@@ -8,8 +8,7 @@ async function testVersionFetching() {
   const testUrls = [
     './version.json',
     './version.json?t=' + Date.now(),
-    '/PlayableTools/version.json?v=' + Date.now(),
-    '/PlayableTools/version.json?cb=' + Math.random()
+    '/version.json?cb=' + Math.random()
   ];
   
   for (const url of testUrls) {

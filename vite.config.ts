@@ -23,16 +23,12 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 5173,
     strictPort: true,
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-    },
+headers: {},
   },
   preview: {
     port: 5173,
     strictPort: true,
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-    },
+headers: {},
   },
   resolve: {
     alias: {
