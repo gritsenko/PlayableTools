@@ -79,8 +79,10 @@ export class PlayableEditor extends ComponentBase {
     super.connectedCallback();
     this.loadProjects();
     if (this.existingPlayable) {
-      this.title = this.existingPlayable.name;
-      this.details = this.existingPlayable.description || "";
+      this.title = this.existingPlayable.title || this.existingPlayable.name;
+      this.details = this.existingPlayable.details || this.existingPlayable.description || "";
+      this.projectId = this.existingPlayable.project || "";
+      this.tags = this.existingPlayable.tags?.join(", ") || "";
       this.fileName = this.existingPlayable.name;
     }
   }
@@ -222,9 +224,14 @@ export class PlayableEditor extends ComponentBase {
     this.variations = this.variations.filter((v) => v.id !== id);
   }
 
-  async handleSavePlayable() {
-    if (!this.title || !this.fileContent) {
-      this.errorMessage = "Please provide a title and select a file";
+async handleSavePlayable() {
+    if (!this.title) {
+      this.errorMessage = "Please provide a title";
+      return;
+    }
+    
+    if (!this.existingPlayable && !this.fileContent) {
+      this.errorMessage = "Please select a file for new playable";
       return;
     }
 
@@ -233,16 +240,18 @@ export class PlayableEditor extends ComponentBase {
 
     try {
       if (this.existingPlayable) {
-        // Update existing
+        // Update existing playable properties
+        const tagsList = this.tags.split(",").map(t => t.trim()).filter(t => t);
         await this.portfolioService.updatePlayable(
           this.existingPlayable.id,
           this.title,
-          this.fileContent,
-          this.details
+          this.details,
+          this.projectId,
+          tagsList
         );
         this.successMessage = "Playable updated successfully!";
       } else {
-        // Create new
+        // Create new playable
         await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details);
         this.successMessage = "Playable created successfully!";
       }
@@ -318,10 +327,11 @@ export class PlayableEditor extends ComponentBase {
           : ""}
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <!-- Main Content -->
+<!-- Main Content -->
           <div class="lg:col-span-2 space-y-6">
-            <!-- File Source Selection -->
-            <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+            <!-- File Source Selection (only for new playables) -->
+            ${!this.existingPlayable ? html`
+              <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
               <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">Playable Source</h3>
               <div class="space-y-4">
                 <div class="flex gap-4">
@@ -426,8 +436,9 @@ export class PlayableEditor extends ComponentBase {
                       </div>
                     `
                   : ""}
-              </div>
+</div>
             </section>
+            ` : ""}
 
             <!-- Basic Info -->
             <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -510,9 +521,9 @@ export class PlayableEditor extends ComponentBase {
             <section class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
               <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">Actions</h3>
               <div class="space-y-2">
-                <button
+<button
                   @click=${this.handleSavePlayable}
-                  ?disabled=${this.isLoading || !this.fileContent}
+                  ?disabled=${this.isLoading || !this.title || (!this.existingPlayable && !this.fileContent)}
                   class="w-full px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ${this.isLoading ? "Saving..." : this.existingPlayable ? "Update Playable" : "Create Playable"}

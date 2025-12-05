@@ -292,7 +292,17 @@ export class PortfolioPage extends ComponentBase {
                         <li class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-800">
                           <div class="flex justify-between items-start gap-4">
                             <div class="flex-1">
-                              <h4 class="font-semibold text-slate-900 dark:text-white">${playable.name}</h4>
+                              <h4 class="font-semibold text-slate-900 dark:text-white">${playable.title || playable.name}</h4>
+                              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                File: <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${playable.name}</code>
+                              </p>
+                              ${playable.details
+                                ? html`
+                                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                                      ${playable.details}
+                                    </p>
+                                  `
+                                : ""}
                               <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                                 ID: <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${playable.id}</code>
                               </p>

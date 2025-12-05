@@ -3,6 +3,10 @@ import { injectable, ServiceLifetime } from "fw";
 export interface PlayableAdData {
   id: string;
   name: string;
+  title: string;
+  details: string;
+  project: string;
+  tags: string[];
   content?: string;
   description?: string;
   createdAt: number;
@@ -27,6 +31,10 @@ interface FileMeta {
   contentType: string;
   uploadedAt: string;
   ownerUserId: number;
+  title: string;
+  details: string;
+  project: string;
+  tags: string[];
 }
 
 @injectable(ServiceLifetime.Singleton)
@@ -190,8 +198,12 @@ export class PortfolioService {
     return files.map(f => ({
       id: f.storageName,
       name: f.originalName,
+      title: f.title,
+      details: f.details,
+      project: f.project,
+      tags: f.tags,
       content: undefined,
-      description: "",
+      description: f.details,
       createdAt: new Date(f.uploadedAt).getTime(),
       updatedAt: new Date(f.uploadedAt).getTime(),
       originalName: f.originalName,
@@ -211,6 +223,10 @@ export class PortfolioService {
       return {
         id: id,
         name: "Portfolio Playable",
+        title: "Portfolio Playable",
+        details: "",
+        project: "",
+        tags: [],
         content: content,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -240,6 +256,10 @@ export class PortfolioService {
     return {
       id: f.storageName,
       name: f.originalName,
+      title: f.title,
+      details: f.details,
+      project: f.project,
+      tags: f.tags,
       content: content,
       description: description,
       createdAt: new Date(f.uploadedAt).getTime(),
@@ -261,8 +281,41 @@ export class PortfolioService {
     console.warn("Projects not supported in backend", projectId);
   }
 
-  async updatePlayable(id: string, _name: string, _content: string, _description?: string): Promise<void> {
-    throw new Error(`Update not supported by backend. Please create new. (Attempted to update ${id})`);
+  async updatePlayable(id: string, title: string, details: string, projectId: string, tags: string[]): Promise<PlayableAdData> {
+    if (!this.token) throw new Error("Not authenticated");
+    
+    const updatePayload = {
+      Title: title,
+      Details: details,
+      Project: projectId,
+      Tags: tags
+    };
+
+    const res = await fetch(`${this.baseUrl}/api/files/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.token}`
+      },
+      body: JSON.stringify(updatePayload)
+    });
+
+    if (!res.ok) throw new Error("Failed to update playable");
+
+    const f: FileMeta = await res.json();
+    return {
+      id: f.storageName,
+      name: f.originalName,
+      title: f.title,
+      details: f.details,
+      project: f.project,
+      tags: f.tags,
+      description: details,
+      createdAt: new Date(f.uploadedAt).getTime(),
+      updatedAt: new Date(f.uploadedAt).getTime(),
+      originalName: f.originalName,
+      contentType: f.contentType
+    };
   }
 
   async deletePlayable(id: string): Promise<void> {
@@ -275,6 +328,10 @@ export class PortfolioService {
       return {
         id: shortLink,
         name: "Shared Playable",
+        title: "Shared Playable",
+        details: "",
+        project: "",
+        tags: [],
         content: content,
         createdAt: Date.now(),
         updatedAt: Date.now()
