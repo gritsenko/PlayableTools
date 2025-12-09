@@ -39,7 +39,7 @@ export class PortfolioPage extends ComponentBase {
       await this.portfolioService.initialize();
       await this.portfolioService.waitForAuthState();
       const user = this.portfolioService.getCurrentUser();
-      if (user) {
+      if (user && this.portfolioService.isAuthenticated()) {
         this.isAuthenticated = true;
         this.requestUpdate();
         await this.loadPlayables();

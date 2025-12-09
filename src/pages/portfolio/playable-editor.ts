@@ -252,7 +252,8 @@ async handleSavePlayable() {
         this.successMessage = "Playable updated successfully!";
       } else {
         // Create new playable
-        await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details);
+        const tagsList = this.tags.split(",").map(t => t.trim()).filter(t => t);
+        await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details, this.projectId, tagsList);
         this.successMessage = "Playable created successfully!";
       }
 

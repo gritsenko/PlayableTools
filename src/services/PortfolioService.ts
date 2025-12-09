@@ -185,6 +185,10 @@ export class PortfolioService {
     return this.currentUser;
   }
 
+  isAuthenticated(): boolean {
+    return !!this.token && !!this.currentUser;
+  }
+
   async getPlayables(): Promise<PlayableAdData[]> {
     if (!this.token) throw new Error("Not authenticated");
     
@@ -192,7 +196,13 @@ export class PortfolioService {
       headers: { "Authorization": `Bearer ${this.token}` }
     });
     
-    if (!res.ok) throw new Error("Failed to fetch files");
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.signOut();
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+      throw new Error("Failed to fetch files");
+    }
     
     const files: FileMeta[] = await res.json();
     return files.map(f => ({
@@ -237,12 +247,16 @@ export class PortfolioService {
     }
   }
 
-  async uploadPlayable(name: string, content: string, description?: string): Promise<PlayableAdData> {
+  async uploadPlayable(name: string, content: string, description?: string, project?: string, tags?: string[]): Promise<PlayableAdData> {
     if (!this.token) throw new Error("Not authenticated");
     
     const blob = new Blob([content], { type: "text/html" });
     const formData = new FormData();
     formData.append("file", blob, name.endsWith(".html") ? name : `${name}.html`);
+    if (description) formData.append("details", description);
+    if (name) formData.append("title", name);
+    if (project) formData.append("project", project);
+    if (tags && tags.length > 0) formData.append("tags", tags.join(","));
     
     const res = await fetch(`${this.baseUrl}/api/files/upload`, {
       method: "POST",
@@ -270,15 +284,52 @@ export class PortfolioService {
   }
 
   async getProjects(): Promise<any[]> {
-    return [];
+    // If not authenticated, return an empty list - projects are user-scoped
+    if (!this.token) return [];
+
+    const res = await fetch(`${this.baseUrl}/api/projects`, {
+      headers: { Authorization: `Bearer ${this.token}` }
+    });
+
+    if (!res.ok) throw new Error("Failed to fetch projects");
+
+    const projects = await res.json();
+    // Backend returns owner information; map to frontend-friendly shape
+    return projects.map((p: any) => ({ id: p.Id || p.id, name: p.Name || p.name, shortName: p.ShortName || p.shortName, appStore: p.AppStore || p.appStore, googlePlay: p.GooglePlay || p.googlePlay }));
   }
 
   async saveProject(project: any): Promise<void> {
-    console.warn("Projects not supported in backend", project);
+    if (!this.token) throw new Error("Not authenticated");
+
+    const res = await fetch(`${this.baseUrl}/api/projects`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.token}`
+      },
+      body: JSON.stringify(project)
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "Failed to save project");
+    }
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    console.warn("Projects not supported in backend", projectId);
+    if (!this.token) throw new Error("Not authenticated");
+
+    const res = await fetch(`${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${this.token}`
+      }
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "Failed to delete project");
+    }
   }
 
   async updatePlayable(id: string, title: string, details: string, projectId: string, tags: string[]): Promise<PlayableAdData> {
