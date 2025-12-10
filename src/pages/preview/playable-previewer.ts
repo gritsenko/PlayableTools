@@ -1,12 +1,15 @@
-import { ComponentBase, customElement, html, inject, state } from "fw";
+import { ComponentBase, customElement, html, inject, state, property } from "fw";
 import { PreviewService } from "../../services/PreviewService";
 import type { PreviewPreset } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
+import "./save-creative-modal";
 
 @customElement("playable-previewer")
 export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
+
+  @property() fileName: string = "";
 
   pageContent: string = "";
   loading: boolean = true;
@@ -325,7 +328,7 @@ export class PlayablePreviewer extends ComponentBase {
     }
   }
 
-  private _installScreenshotCapture(win: Window, doc: Document) {
+  private _installScreenshotCapture(_win: Window, doc: Document) {
     // Inject the screenshot script into the iframe
     const script = doc.createElement('script');
     script.src = '/playable-screenshot.js';
@@ -403,6 +406,36 @@ export class PlayablePreviewer extends ComponentBase {
         this.isPresetSwitching = false;
         this.requestUpdate();
       }
+    }
+  }
+
+  async handleSaveToLibrary() {
+    try {
+      const iframe = this._getIframeEl();
+      if (!iframe) {
+        throw new Error('Playable iframe not found');
+      }
+      
+      const blob = await this.previewService.captureScreenshot(iframe);
+      
+      // Modal is in light DOM, so query from the element itself (fallback to document)
+      const modal = (this as any).querySelector('save-creative-modal') || document.querySelector('save-creative-modal');
+      if (modal) {
+        const content = this.pageContent;
+        // Use fileName property or default
+        const name = this.fileName || "Playable Ad.html";
+        await modal.show(blob, content, name);
+      } else {
+        console.warn('Modal not found in DOM');
+      }
+    } catch (error) {
+      console.error('Failed to capture screenshot for library:', error);
+      this.error = `Failed to capture screenshot: ${error instanceof Error ? error.message : String(error)}`;
+      this.requestUpdate();
+      setTimeout(() => {
+        this.error = '';
+        this.requestUpdate();
+      }, 3000);
     }
   }
 
@@ -612,6 +645,7 @@ export class PlayablePreviewer extends ComponentBase {
             </div>
           </div>
         </div>
+        <save-creative-modal id="save-modal"></save-creative-modal>
       </div>
     `;
   }

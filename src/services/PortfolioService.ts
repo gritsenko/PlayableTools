@@ -283,6 +283,27 @@ export class PortfolioService {
     };
   }
 
+  async uploadFile(file: File, title?: string, details?: string, project?: string, tags?: string[]): Promise<FileMeta> {
+    if (!this.token) throw new Error("Not authenticated");
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    if (title) formData.append("title", title);
+    if (details) formData.append("details", details);
+    if (project) formData.append("project", project);
+    if (tags && tags.length > 0) formData.append("tags", tags.join(","));
+    
+    const res = await fetch(`${this.baseUrl}/api/files/upload`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${this.token}` },
+      body: formData
+    });
+    
+    if (!res.ok) throw new Error("Upload failed");
+    
+    return await res.json();
+  }
+
   async getProjects(): Promise<any[]> {
     // If not authenticated, return an empty list - projects are user-scoped
     if (!this.token) return [];

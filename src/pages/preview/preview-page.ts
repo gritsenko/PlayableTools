@@ -166,6 +166,13 @@ export class PreviewPage extends ComponentBase {
   // Lock UI moved into PlayablePreviewer component
   }
 
+  private triggerSaveToLibrary() {
+    const previewer = this.querySelector('playable-previewer') as any;
+    if (previewer && typeof previewer.handleSaveToLibrary === 'function') {
+      previewer.handleSaveToLibrary();
+    }
+  }
+
   render() {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
     const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
@@ -181,6 +188,13 @@ export class PreviewPage extends ComponentBase {
           <div class="flex items-center gap-4">
             ${hasContent
               ? html`
+                  <button
+                    @click=${this.triggerSaveToLibrary}
+                    class="px-6 py-2.5 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors flex items-center gap-2"
+                  >
+                    <span class="material-icons-outlined">save</span>
+                    Save to Library
+                  </button>
                   <button
                     @click=${() => {
                       // Clear all content and return to input mode
@@ -263,7 +277,7 @@ export class PreviewPage extends ComponentBase {
             const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
             if (hasUploadedContent || this.uploadedFileName) {
               console.log(`✅ preview-page: Rendering previewer with content`);
-              return html`<playable-previewer></playable-previewer>`;
+              return html`<playable-previewer .fileName=${this.uploadedFileName}></playable-previewer>`;
             } else {
               console.log(`⛔ preview-page: Not rendering previewer (no content)`);
               return null;
