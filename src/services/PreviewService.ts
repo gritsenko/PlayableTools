@@ -772,4 +772,43 @@ export class PreviewService {
       console.warn('PreviewService: handleScreenLockChange failed', err);
     }
   }
+
+  /**
+   * Captures a screenshot from the playable preview iframe and returns it as a blob
+   * The screenshot includes the entire viewport content rendered in the iframe
+   */
+  async captureScreenshot(iframeElement?: HTMLIFrameElement): Promise<Blob> {
+    try {
+      return new Promise((resolve, reject) => {
+        const iframe = iframeElement || (document.querySelector('.playable-iframe') as HTMLIFrameElement);
+        if (!iframe?.contentWindow) {
+          throw new Error('Playable iframe not found or not loaded');
+        }
+
+        const iframeWin = iframe.contentWindow as any;
+        if (!iframeWin.__ptScreenshot) {
+          throw new Error('Screenshot API not available in iframe. Ensure playable-screenshot.js is injected.');
+        }
+
+        // Call the iframe's screenshot API
+        iframeWin.__ptScreenshot.captureBlob((error: Error | null, blob: Blob | null) => {
+          if (error) {
+            reject(error);
+          } else if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('No blob returned from screenshot'));
+          }
+        });
+
+        // Timeout after 15 seconds
+        setTimeout(() => {
+          reject(new Error('Screenshot capture timeout'));
+        }, 15000);
+      });
+    } catch (error) {
+      console.error('PreviewService: Failed to capture screenshot', error);
+      throw error;
+    }
+  }
 }

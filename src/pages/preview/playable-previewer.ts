@@ -283,6 +283,9 @@ export class PlayablePreviewer extends ComponentBase {
         } catch {}
       }
     };
+
+    // Install screenshot capture script
+    this._installScreenshotCapture(win, doc);
   };
 
   private renderPlayableIframe() {
@@ -319,6 +322,45 @@ export class PlayablePreviewer extends ComponentBase {
       setTimeout(() => {
         try { iframe?.contentWindow && (iframe.contentWindow as any).__ptGuard?.setLocked(locked); } catch {}
       }, 50);
+    }
+  }
+
+  private _installScreenshotCapture(win: Window, doc: Document) {
+    // Inject the screenshot script into the iframe
+    const script = doc.createElement('script');
+    script.src = '/playable-screenshot.js';
+    script.onload = () => {
+      console.log('Screenshot capture script loaded in iframe');
+    };
+    script.onerror = () => {
+      console.warn('Failed to load screenshot capture script');
+    };
+    doc.head.appendChild(script);
+  }
+
+  async _captureScreenshot() {
+    try {
+      this.requestUpdate();
+      const iframe = this._getIframeEl();
+      if (!iframe) {
+        throw new Error('Playable iframe not found');
+      }
+      const blob = await this.previewService.captureScreenshot(iframe);
+      
+      // Open in new tab
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (error) {
+      console.error('Failed to capture screenshot:', error);
+      this.error = `Failed to capture screenshot: ${error instanceof Error ? error.message : String(error)}`;
+      this.requestUpdate();
+      setTimeout(() => {
+        this.error = '';
+        this.requestUpdate();
+      }, 3000);
     }
   }
   
@@ -507,6 +549,13 @@ export class PlayablePreviewer extends ComponentBase {
                 class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               >
                 <span class="material-icons-outlined">${this._muted ? 'volume_off' : 'volume_up'}</span>
+              </button>
+              <button 
+                @click=${() => this._captureScreenshot()} 
+                title="Capture screenshot"
+                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <span class="material-icons-outlined">photo_camera</span>
               </button>
             </div>
             
