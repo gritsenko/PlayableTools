@@ -1,5 +1,5 @@
 import { ComponentBase, customElement, html, route, inject, state } from "fw";
-import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
+import { PortfolioService, type PlayableAdData, type CreativeWithVariations } from "../../services/PortfolioService";
 import "./playable-editor";
 import "./project-manager";
 
@@ -15,6 +15,9 @@ export class PortfolioPage extends ComponentBase {
   playables: PlayableAdData[] = [];
 
   @state()
+  creatives: CreativeWithVariations[] = [];
+
+  @state()
   isAuthenticated = false;
 
   @state()
@@ -28,6 +31,9 @@ export class PortfolioPage extends ComponentBase {
 
   @state()
   selectedPlayable: PlayableAdData | null = null;
+
+  @state()
+  expandedCreativeId: number | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -102,6 +108,7 @@ export class PortfolioPage extends ComponentBase {
 
     try {
       this.playables = await this.portfolioService.getPlayables();
+      this.creatives = await this.portfolioService.getCreativesWithVariations();
     } catch (error) {
       console.error("Loading playables error:", error);
       this.errorMessage = error instanceof Error ? error.message : "Failed to load playables";
@@ -193,6 +200,14 @@ export class PortfolioPage extends ComponentBase {
     this.currentView = "projects";
   };
 
+  toggleCreativeExpanded = (creativeId: number) => {
+    this.expandedCreativeId = this.expandedCreativeId === creativeId ? null : creativeId;
+  };
+
+  getScreenshotUrl = (screenshotStorageName: string): string => {
+    return `${this.portfolioService.getApiBaseUrl()}/api/files/${screenshotStorageName}`;
+  };
+
   render() {
     if (!this.isAuthenticated) {
       return html`
@@ -279,86 +294,130 @@ export class PortfolioPage extends ComponentBase {
           <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Your Playable Ads:</h3>
           ${this.isLoading
             ? html` <p class="text-slate-500 dark:text-slate-400">Loading playables...</p> `
-            : this.playables.length === 0
+            : this.creatives.length === 0
               ? html`
                   <p class="text-slate-500 dark:text-slate-400 italic">
                     No playables uploaded yet. Start by clicking "New Playable"!
                   </p>
                 `
               : html`
-                  <ul class="space-y-3">
-                    ${this.playables.map(
-                      (playable) => html`
-                        <li class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-800">
+                  <div class="space-y-4">
+                    ${this.creatives.map(creative => {
+                      const isExpanded = this.expandedCreativeId === creative.id;
+                      const latestVariation = creative.variations[creative.variations.length - 1];
+                      const hasScreenshot = latestVariation?.screenshotFile;
+                      
+                      return html`
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-800">
+                          <!-- Creative Header -->
                           <div class="flex justify-between items-start gap-4">
-                            <div class="flex-1">
-                              <h4 class="font-semibold text-slate-900 dark:text-white">${playable.title || playable.name}</h4>
-                              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                File: <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${playable.name}</code>
-                              </p>
-                              ${playable.details
+                            <div class="flex-1 cursor-pointer" @click=${() => this.toggleCreativeExpanded(creative.id)}>
+                              <div class="flex items-center gap-2">
+                                <span class="text-slate-400 dark:text-slate-600 text-lg">
+                                  ${isExpanded ? '▼' : '▶'}
+                                </span>
+                                <h4 class="font-semibold text-slate-900 dark:text-white text-lg">${creative.title}</h4>
+                                <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs font-medium">
+                                  ${creative.variations.length} variation${creative.variations.length !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                              ${creative.details
                                 ? html`
-                                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                                      ${playable.details}
+                                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                                      ${creative.details}
                                     </p>
                                   `
-                                : ""}
-                              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                ID: <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${playable.id}</code>
-                              </p>
-                              ${playable.shortLink
+                                : ''}
+                              ${creative.tags.length > 0
                                 ? html`
-                                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                                      Short Link:
-                                      <code class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-xs">${playable.shortLink}</code>
-                                    </p>
+                                    <div class="flex gap-2 mt-2 flex-wrap">
+                                      ${creative.tags.map(tag => html`
+                                        <span class="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs">
+                                          ${tag}
+                                        </span>
+                                      `)}
+                                    </div>
                                   `
-                                : ""}
+                                : ''}
                               <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
-                                Updated: ${new Date(playable.updatedAt).toLocaleString()}
+                                Created: ${new Date(creative.createdAt).toLocaleString()}
                               </p>
-                            </div>
-                            <div class="flex gap-2">
-                              <a
-                                href="${this.getPlayableDirectLink(playable.id)}"
-                                download
-                                class="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium"
-                                title="Download playable ad file"
-                              >
-                                Download
-                              </a>
-                              <button
-                                @click=${() => this.handleCopyLink(playable.id)}
-                                class="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
-                                title="Copy direct link to clipboard"
-                              >
-                                Copy Link
-                              </button>
-                              <button
-                                @click=${() => this.handlePreviewPlayable(playable)}
-                                class="px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-sm font-medium"
-                                title="Preview playable ad"
-                              >
-                                Preview
-                              </button>
-                              <button
-                                @click=${() => this.handleEditPlayable(playable)}
-                                class="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                @click=${() => this.handleDeletePlayable(playable.id)}
-                                class="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-sm font-medium"
-                              >
-                                Delete
-                              </button>
                             </div>
                           </div>
-                        </li>
-                      `
-                    )}
-                  </ul>
+
+                          <!-- Expanded Content -->
+                          ${isExpanded
+                            ? html`
+                                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                                  <!-- Latest Variation Screenshot Preview -->
+                                  ${latestVariation
+                                    ? html`
+                                        <div class="bg-white dark:bg-slate-900 p-4 rounded border border-slate-200 dark:border-slate-700">
+                                          <h5 class="font-semibold text-slate-900 dark:text-white mb-3">Latest Variation: ${latestVariation.title}</h5>
+                                          ${hasScreenshot
+                                            ? html`
+                                                <div class="mb-3">
+                                                  <img 
+                                                    src="${this.getScreenshotUrl(latestVariation.screenshotFile!.storageName)}"
+                                                    alt="Screenshot of ${latestVariation.title}"
+                                                    class="max-w-xs h-auto rounded border border-slate-200 dark:border-slate-700"
+                                                  />
+                                                </div>
+                                              `
+                                            : html`
+                                                <div class="mb-3 p-4 bg-slate-100 dark:bg-slate-800 rounded text-center text-slate-500 dark:text-slate-400 text-sm">
+                                                  No screenshot available
+                                                </div>
+                                              `}
+                                          <p class="text-xs text-slate-400 dark:text-slate-500">
+                                            Updated: ${new Date(latestVariation.createdAt).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      `
+                                    : ''}
+
+                                  <!-- All Variations List -->
+                                  <div class="bg-white dark:bg-slate-900 p-4 rounded border border-slate-200 dark:border-slate-700">
+                                    <h5 class="font-semibold text-slate-900 dark:text-white mb-3">All Variations (${creative.variations.length})</h5>
+                                    <div class="space-y-2">
+                                      ${creative.variations.map((variation, idx) => html`
+                                        <div class="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-800">
+                                          <div class="flex-1">
+                                            <div class="flex items-center gap-2">
+                                              <span class="font-medium text-slate-900 dark:text-white">${variation.title}</span>
+                                              ${idx === creative.variations.length - 1
+                                                ? html`<span class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">Latest</span>`
+                                                : ''}
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                              ${variation.file?.originalName || 'Unknown file'} • ${new Date(variation.createdAt).toLocaleString()}
+                                            </p>
+                                          </div>
+                                          <div class="flex gap-2">
+                                            ${variation.screenshotFile
+                                              ? html`
+                                                  <a
+                                                    href="${this.getScreenshotUrl(variation.screenshotFile.storageName)}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-xs font-medium"
+                                                  >
+                                                    View Screenshot
+                                                  </a>
+                                                `
+                                              : ''}
+                                          </div>
+                                        </div>
+                                      `)}
+                                    </div>
+                                  </div>
+                                </div>
+                              `
+                            : ''}
+                        </div>
+                      `;
+                    })}
+                  </div>
                 `}
         </div>
       </div>

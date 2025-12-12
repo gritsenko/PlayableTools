@@ -1,4 +1,5 @@
-import { injectable, ServiceLifetime } from "fw";
+import { injectable, ServiceLifetime, inject } from "fw";
+import { ApiClient, type Creative, type Variation, type FileMeta, type Project } from "./ApiClient";
 
 export interface PlayableAdData {
   id: string;
@@ -14,6 +15,8 @@ export interface PlayableAdData {
   shortLink?: string;
   originalName?: string;
   contentType?: string;
+  creativeId?: number;
+  variationId?: number;
 }
 
 export interface User {
@@ -24,43 +27,35 @@ export interface User {
   token?: string;
 }
 
-interface FileMeta {
+export interface CreativeWithVariations {
   id: number;
-  storageName: string;
-  originalName: string;
-  contentType: string;
-  uploadedAt: string;
-  ownerUserId: number;
   title: string;
   details: string;
   project: string;
   tags: string[];
+  createdAt: number;
+  variations: Array<{
+    id: number;
+    title: string;
+    createdAt: number;
+    file?: { originalName: string; contentType: string };
+    screenshotFile?: { storageName: string; originalName: string };
+  }>;
 }
 
 @injectable(ServiceLifetime.Singleton)
 export class PortfolioService {
+  @inject(ApiClient)
+  private apiClient!: ApiClient;
+
   private currentUser: User | null = null;
-  private token: string | null = null;
   private isInitialized = false;
-
-  private get baseUrl(): string {
-    // Allow overriding the API base URL via Vite env var VITE_API_BASE_URL
-    // Example: create a .env.local with VITE_API_BASE_URL=https://my-custom-api.example
-    const envUrl = (import.meta.env as any).VITE_API_BASE_URL;
-    if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
-      return envUrl;
-    }
-
-    // Default to localhost for dev, otherwise the public API
-    return import.meta.env.DEV ? "http://localhost:5189" : "https://api.gritsenko.biz";
-  }
 
   /**
    * Public accessor for components/pages that need to know which API base URL is used.
-   * This is the same value used by internal methods.
    */
   public getApiBaseUrl(): string {
-    return this.baseUrl;
+    return this.apiClient.getApiBaseUrl();
   }
 
   async initialize(): Promise<void> {
@@ -70,7 +65,7 @@ export class PortfolioService {
     const storedUser = localStorage.getItem("authUser");
     
     if (storedToken && storedUser) {
-      this.token = storedToken;
+      this.apiClient.setToken(storedToken);
       try {
         this.currentUser = JSON.parse(storedUser);
       } catch (e) {
@@ -156,16 +151,8 @@ export class PortfolioService {
   }
 
   private async loginWithBackend(idToken: string): Promise<User> {
-    const res = await fetch(`${this.baseUrl}/api/auth/google`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ IdToken: idToken })
-    });
-    
-    if (!res.ok) throw new Error("Backend login failed");
-    
-    const data = await res.json();
-    this.token = data.token;
+    const data = await this.apiClient.loginWithGoogle(idToken);
+    this.apiClient.setToken(data.token);
     
     const user: User = {
       uid: "backend_user",
@@ -176,7 +163,7 @@ export class PortfolioService {
     };
     
     this.currentUser = user;
-    localStorage.setItem("authToken", this.token!);
+    localStorage.setItem("authToken", data.token);
     localStorage.setItem("authUser", JSON.stringify(user));
     return user;
   }
@@ -186,45 +173,71 @@ export class PortfolioService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.token && !!this.currentUser;
+    return this.apiClient.isAuthenticated() && !!this.currentUser;
   }
 
   async getPlayables(): Promise<PlayableAdData[]> {
-    if (!this.token) throw new Error("Not authenticated");
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
     
-    const res = await fetch(`${this.baseUrl}/api/files/my`, {
-      headers: { "Authorization": `Bearer ${this.token}` }
-    });
+    const creatives = await this.apiClient.getCreatives();
+    const playables: PlayableAdData[] = [];
     
-    if (!res.ok) {
-      if (res.status === 401) {
-        this.signOut();
-        throw new Error("Your session has expired. Please sign in again.");
+    // Flatten creatives with variations into playable ad data
+    for (const creative of creatives) {
+      for (const variation of creative.variations) {
+        playables.push({
+          id: `${creative.id}_${variation.id}`, // Composite ID
+          name: variation.title,
+          title: creative.title,
+          details: creative.details,
+          project: creative.project,
+          tags: creative.tags,
+          createdAt: new Date(creative.createdAt).getTime(),
+          updatedAt: new Date(variation.createdAt).getTime(),
+          originalName: variation.file?.originalName,
+          contentType: variation.file?.contentType,
+          creativeId: creative.id,
+          variationId: variation.id
+        });
       }
-      throw new Error("Failed to fetch files");
     }
     
-    const files: FileMeta[] = await res.json();
-    return files.map(f => ({
-      id: f.storageName,
-      name: f.originalName,
-      title: f.title,
-      details: f.details,
-      project: f.project,
-      tags: f.tags,
-      content: undefined,
-      description: f.details,
-      createdAt: new Date(f.uploadedAt).getTime(),
-      updatedAt: new Date(f.uploadedAt).getTime(),
-      originalName: f.originalName,
-      contentType: f.contentType
+    return playables;
+  }
+
+  async getCreativesWithVariations(): Promise<CreativeWithVariations[]> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    
+    const creatives = await this.apiClient.getCreatives();
+    return creatives.map(c => ({
+      id: c.id,
+      title: c.title,
+      details: c.details,
+      project: c.project,
+      tags: c.tags,
+      createdAt: new Date(c.createdAt).getTime(),
+      variations: c.variations.map(v => ({
+        id: v.id,
+        title: v.title,
+        createdAt: new Date(v.createdAt).getTime(),
+        file: v.file ? {
+          originalName: v.file.originalName,
+          contentType: v.file.contentType
+        } : undefined,
+        screenshotFile: v.screenshotFile ? {
+          storageName: v.screenshotFile.storageName,
+          originalName: v.screenshotFile.originalName
+        } : undefined
+      }))
     }));
   }
 
   async getPlayableContent(id: string): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/files/${id}`);
-    if (!res.ok) throw new Error("Failed to fetch content");
-    return await res.text();
+    // Parse composite ID (creativeId_variationId_storageName)
+    const storageNameMatch = id.match(/([a-f0-9\-]+)$/);
+    if (!storageNameMatch) throw new Error("Invalid playable ID format");
+    const storageName = storageNameMatch[1];
+    return this.apiClient.getFileAsText(storageName);
   }
 
   async getPlayableById(id: string): Promise<PlayableAdData | null> {
@@ -247,151 +260,124 @@ export class PortfolioService {
     }
   }
 
+  async createCreative(title: string, details?: string, project?: string, tags?: string[]): Promise<Creative> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.createCreative({ title, details, project, tags });
+  }
+
+  async updateCreative(creativeId: number, title?: string, details?: string, project?: string, tags?: string[]): Promise<Creative> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.updateCreative(creativeId, { title, details, project, tags });
+  }
+
   async uploadPlayable(name: string, content: string, description?: string, project?: string, tags?: string[]): Promise<PlayableAdData> {
-    if (!this.token) throw new Error("Not authenticated");
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
     
+    // Create creative first
+    const creative = await this.createCreative(name, description, project, tags);
+    
+    // Upload variation with file
     const blob = new Blob([content], { type: "text/html" });
-    const formData = new FormData();
-    formData.append("file", blob, name.endsWith(".html") ? name : `${name}.html`);
-    if (description) formData.append("details", description);
-    if (name) formData.append("title", name);
-    if (project) formData.append("project", project);
-    if (tags && tags.length > 0) formData.append("tags", tags.join(","));
+    const file = new File([blob], name.endsWith(".html") ? name : `${name}.html`, { type: "text/html" });
+    const variation = await this.apiClient.uploadVariation(creative.id, file, name);
     
-    const res = await fetch(`${this.baseUrl}/api/files/upload`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${this.token}` },
-      body: formData
-    });
-    
-    if (!res.ok) throw new Error("Upload failed");
-    
-    const f: FileMeta = await res.json();
     return {
-      id: f.storageName,
-      name: f.originalName,
-      title: f.title,
-      details: f.details,
-      project: f.project,
-      tags: f.tags,
+      id: `${creative.id}_${variation.id}`,
+      name: variation.title,
+      title: creative.title,
+      details: creative.details,
+      project: creative.project,
+      tags: creative.tags,
       content: content,
       description: description,
-      createdAt: new Date(f.uploadedAt).getTime(),
-      updatedAt: new Date(f.uploadedAt).getTime(),
-      originalName: f.originalName,
-      contentType: f.contentType
+      createdAt: new Date(creative.createdAt).getTime(),
+      updatedAt: new Date(variation.createdAt).getTime(),
+      creativeId: creative.id,
+      variationId: variation.id
     };
   }
 
-  async uploadFile(file: File, title?: string, details?: string, project?: string, tags?: string[]): Promise<FileMeta> {
-    if (!this.token) throw new Error("Not authenticated");
-    
-    const formData = new FormData();
-    formData.append("file", file);
-    if (title) formData.append("title", title);
-    if (details) formData.append("details", details);
-    if (project) formData.append("project", project);
-    if (tags && tags.length > 0) formData.append("tags", tags.join(","));
-    
-    const res = await fetch(`${this.baseUrl}/api/files/upload`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${this.token}` },
-      body: formData
-    });
-    
-    if (!res.ok) throw new Error("Upload failed");
-    
-    return await res.json();
+  async uploadFile(file: File): Promise<FileMeta> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.uploadFile(file);
   }
 
-  async getProjects(): Promise<any[]> {
-    // If not authenticated, return an empty list - projects are user-scoped
-    if (!this.token) return [];
+  async uploadScreenshot(screenshotBlob: Blob, creativeId: number, variationId: number): Promise<number> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    const file = new File([screenshotBlob], "screenshot.jpg", { type: "image/jpeg" });
+    const result = await this.apiClient.uploadScreenshot(creativeId, variationId, file);
+    return result.screenshotFileId;
+  }
 
-    const res = await fetch(`${this.baseUrl}/api/projects`, {
-      headers: { Authorization: `Bearer ${this.token}` }
-    });
+  async uploadVariation(creativeId: number, file: File, title?: string): Promise<Variation> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.uploadVariation(creativeId, file, title);
+  }
 
-    if (!res.ok) throw new Error("Failed to fetch projects");
-
-    const projects = await res.json();
-    // Backend returns owner information; map to frontend-friendly shape
-    return projects.map((p: any) => ({ id: p.Id || p.id, name: p.Name || p.name, shortName: p.ShortName || p.shortName, appStore: p.AppStore || p.appStore, googlePlay: p.GooglePlay || p.googlePlay }));
+  async getProjects(): Promise<Project[]> {
+    if (!this.isAuthenticated()) return [];
+    return this.apiClient.getProjects();
   }
 
   async saveProject(project: any): Promise<void> {
-    if (!this.token) throw new Error("Not authenticated");
-
-    const res = await fetch(`${this.baseUrl}/api/projects`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.token}`
-      },
-      body: JSON.stringify(project)
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Failed to save project");
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    
+    if (project.id) {
+      const { id, ...updateData } = project;
+      await this.apiClient.updateProject(id, updateData);
+    } else {
+      await this.apiClient.createProject(project);
     }
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    if (!this.token) throw new Error("Not authenticated");
-
-    const res = await fetch(`${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${this.token}`
-      }
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Failed to delete project");
-    }
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    await this.apiClient.deleteProject(projectId);
   }
 
   async updatePlayable(id: string, title: string, details: string, projectId: string, tags: string[]): Promise<PlayableAdData> {
-    if (!this.token) throw new Error("Not authenticated");
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
     
-    const updatePayload = {
-      Title: title,
-      Details: details,
-      Project: projectId,
-      Tags: tags
-    };
-
-    const res = await fetch(`${this.baseUrl}/api/files/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.token}`
-      },
-      body: JSON.stringify(updatePayload)
+    // Parse composite ID to get creativeId
+    const creativeIdMatch = id.match(/^(\d+)/);
+    if (!creativeIdMatch) throw new Error("Invalid playable ID format");
+    const creativeId = parseInt(creativeIdMatch[1], 10);
+    
+    const updatedCreative = await this.apiClient.updateCreative(creativeId, {
+      title,
+      details,
+      project: projectId,
+      tags
     });
-
-    if (!res.ok) throw new Error("Failed to update playable");
-
-    const f: FileMeta = await res.json();
+    
+    // Return first variation as PlayableAdData
+    const variation = updatedCreative.variations[0];
+    if (!variation) throw new Error("No variations found");
+    
     return {
-      id: f.storageName,
-      name: f.originalName,
-      title: f.title,
-      details: f.details,
-      project: f.project,
-      tags: f.tags,
-      description: details,
-      createdAt: new Date(f.uploadedAt).getTime(),
-      updatedAt: new Date(f.uploadedAt).getTime(),
-      originalName: f.originalName,
-      contentType: f.contentType
+      id: `${creativeId}_${variation.id}`,
+      name: variation.title,
+      title: updatedCreative.title,
+      details: updatedCreative.details,
+      project: updatedCreative.project,
+      tags: updatedCreative.tags,
+      createdAt: new Date(updatedCreative.createdAt).getTime(),
+      updatedAt: new Date(variation.createdAt).getTime(),
+      creativeId: creativeId,
+      variationId: variation.id
     };
   }
 
   async deletePlayable(id: string): Promise<void> {
-    throw new Error(`Delete not supported by backend. (Attempted to delete ${id})`);
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    
+    // Parse composite ID to get creativeId and variationId
+    const match = id.match(/^(\d+)_(\d+)/);
+    if (!match) throw new Error("Invalid playable ID format");
+    const creativeId = parseInt(match[1], 10);
+    const variationId = parseInt(match[2], 10);
+    
+    await this.apiClient.deleteVariation(creativeId, variationId);
   }
 
   async getPlayableByShortLink(shortLink: string): Promise<PlayableAdData | null> {
@@ -415,7 +401,7 @@ export class PortfolioService {
 
   async signOut(): Promise<void> {
     this.currentUser = null;
-    this.token = null;
+    this.apiClient.setToken(null);
     localStorage.removeItem("authToken");
     localStorage.removeItem("authUser");
     // @ts-ignore

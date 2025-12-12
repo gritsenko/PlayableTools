@@ -142,55 +142,81 @@ export class SaveCreativeModal extends ComponentBase {
       const tagList = this.tags.split(/[\s,]+/).filter(t => t.length > 0);
       
       if (this.isNew) {
-        // Create new
-        const result = await this.portfolioService.uploadPlayable(
+        // Create new creative with variation
+        const playable = await this.portfolioService.uploadPlayable(
           this.creativeTitle,
           this.htmlContent,
-          "", // description
-          "", // project
+          "",
+          "",
           tagList
         );
         
-        // Upload screenshot if possible (as a separate file for now, maybe linked by name/tag)
-        if (this.screenshotBlob) {
-            const screenshotFile = new File([this.screenshotBlob], `${this.creativeTitle}_thumb.png`, { type: "image/png" });
-            await this.portfolioService.uploadFile(
-                screenshotFile,
-                `${this.creativeTitle} Thumbnail`,
-                "Thumbnail for " + result.id,
-                "",
-                [...tagList, "thumbnail", `parent:${result.id}`]
-            );
+        // Upload screenshot if available
+        if (this.screenshotBlob && playable.creativeId && playable.variationId) {
+          const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
+          await this.portfolioService.uploadScreenshot(
+            jpgBlob,
+            playable.creativeId,
+            playable.variationId
+          );
         }
       } else if (this.selectedId) {
-        // Update existing
-        await this.portfolioService.uploadPlayable(
-          this.creativeTitle,
-          this.htmlContent,
-          "", 
-          "", 
-          tagList
-        );
-         if (this.screenshotBlob) {
-            const screenshotFile = new File([this.screenshotBlob], `${this.creativeTitle}_thumb.png`, { type: "image/png" });
-            await this.portfolioService.uploadFile(
-                screenshotFile,
-                `${this.creativeTitle} Thumbnail`,
-                "Thumbnail",
-                "",
-                [...tagList, "thumbnail"]
-            );
+        // Update existing creative
+        const match = this.selectedId.match(/^(\d+)/);
+        if (match) {
+          const creativeId = parseInt(match[1], 10);
+          await this.portfolioService.updateCreative(
+            creativeId,
+            this.creativeTitle,
+            "",
+            "",
+            tagList
+          );
         }
       }
 
       this.close();
-      // Notify parent or reload?
-      window.location.reload(); // Simple way to refresh list if needed, or just close.
+      window.location.reload();
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     } finally {
       this.isSaving = false;
     }
+  }
+
+  private async convertBlobToJpg(blob: Blob): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Failed to get canvas context"));
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob(
+            (jpgBlob) => {
+              if (jpgBlob) {
+                resolve(jpgBlob);
+              } else {
+                reject(new Error("Failed to convert to JPG"));
+              }
+            },
+            "image/jpeg",
+            0.85 // Quality 85%
+          );
+        };
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error("Failed to read blob"));
+      reader.readAsDataURL(blob);
+    });
   }
 
   render() {
