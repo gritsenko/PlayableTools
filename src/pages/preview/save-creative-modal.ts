@@ -175,6 +175,7 @@ export class SaveCreativeModal extends ComponentBase {
         }
       }
 
+      (window as any).isSavingPlayable = true;
       this.close();
       window.location.reload();
     } catch (e) {

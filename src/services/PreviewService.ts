@@ -91,8 +91,10 @@ export class PreviewService {
 
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
   private _uploadedContent: string | null = null;
+  private _uploadedFileName: string | null = null;
   private _uploadedListeners = new Set<(content: string | null) => void>();
   private _lastUploadedSizeBytes: number | undefined;
+  private _portfolioPlayableId: string | null = null;
   
   // ZIP preview session metadata served through a dedicated service worker
   private _zipSessionId: string | null = null;
@@ -120,6 +122,26 @@ export class PreviewService {
 
   getUploadedContent(): string | null {
     return this._uploadedContent;
+  }
+
+  getUploadedFileName(): string | null {
+    return this._uploadedFileName;
+  }
+
+  setUploadedFileName(name: string | null): void {
+    this._uploadedFileName = name;
+  }
+
+  getPortfolioPlayableId(): string | null {
+    return this._portfolioPlayableId;
+  }
+
+  setPortfolioPlayableId(id: string | null): void {
+    this._portfolioPlayableId = id;
+  }
+
+  hasUnsavedChanges(): boolean {
+    return !!this._uploadedFileName && !this._portfolioPlayableId;
   }
 
   onUploadedContentChange(cb: (content: string | null) => void): () => void {

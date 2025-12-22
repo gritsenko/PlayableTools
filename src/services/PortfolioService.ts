@@ -221,6 +221,7 @@ export class PortfolioService {
         title: v.title,
         createdAt: new Date(v.createdAt).getTime(),
         file: v.file ? {
+          storageName: v.file.storageName,
           originalName: v.file.originalName,
           contentType: v.file.contentType
         } : undefined,
@@ -230,6 +231,11 @@ export class PortfolioService {
         } : undefined
       }))
     }));
+  }
+
+  async deleteCreative(id: number): Promise<void> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    await this.apiClient.deleteCreative(id);
   }
 
   async getPlayableContent(id: string): Promise<string> {

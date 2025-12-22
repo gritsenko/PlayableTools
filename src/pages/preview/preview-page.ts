@@ -31,6 +31,8 @@ export class PreviewPage extends ComponentBase {
       }
     }
     window.removeEventListener("popstate", this.handlePopState);
+    window.removeEventListener("beforeunload", this._onBeforeUnload);
+    window.removeEventListener("hashchange", this._onHashChange);
     // playable-screen-lock handled inside previewer
   }
 
@@ -47,6 +49,34 @@ export class PreviewPage extends ComponentBase {
   isUploading: boolean = false;
   isLoadingPortfolioPlayable: boolean = false;
   portfolioPlayableId: string | null = null;
+
+  get hasUnsavedChanges(): boolean {
+    return this.previewService.hasUnsavedChanges();
+  }
+
+  private _onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (this.hasUnsavedChanges && !(window as any).isSavingPlayable) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  };
+
+  private _onHashChange = (e: HashChangeEvent) => {
+    if (this.hasUnsavedChanges && !(window as any).isSavingPlayable) {
+      const oldHash = new URL(e.oldURL).hash;
+      const newHash = new URL(e.newURL).hash;
+
+      if (newHash !== oldHash && !newHash.startsWith("#preview")) {
+        if (!confirm("You have unsaved changes. Are you sure you want to leave?")) {
+          window.removeEventListener("hashchange", this._onHashChange);
+          window.location.hash = oldHash;
+          setTimeout(() => {
+            window.addEventListener("hashchange", this._onHashChange);
+          }, 0);
+        }
+      }
+    }
+  };
 
   connectedCallback() {
     super.connectedCallback();
@@ -72,16 +102,27 @@ export class PreviewPage extends ComponentBase {
       // Clear preview state - user will upload or select from recent
       this.isEncoded = false;
       this.decodedUrl = "";
+      
+      // Check if there's already a filename in PreviewService (e.g. from PortfolioPage)
+      const serviceFileName = this.previewService.getUploadedFileName();
+      if (serviceFileName) {
+        this.uploadedFileName = serviceFileName;
+        this.portfolioPlayableId = this.previewService.getPortfolioPlayableId();
+      }
     }
     
     // Listen for browser navigation (back/forward)
     window.addEventListener("popstate", this.handlePopState);
+    window.addEventListener("beforeunload", this._onBeforeUnload);
+    window.addEventListener("hashchange", this._onHashChange);
 
     // playable-screen-lock is handled inside the previewer component
   }
 
   private async loadPortfolioPlayable(playableId: string) {
     this.isLoadingPortfolioPlayable = true;
+    this.portfolioPlayableId = playableId;
+    this.previewService.setPortfolioPlayableId(playableId);
     this.requestUpdate();
     
     try {
@@ -110,6 +151,8 @@ export class PreviewPage extends ComponentBase {
 
   handlePopState = () => {
     // Handle back/forward navigation
+    if (this.hasUnsavedChanges) return;
+    
     // For now, just clear the preview state on navigation
     this.isEncoded = false;
     this.decodedUrl = "";
@@ -125,6 +168,7 @@ export class PreviewPage extends ComponentBase {
     this.isUploading = true;
     this.uploadError = "";
     this.uploadedFileName = "";
+    this.portfolioPlayableId = null;
     
     // Clear any existing state when uploading
     this.isEncoded = false;
@@ -143,6 +187,8 @@ export class PreviewPage extends ComponentBase {
         await this.previewService.handleFileUpload(file);
       }
       this.uploadedFileName = file.name;
+      this.previewService.setUploadedFileName(file.name);
+      this.previewService.setPortfolioPlayableId(null);
     } catch (err: any) {
       this.uploadError = err.message || String(err);
     }
@@ -156,7 +202,9 @@ export class PreviewPage extends ComponentBase {
 
   clearUploadedContent() {
     this.previewService.clearUploadedContent();
+    this.previewService.setUploadedFileName(null);
     this.uploadedFileName = "";
+    this.portfolioPlayableId = null;
     this.uploadError = "";
     this.requestUpdate();
   }
@@ -199,7 +247,9 @@ export class PreviewPage extends ComponentBase {
                     @click=${() => {
                       // Clear all content and return to input mode
                       this.previewService.clearUploadedContent();
+                      this.previewService.setUploadedFileName(null);
                       this.uploadedFileName = "";
+                      this.portfolioPlayableId = null;
                       this.uploadError = "";
                       this.isEncoded = false;
                       this.decodedUrl = "";
