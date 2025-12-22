@@ -286,7 +286,7 @@ export class PortfolioPage extends ComponentBase {
   }
 
   handleShowProjects = () => {
-    this.currentView = "projects";
+    window.location.hash = "#/projects";
   };
 
   getScreenshotUrl = (screenshotStorageName: string): string => {
@@ -507,10 +507,6 @@ export class PortfolioPage extends ComponentBase {
               </div>
             `
           : ""}
-
-        <div class="mb-8 flex justify-between items-center">
-          <h3 class="text-xl font-bold text-slate-900 dark:text-white">Your Playable Ads</h3>
-        </div>
 
         ${this.isLoading && this.creatives.length === 0
           ? html`
