@@ -42,6 +42,9 @@ export class ProjectEditor extends ComponentBase {
   @state()
   isLoading: boolean = false;
 
+  @state()
+  titleBlurred: boolean = false;
+
   async connectedCallback() {
     super.connectedCallback();
     
@@ -80,6 +83,10 @@ export class ProjectEditor extends ComponentBase {
 
   handleNameInput = (e: Event) => {
     this.formData.name = (e.target as HTMLInputElement).value;
+  };
+
+  handleNameBlur = () => {
+    this.titleBlurred = true;
   };
 
   handleShortNameInput = (e: Event) => {
@@ -163,6 +170,7 @@ export class ProjectEditor extends ComponentBase {
                 placeholder="My App Project"
                 .value=${this.formData.name}
                 @input=${this.handleNameInput}
+                @blur=${this.handleNameBlur}
                 class="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
               />
             </div>
@@ -183,9 +191,20 @@ export class ProjectEditor extends ComponentBase {
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                App Store Link (optional):
-              </label>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  App Store Link (optional):
+                </label>
+                ${this.formData.name && this.titleBlurred
+                  ? html`<a
+                      href="https://apps.apple.com/us/iphone/search?term=${encodeURIComponent(this.formData.name)}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-xs text-primary hover:underline font-medium"
+                      >Search App Store →</a
+                    >`
+                  : ""}
+              </div>
               <input
                 type="url"
                 placeholder="https://apps.apple.com/app/..."
@@ -196,9 +215,20 @@ export class ProjectEditor extends ComponentBase {
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Google Play Link (optional):
-              </label>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Google Play Link (optional):
+                </label>
+                ${this.formData.name && this.titleBlurred
+                  ? html`<a
+                      href="https://play.google.com/store/search?q=${encodeURIComponent(this.formData.name)}&c=apps"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-xs text-primary hover:underline font-medium"
+                      >Search Google Play →</a
+                    >`
+                  : ""}
+              </div>
               <input
                 type="url"
                 placeholder="https://play.google.com/store/apps/details?id=..."
