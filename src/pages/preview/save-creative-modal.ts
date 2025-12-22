@@ -1,5 +1,6 @@
 import { ComponentBase, customElement, html, inject, state } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
+import type { Project } from "../../services/ApiClient";
 
 @customElement("save-creative-modal")
 export class SaveCreativeModal extends ComponentBase {
@@ -9,6 +10,8 @@ export class SaveCreativeModal extends ComponentBase {
   @state() private creatives: PlayableAdData[] = [];
   @state() private selectedId: string | null = null;
   @state() private isNew: boolean = true;
+  @state() private projects: Project[] = [];
+  @state() private selectedProject: string = "";
   
   @state() private creativeTitle: string = "";
   @state() private tags: string = "";
@@ -98,6 +101,7 @@ export class SaveCreativeModal extends ComponentBase {
     try {
       if (this.portfolioService.isAuthenticated()) {
         this.creatives = await this.portfolioService.getPlayables();
+        this.projects = await this.portfolioService.getProjects();
       }
     } catch (e) {
       console.error("Failed to load creatives", e);
@@ -120,6 +124,7 @@ export class SaveCreativeModal extends ComponentBase {
     this.selectedId = null;
     this.creativeTitle = this.extractTitle(this.htmlContent) || this.fileName.replace(/\.html$/i, "");
     this.tags = "";
+    this.selectedProject = "";
   }
 
   private selectCreative(c: PlayableAdData) {
@@ -127,6 +132,7 @@ export class SaveCreativeModal extends ComponentBase {
     this.selectedId = c.id;
     this.creativeTitle = c.title;
     this.tags = c.tags.join(" ");
+    this.selectedProject = c.project || "";
   }
 
   private async save() {
@@ -147,7 +153,7 @@ export class SaveCreativeModal extends ComponentBase {
           this.creativeTitle,
           this.htmlContent,
           "",
-          "",
+          this.selectedProject || "",
           tagList
         );
         
@@ -169,7 +175,7 @@ export class SaveCreativeModal extends ComponentBase {
             creativeId,
             this.creativeTitle,
             "",
-            "",
+            this.selectedProject || "",
             tagList
           );
         }
@@ -241,14 +247,15 @@ export class SaveCreativeModal extends ComponentBase {
               <div class="modal-grid">
                 <!-- Left Side: List -->
                 <div class="list-section">
-                  <h5>Select Existing Creative</h5>
                   <div class="list-group">
+                    <div class="list-category">NEW CREATIVE</div>
                     <div class="list-item ${this.isNew ? 'selected' : ''}" @click=${this.selectNew}>
                       <div class="new-item">
                         <span class="plus-icon">+</span>
-                        <strong>New Playable Ad</strong>
+                        <strong>Create New Playable Ad</strong>
                       </div>
                     </div>
+                    <div class="list-category">UPDATE EXISTING CREATIVE</div>
                     ${this.creatives.map(c => html`
                       <div class="list-item ${this.selectedId === c.id ? 'selected' : ''}" @click=${() => this.selectCreative(c)}>
                         <strong>${c.title}</strong><br>
@@ -267,6 +274,13 @@ export class SaveCreativeModal extends ComponentBase {
                   <label>
                     Tags
                     <input type="text" .value=${this.tags} @input=${(e: any) => this.tags = e.target.value} placeholder="space or comma separated">
+                  </label>
+                  <label>
+                    Project
+                    <select .value=${this.selectedProject} @change=${(e: any) => this.selectedProject = e.target.value}>
+                      <option value="">-- No Project --</option>
+                      ${this.projects.map(p => html`<option value=${p.id}>${p.name}</option>`)}
+                    </select>
                   </label>
                   <label>Preview</label>
                   <div class="preview-container">
@@ -387,6 +401,19 @@ export class SaveCreativeModal extends ComponentBase {
           cursor: pointer;
           transition: all 0.15s ease;
         }
+        .list-category {
+          font-size: 0.65rem;
+          font-weight: 700;
+          color: #94a3b8;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-top: 1rem;
+          margin-bottom: 0.5rem;
+          padding: 0 0.5rem;
+        }
+        .list-category:first-child {
+          margin-top: 0;
+        }
         .list-item:hover {
           background: #f8fafc;
           border-color: #cbd5e1;
@@ -435,6 +462,21 @@ export class SaveCreativeModal extends ComponentBase {
         .form-section input:disabled {
           background: #f3f4f6;
           color: #6b7280;
+        }
+        .form-section select {
+          width: 100%;
+          padding: 0.5rem 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
+          background: white;
+          cursor: pointer;
+        }
+        .form-section select:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         .preview-container {
           margin-top: 0.5rem;
@@ -550,6 +592,9 @@ export class SaveCreativeModal extends ComponentBase {
           .list-item strong {
             color: #f1f5f9;
           }
+          .list-category {
+            color: #64748b;
+          }
           .form-section label {
             color: #e2e8f0;
           }
@@ -561,6 +606,11 @@ export class SaveCreativeModal extends ComponentBase {
           .form-section input:disabled {
             background: #1e293b;
             color: #64748b;
+          }
+          .form-section select {
+            background: #0f172a;
+            border-color: #334155;
+            color: #f1f5f9;
           }
           .preview-image {
             border-color: #334155;
