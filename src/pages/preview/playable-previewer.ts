@@ -456,74 +456,54 @@ export class PlayablePreviewer extends ComponentBase {
     
     return html`
       <div class="flex flex-col gap-8">
-        <!-- Controls Bar -->
-        <div class="flex items-center gap-6 flex-wrap">
-          <!-- Validator Select -->
-          <div class="flex items-center gap-2">
-            <label for="preset-select" class="text-sm font-medium text-slate-500 dark:text-slate-400">Validator:</label>
-            <div class="relative">
-              <select 
-                id="preset-select"
-                @change="${this.handlePresetChange.bind(this)}" 
-                class="w-48 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
-                title="${this.currentPreset?.description || ''}"
-                ?disabled="${this.isPresetSwitching}"
-              >
-                ${this.availablePresets.map(preset =>
-                  html`<option 
-                    value="${preset.id}" 
-                    ?selected="${preset.id === this.currentPreset?.id}"
-                  >
-                    ${preset.name}
-                  </option>`
-                )}
-              </select>
-              <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
-            </div>
-            ${this.isPresetSwitching ? html`
-              <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
-            ` : ''}
-          </div>
-          
-          <!-- Device Select -->
-          <div class="flex items-center gap-2">
-            <label for="device-select" class="text-sm font-medium text-slate-500 dark:text-slate-400">Device:</label>
-            <div class="relative">
-              <select 
-                id="device-select" 
-                @change="${this.handleDeviceChange.bind(this)}" 
-                class="w-48 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              >
-                ${this.devices.map((d, i) =>
-                  d.disabled
-                    ? html`<option disabled> ${d.name} </option>`
-                    : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${d.name}</option>`
-                )}
-              </select>
-              <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
-            </div>
-          </div>
-          
-          <!-- Info -->
-          ${this.currentPreset ? html`
-            <div class="ml-auto text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <span>
-                Max size: ${this.currentPreset.maxFileSizeMB}MB
-                ${this.currentPreset.injectScripts.length > 0 ? html`• Scripts: ${this.currentPreset.injectScripts.length}` : ''}
-              </span>
-              ${this.presetSuccessMessage ? html`
-                <span class="text-green-500 font-medium animate-fade-in-out">
-                  ${this.presetSuccessMessage}
-                </span>
-              ` : ''}
-            </div>
-          ` : ''}
-        </div>
-        
         <div class="grid grid-cols-1 ${shouldStackPreview ? '' : 'lg:grid-cols-2'} gap-8 items-start">
           <!-- Validation Results -->
           <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Validation Results</h2>
+            <div class="flex items-start justify-between gap-4 mb-6">
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Validation Results</h2>
+
+              <div class="flex flex-col items-end gap-2">
+                <div class="flex items-center gap-2">
+                  <label for="preset-select" class="text-sm font-medium text-slate-500 dark:text-slate-400">Validator:</label>
+                  <div class="relative">
+                    <select 
+                      id="preset-select"
+                      @change="${this.handlePresetChange.bind(this)}" 
+                      class="w-48 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
+                      title="${this.currentPreset?.description || ''}"
+                      ?disabled="${this.isPresetSwitching}"
+                    >
+                      ${this.availablePresets.map(preset =>
+                        html`<option 
+                          value="${preset.id}" 
+                          ?selected="${preset.id === this.currentPreset?.id}"
+                        >
+                          ${preset.name}
+                        </option>`
+                      )}
+                    </select>
+                    <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
+                  </div>
+                  ${this.isPresetSwitching ? html`
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                  ` : ''}
+                </div>
+
+                ${this.currentPreset ? html`
+                  <div class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <span>
+                      Max size: ${this.currentPreset.maxFileSizeMB}MB
+                      ${this.currentPreset.injectScripts.length > 0 ? html`• Scripts: ${this.currentPreset.injectScripts.length}` : ''}
+                    </span>
+                    ${this.presetSuccessMessage ? html`
+                      <span class="text-green-500 font-medium animate-fade-in-out">
+                        ${this.presetSuccessMessage}
+                      </span>
+                    ` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
             
             ${this.validationResults && this.validationResults.categories.length > 0 ? html`
               <div class="space-y-6">
@@ -565,35 +545,54 @@ export class PlayablePreviewer extends ComponentBase {
           <!-- Phone Preview -->
           <div class="flex flex-col items-center">
             <!-- Simulator Controls -->
-            <div class="flex items-center justify-center gap-2 mb-4" style="width: ${width + 20}px;">
-              <button 
-                @click=${() => this.toggleOrientation()} 
-                title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}"
-                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <span class="material-icons-outlined">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
-              </button>
-              <button 
-                @click=${() => this._toggleLock()} 
-                title="Lock / Unlock"
-                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <span class="material-icons-outlined">${this._locked ? 'lock' : 'lock_open'}</span>
-              </button>
-              <button 
-                @click=${() => this._toggleMute()} 
-                title="${this._muted ? 'Unmute audio' : 'Mute audio'}"
-                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <span class="material-icons-outlined">${this._muted ? 'volume_off' : 'volume_up'}</span>
-              </button>
-              <button 
-                @click=${() => this._captureScreenshot()} 
-                title="Capture screenshot"
-                class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <span class="material-icons-outlined">photo_camera</span>
-              </button>
+            <div class="flex items-center justify-between gap-2 mb-4" style="width: ${width + 20}px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="relative">
+                  <select 
+                    aria-label="Device"
+                    @change="${this.handleDeviceChange.bind(this)}" 
+                    class="w-40 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  >
+                    ${this.devices.map((d, i) =>
+                      d.disabled
+                        ? html`<option disabled> ${d.name} </option>`
+                        : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${d.name}</option>`
+                    )}
+                  </select>
+                  <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-center gap-2">
+                <button 
+                  @click=${() => this.toggleOrientation()} 
+                  title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
+                </button>
+                <button 
+                  @click=${() => this._toggleLock()} 
+                  title="Lock / Unlock"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">${this._locked ? 'lock' : 'lock_open'}</span>
+                </button>
+                <button 
+                  @click=${() => this._toggleMute()} 
+                  title="${this._muted ? 'Unmute audio' : 'Mute audio'}"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">${this._muted ? 'volume_off' : 'volume_up'}</span>
+                </button>
+                <button 
+                  @click=${() => this._captureScreenshot()} 
+                  title="Capture screenshot"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">photo_camera</span>
+                </button>
+              </div>
             </div>
             
             <!-- Phone Frame -->

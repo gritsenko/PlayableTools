@@ -75,9 +75,9 @@ export class ApiClient {
   }
 
   async getCreative(id: number): Promise<Creative> {
-    if (!this.token) throw new Error("Not authenticated");
+    // Allow anonymous access for reading creatives (public viewing of playables)
     const response = await fetch(`${this.baseUrl}/api/creatives/${id}`, {
-      headers: this.getHeaders()
+      headers: this.getHeaders(false) // Don't include auth for read operations
     });
     return this.handleResponse(response);
   }
@@ -218,6 +218,14 @@ export class ApiClient {
     if (!this.token) throw new Error("Not authenticated");
     const response = await fetch(`${this.baseUrl}/api/projects`, {
       headers: this.getHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async getProject(id: string): Promise<Project> {
+    // Allow anonymous access for reading projects (public viewing of project info)
+    const response = await fetch(`${this.baseUrl}/api/projects/${encodeURIComponent(id)}`, {
+      headers: this.getHeaders(false) // Don't include auth for read operations
     });
     return this.handleResponse(response);
   }

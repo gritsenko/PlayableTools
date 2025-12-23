@@ -234,10 +234,8 @@ export class PortfolioService {
   }
 
   async getCreativeById(id: number): Promise<CreativeWithVariations | null> {
-    if (!this.isAuthenticated()) throw new Error("Not authenticated");
-    
-    const creatives = await this.apiClient.getCreatives();
-    const creative = creatives.find(c => c.id === id);
+    // Use individual getCreative endpoint which supports anonymous access
+    const creative = await this.apiClient.getCreative(id);
     
     if (!creative) return null;
     
@@ -280,8 +278,7 @@ export class PortfolioService {
 
   async getPlayableById(id: string): Promise<PlayableAdData | null> {
     try {
-      if (!this.isAuthenticated()) throw new Error("Not authenticated");
-
+      // Allow anonymous access for viewing playables
       // Expected preview id format from PortfolioPage: `${creativeId}_${variationId}_${storageName}`
       const match = id.match(/^(\d+)_(\d+)_([a-f0-9\-]+)$/i);
       if (!match) throw new Error("Invalid playable ID format");
@@ -376,6 +373,15 @@ export class PortfolioService {
   async getProjects(): Promise<Project[]> {
     if (!this.isAuthenticated()) return [];
     return this.apiClient.getProjects();
+  }
+
+  async getProjectById(id: string): Promise<Project | null> {
+    // Allow anonymous access for reading project details (needed for playable preview)
+    try {
+      return await this.apiClient.getProject(id);
+    } catch {
+      return null;
+    }
   }
 
   async saveProject(project: any): Promise<void> {

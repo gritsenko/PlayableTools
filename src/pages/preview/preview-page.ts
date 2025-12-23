@@ -152,11 +152,14 @@ export class PreviewPage extends ComponentBase {
 
         const projectKey = (playable.project ?? "").trim();
         if (projectKey.length > 0) {
-          const projects = await this.portfolioService.getProjects();
-          const matched = projects.find(p =>
-            p.id === projectKey || p.shortName === projectKey || p.name === projectKey
-          );
-          this.portfolioProjectTitle = matched?.name ?? projectKey;
+          try {
+            // Try to fetch the project by ID for its full name
+            const project = await this.portfolioService.getProjectById(projectKey);
+            this.portfolioProjectTitle = project?.name ?? projectKey;
+          } catch {
+            // If project fetch fails (not found or not authorized), use the key as title
+            this.portfolioProjectTitle = projectKey;
+          }
         } else {
           this.portfolioProjectTitle = null;
         }
