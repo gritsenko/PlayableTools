@@ -233,6 +233,38 @@ export class PortfolioService {
     }));
   }
 
+  async getCreativeById(id: number): Promise<CreativeWithVariations | null> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    
+    const creatives = await this.apiClient.getCreatives();
+    const creative = creatives.find(c => c.id === id);
+    
+    if (!creative) return null;
+    
+    return {
+      id: creative.id,
+      title: creative.title,
+      details: creative.details,
+      project: creative.project,
+      tags: creative.tags,
+      createdAt: new Date(creative.createdAt).getTime(),
+      variations: creative.variations.map(v => ({
+        id: v.id,
+        title: v.title,
+        createdAt: new Date(v.createdAt).getTime(),
+        file: v.file ? {
+          storageName: v.file.storageName,
+          originalName: v.file.originalName,
+          contentType: v.file.contentType
+        } : undefined,
+        screenshotFile: v.screenshotFile ? {
+          storageName: v.screenshotFile.storageName,
+          originalName: v.screenshotFile.originalName
+        } : undefined
+      }))
+    };
+  }
+
   async deleteCreative(id: number): Promise<void> {
     if (!this.isAuthenticated()) throw new Error("Not authenticated");
     await this.apiClient.deleteCreative(id);
@@ -248,17 +280,38 @@ export class PortfolioService {
 
   async getPlayableById(id: string): Promise<PlayableAdData | null> {
     try {
-      const content = await this.getPlayableContent(id);
+      if (!this.isAuthenticated()) throw new Error("Not authenticated");
+
+      // Expected preview id format from PortfolioPage: `${creativeId}_${variationId}_${storageName}`
+      const match = id.match(/^(\d+)_(\d+)_([a-f0-9\-]+)$/i);
+      if (!match) throw new Error("Invalid playable ID format");
+      const creativeId = Number(match[1]);
+      const variationId = Number(match[2]);
+      const storageName = match[3];
+
+      const [content, creative] = await Promise.all([
+        this.apiClient.getFileAsText(storageName),
+        this.getCreativeById(creativeId),
+      ]);
+      if (!creative) return null;
+
+      const variation = creative.variations.find(v => v.id === variationId);
+      if (!variation) return null;
+
       return {
-        id: id,
-        name: "Portfolio Playable",
-        title: "Portfolio Playable",
-        details: "",
-        project: "",
-        tags: [],
-        content: content,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
+        id,
+        name: variation.title,
+        title: creative.title,
+        details: creative.details,
+        project: creative.project,
+        tags: creative.tags,
+        content,
+        createdAt: creative.createdAt,
+        updatedAt: variation.createdAt,
+        originalName: variation.file?.originalName,
+        contentType: variation.file?.contentType,
+        creativeId,
+        variationId,
       };
     } catch (error) {
       console.error("Failed to fetch playable by ID:", error);

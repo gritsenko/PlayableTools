@@ -1,7 +1,6 @@
 import { ComponentBase, customElement, html, route, inject, state } from "fw";
-import { PortfolioService, type PlayableAdData, type CreativeWithVariations } from "../../services/PortfolioService";
+import { PortfolioService, type CreativeWithVariations } from "../../services/PortfolioService";
 import { PreviewService } from "../../services/PreviewService";
-import "./playable-editor";
 import "./project-manager";
 
 @customElement("portfolio-page")
@@ -17,6 +16,9 @@ export class PortfolioPage extends ComponentBase {
   creatives: CreativeWithVariations[] = [];
 
   @state()
+  projects: any[] = [];
+
+  @state()
   isAuthenticated = false;
 
   @state()
@@ -24,12 +26,6 @@ export class PortfolioPage extends ComponentBase {
 
   @state()
   errorMessage = "";
-
-  @state()
-  currentView: "list" | "editor" | "projects" = "list";
-
-  @state()
-  selectedPlayable: PlayableAdData | null = null;
 
   @state()
   private openMenuId: number | null = null;
@@ -118,6 +114,7 @@ export class PortfolioPage extends ComponentBase {
     this.errorMessage = "";
 
     try {
+      this.projects = await this.portfolioService.getProjects();
       this.creatives = await this.portfolioService.getCreativesWithVariations();
     } catch (error) {
       console.error("Loading playables error:", error);
@@ -137,16 +134,6 @@ export class PortfolioPage extends ComponentBase {
       this.errorMessage = error instanceof Error ? error.message : "Failed to sign out";
     }
   }
-
-  handleEditorClosed = () => {
-    this.currentView = "list";
-    this.selectedPlayable = null;
-  };
-
-  handlePlayableSaved = () => {
-    this.loadPlayables();
-    this.handleEditorClosed();
-  };
 
   getPlayableDirectLink = (playableId: string): string => {
     const baseUrl = this.portfolioService.getApiBaseUrl();
@@ -172,22 +159,7 @@ export class PortfolioPage extends ComponentBase {
   };
 
   handleEditCreative = (creative: CreativeWithVariations) => {
-    const latestVariation = creative.variations[creative.variations.length - 1];
-    if (latestVariation) {
-      this.selectedPlayable = {
-        id: `${creative.id}_${latestVariation.id}`,
-        name: latestVariation.title,
-        title: creative.title,
-        details: creative.details,
-        project: creative.project,
-        tags: creative.tags,
-        createdAt: creative.createdAt,
-        updatedAt: latestVariation.createdAt,
-        creativeId: creative.id,
-        variationId: latestVariation.id
-      };
-      this.currentView = "editor";
-    }
+    window.location.hash = `#editor/${creative.id}`;
   };
 
   handleCopyCreativeLink = async (creative: CreativeWithVariations) => {
@@ -293,6 +265,11 @@ export class PortfolioPage extends ComponentBase {
     return `${this.portfolioService.getApiBaseUrl()}/api/files/${screenshotStorageName}`;
   };
 
+  private getProjectName = (projectId: string): string => {
+    const project = this.projects.find((p: any) => p.id === projectId);
+    return project?.name || projectId;
+  };
+
   private renderGhostCard() {
     return html`
       <div
@@ -333,7 +310,7 @@ export class PortfolioPage extends ComponentBase {
       >
         <!-- Card Cover / Screenshot -->
         <div
-          class="aspect-video w-full bg-slate-100 dark:bg-slate-800 relative cursor-pointer overflow-hidden"
+          class="aspect-square w-full bg-slate-100 dark:bg-slate-800 relative cursor-pointer overflow-hidden"
           @click=${() => this.handlePreviewCreative(creative)}
         >
           ${screenshotUrl
@@ -348,6 +325,16 @@ export class PortfolioPage extends ComponentBase {
                   <span class="text-xs">No screenshot</span>
                 </div>
               `}
+          
+          <!-- Project Label -->
+          ${creative.project ? html`
+            <div class="absolute top-2 left-2">
+              <span class="px-2.5 py-1 bg-blue-500/90 text-white rounded-full text-xs font-semibold shadow-lg">
+                ${this.getProjectName(creative.project)}
+              </span>
+            </div>
+          ` : ''}
+          
           <!-- Overlay on hover -->
           <div
             class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center"
@@ -460,21 +447,6 @@ export class PortfolioPage extends ComponentBase {
           </section>
         </div>
       `;
-    }
-
-    if (this.currentView === "editor") {
-      return html`
-        <playable-editor
-          .existingPlayable=${this.selectedPlayable}
-          @playable-saved=${this.handlePlayableSaved}
-          @playable-deleted=${this.handlePlayableSaved}
-          @editor-closed=${this.handleEditorClosed}
-        ></playable-editor>
-      `;
-    }
-
-    if (this.currentView === "projects") {
-      return html` <project-manager></project-manager> `;
     }
 
     return html`

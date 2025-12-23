@@ -18,9 +18,22 @@ export class HomePage extends ComponentBase {
           </p>
         </div>
 
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white mb-8">Available Tools:</h2>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white mb-8">Main tools</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          ${this.renderCard(
+            "📂 Portfolio Management",
+            "GitHub integration - Manage and view your portfolio of playable ads from GitHub repositories. Organize and showcase your work.",
+            "#portfolio",
+            "Manage Portfolio"
+          )}
+
+          ${this.renderCard(
+            "📱 Playable Preview",
+            "Multi-device testing - Preview and share your playable ad creations from GitHub on different devices and orientations.",
+            "#preview",
+            "Preview Ads"
+          )}
+
           ${this.renderCard(
             "📤 Publish to Ad Networks",
             "Publishing workflow automation - Streamline the process of deploying your playable ads to various advertising networks.",
@@ -28,6 +41,17 @@ export class HomePage extends ComponentBase {
             "Start Publishing"
           )}
 
+          ${this.renderCard(
+            "📖 CTA SDK Documentation",
+            "Integration guides - Complete guide for integrating the Call-to-Action SDK in your playable ads. Essential for successful publishing.",
+            "#cta-sdk",
+            "View Documentation"
+          )}
+
+        </div>
+
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white mb-8">Extra tools</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           ${this.renderCard(
             "🔄 Base64 Converter",
             "File to Base64 encoding - Convert files and images to Base64 encoding for embedding in your HTML5 playable ads.",
@@ -64,31 +88,10 @@ export class HomePage extends ComponentBase {
           )}
 
           ${this.renderCard(
-            "📖 CTA SDK Documentation",
-            "Integration guides - Complete guide for integrating the Call-to-Action SDK in your playable ads. Essential for successful publishing.",
-            "#cta-sdk",
-            "View Documentation"
-          )}
-
-          ${this.renderCard(
             "✅ Ad Network Requirements",
             "Technical specifications - Stay up-to-date with the specific technical requirements and specifications for different advertising networks.",
             "#validate",
             "Check Requirements"
-          )}
-
-          ${this.renderCard(
-            "📱 Playable Preview",
-            "Multi-device testing - Preview and share your playable ad creations from GitHub on different devices and orientations.",
-            "#preview",
-            "Preview Ads"
-          )}
-
-          ${this.renderCard(
-            "📂 Portfolio Management",
-            "GitHub integration - Manage and view your portfolio of playable ads from GitHub repositories. Organize and showcase your work.",
-            "#portfolio",
-            "Manage Portfolio"
           )}
         </div>
       </div>

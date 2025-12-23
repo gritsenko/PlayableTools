@@ -183,7 +183,7 @@ export class SaveCreativeModal extends ComponentBase {
 
       (window as any).isSavingPlayable = true;
       this.close();
-      window.location.reload();
+      window.location.hash = "#/portfolio";
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     } finally {

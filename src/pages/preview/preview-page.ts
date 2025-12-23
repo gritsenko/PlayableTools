@@ -7,7 +7,7 @@ import {
   fromQuery,
 } from "fw";
 import { PreviewService } from "../../services/PreviewService";
-import { PortfolioService } from "../../services/PortfolioService";
+import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
 
 @customElement("preview-page")
 @route("/preview/:playableId?", {
@@ -49,6 +49,8 @@ export class PreviewPage extends ComponentBase {
   isUploading: boolean = false;
   isLoadingPortfolioPlayable: boolean = false;
   portfolioPlayableId: string | null = null;
+  portfolioPlayableData: PlayableAdData | null = null;
+  portfolioProjectTitle: string | null = null;
 
   get hasUnsavedChanges(): boolean {
     return this.previewService.hasUnsavedChanges();
@@ -123,6 +125,8 @@ export class PreviewPage extends ComponentBase {
     this.isLoadingPortfolioPlayable = true;
     this.portfolioPlayableId = playableId;
     this.previewService.setPortfolioPlayableId(playableId);
+    this.portfolioPlayableData = null;
+    this.portfolioProjectTitle = null;
     this.requestUpdate();
     
     try {
@@ -131,16 +135,32 @@ export class PreviewPage extends ComponentBase {
       
       if (playable && playable.content) {
         console.log(`✅ preview-page: Portfolio playable loaded: ${playable.name}, ${playable.content.length} chars`);
-        // Set content in PreviewService so the previewer can access it
-        this.previewService.setUploadedContent(playable.content);
-        this.uploadedFileName = playable.name || "Portfolio Playable";
+        this.uploadedFileName = playable.title || playable.name || "Portfolio Playable";
+        // Load content into PreviewService using the same pipeline as file uploads (preset processing + validation)
+        await this.previewService.loadHtmlContentFromString(playable.content, this.uploadedFileName);
+        this.portfolioPlayableData = playable;
+
+        const projectKey = (playable.project ?? "").trim();
+        if (projectKey.length > 0) {
+          const projects = await this.portfolioService.getProjects();
+          const matched = projects.find(p =>
+            p.id === projectKey || p.shortName === projectKey || p.name === projectKey
+          );
+          this.portfolioProjectTitle = matched?.name ?? projectKey;
+        } else {
+          this.portfolioProjectTitle = null;
+        }
       } else {
         console.error("❌ preview-page: Playable not found or has no content");
         this.uploadedFileName = "";
+        this.portfolioPlayableData = null;
+        this.portfolioProjectTitle = null;
       }
     } catch (error) {
       console.error("❌ preview-page: Failed to load portfolio playable:", error);
       this.uploadedFileName = "";
+      this.portfolioPlayableData = null;
+      this.portfolioProjectTitle = null;
     } finally {
       this.isLoadingPortfolioPlayable = false;
       this.requestUpdate();
@@ -205,6 +225,8 @@ export class PreviewPage extends ComponentBase {
     this.previewService.setUploadedFileName(null);
     this.uploadedFileName = "";
     this.portfolioPlayableId = null;
+    this.portfolioPlayableData = null;
+    this.portfolioProjectTitle = null;
     this.uploadError = "";
     this.requestUpdate();
   }
@@ -225,6 +247,7 @@ export class PreviewPage extends ComponentBase {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
     const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
     const showInputSections = !hasContent;
+    const isFromPortfolio = this.portfolioPlayableId !== null;
     
     console.log(`🎨 preview-page render: isEncoded=${this.isEncoded}, decodedUrl='${this.decodedUrl.substring(0, 50)}...', hasUploadedContent=${hasUploadedContent}, uploadedFileName='${this.uploadedFileName}'`);
 
@@ -234,7 +257,7 @@ export class PreviewPage extends ComponentBase {
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Playable Ad Preview</h1>
           
           <div class="flex items-center gap-4">
-            ${hasContent
+            ${hasContent && !isFromPortfolio
               ? html`
                   <button
                     @click=${this.triggerSaveToLibrary}
@@ -261,9 +284,62 @@ export class PreviewPage extends ComponentBase {
                     Load New Content
                   </button>
                 `
+              : hasContent && isFromPortfolio
+              ? html`
+                  <button
+                    @click=${() => {
+                      // Clear all content and return to input mode
+                      this.previewService.clearUploadedContent();
+                      this.previewService.setUploadedFileName(null);
+                      this.uploadedFileName = "";
+                      this.portfolioPlayableId = null;
+                      this.portfolioPlayableData = null;
+                      this.portfolioProjectTitle = null;
+                      this.uploadError = "";
+                      this.isEncoded = false;
+                      this.decodedUrl = "";
+                      window.history.pushState({}, "", window.location.pathname + "#preview");
+                      this.requestUpdate();
+                    }}
+                    class="px-6 py-2.5 rounded bg-red-500 text-white font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors"
+                  >
+                    Load New Content
+                  </button>
+                `
               : null}
           </div>
         </header>
+
+        ${isFromPortfolio && this.portfolioPlayableData
+          ? html`
+              <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div class="space-y-2">
+                  <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">${this.portfolioPlayableData.title || this.portfolioPlayableData.name}</h2>
+                  </div>
+                  ${this.portfolioPlayableData.details ? html`
+                    <p class="text-slate-600 dark:text-slate-400 text-sm">${this.portfolioPlayableData.details}</p>
+                  ` : ''}
+                  ${this.portfolioProjectTitle ? html`
+                    <div class="text-sm">
+                      <span class="font-medium text-slate-700 dark:text-slate-300">Project:</span>
+                      <span class="text-slate-600 dark:text-slate-400 ml-2">${this.portfolioProjectTitle}</span>
+                    </div>
+                  ` : ''}
+                  ${this.portfolioPlayableData.tags && this.portfolioPlayableData.tags.length > 0 ? html`
+                    <div class="text-sm">
+                      <span class="font-medium text-slate-700 dark:text-slate-300 block mb-1">Tags:</span>
+                      <div class="flex flex-wrap gap-2">
+                        ${this.portfolioPlayableData.tags.map((tag: string) => 
+                          html`<span class="inline-block px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs">${tag}</span>`
+                        )}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `
+          : ''}
         
         ${showInputSections
           ? html`

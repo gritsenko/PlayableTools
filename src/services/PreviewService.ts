@@ -132,6 +132,36 @@ export class PreviewService {
     this._uploadedFileName = name;
   }
 
+  /**
+   * Loads HTML content provided as a string (e.g. from portfolio/backend),
+   * applies the current preset transformations, runs validation, and publishes
+   * the processed content via the usual listeners.
+   */
+  async loadHtmlContentFromString(content: string, fileName?: string | null): Promise<string> {
+    const preset = this.getCurrentPreset();
+
+    // Treat as a non-ZIP HTML load; clear any existing ZIP session.
+    await this.clearZipSession();
+    this.setZipPreviewUrl(null);
+
+    // Store original content for preset switching.
+    this._originalUploadedContent = content;
+    this._originalGithubContent = null;
+
+    const processedContent = await this.processContentWithPreset(content, preset || undefined);
+    const originalSizeBytes = new Blob([content]).size;
+
+    await this.runValidation(processedContent, originalSizeBytes);
+    this._lastUploadedSizeBytes = originalSizeBytes;
+
+    if (fileName !== undefined) {
+      this.setUploadedFileName(fileName);
+    }
+
+    this.setUploadedContent(processedContent);
+    return processedContent;
+  }
+
   getPortfolioPlayableId(): string | null {
     return this._portfolioPlayableId;
   }

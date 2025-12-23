@@ -70,6 +70,10 @@ export class ProjectEditor extends ComponentBase {
       
       if (project) {
         this.formData = { ...project };
+        // If project has a name, mark title as blurred to show search links
+        if (this.formData.name) {
+          this.titleBlurred = true;
+        }
       } else {
         this.errorMessage = "Project not found";
       }

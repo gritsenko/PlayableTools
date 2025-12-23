@@ -443,6 +443,10 @@ export class PlayablePreviewer extends ComponentBase {
     const device = this.selectedDevice;
     const width = (this.isPortrait ? device.width : device.height) || 375;
     const height = (this.isPortrait ? device.height : device.width) || 667;
+
+    // Layout: wide simulators (tablet / landscape phone) do not fit nicely side-by-side with validation panel.
+    // In those cases, stack the preview below the page content (single column) even on large screens.
+    const shouldStackPreview = !this.isPortrait || width >= 700;
     
     // Log render state for debugging
     const hasZip = !!this.zipPreviewUrl;
@@ -516,7 +520,7 @@ export class PlayablePreviewer extends ComponentBase {
           ` : ''}
         </div>
         
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div class="grid grid-cols-1 ${shouldStackPreview ? '' : 'lg:grid-cols-2'} gap-8 items-start">
           <!-- Validation Results -->
           <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Validation Results</h2>
@@ -561,13 +565,13 @@ export class PlayablePreviewer extends ComponentBase {
           <!-- Phone Preview -->
           <div class="flex flex-col items-center">
             <!-- Simulator Controls -->
-            <div class="flex items-center gap-2 mb-4 self-end">
+            <div class="flex items-center justify-center gap-2 mb-4" style="width: ${width + 20}px;">
               <button 
                 @click=${() => this.toggleOrientation()} 
                 title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}"
                 class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               >
-                <span class="material-icons-outlined">swap_vert</span>
+                <span class="material-icons-outlined">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
               </button>
               <button 
                 @click=${() => this._toggleLock()} 
