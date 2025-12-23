@@ -491,7 +491,7 @@ export class PortfolioPage extends ComponentBase {
             `
           : html`
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                ${this.renderGhostCard()} ${this.creatives.map((creative) => this.renderCreativeCard(creative))}
+                ${this.renderGhostCard()} ${[...this.creatives].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((creative) => this.renderCreativeCard(creative))}
               </div>
             `}
       </div>

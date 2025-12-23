@@ -25,6 +25,27 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- Cache API Error Handler for Service Workers -->
+  <script>
+    // Patch Cache API to prevent "Entry already exists" errors
+    // This must run before any service worker caching operations
+    if ('caches' in self) {
+      const originalPut = Cache.prototype.put;
+      Cache.prototype.put = async function(request, response) {
+        try {
+          return await originalPut.call(this, request, response);
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'InvalidAccessError') {
+            console.debug('[Cache API] Entry already exists, skipping duplicate cache operation');
+            return;
+          }
+          throw error;
+        }
+      };
+    }
+  </script>
+  
   <script>
     tailwind.config = {
       darkMode: "class",

@@ -74,7 +74,11 @@ headers: {},
             urlPattern: /\/version\.json$/,
             handler: 'NetworkOnly'
           }
-        ]
+        ],
+        // Prevent "Entry already exists" errors during concurrent cache operations
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true
       },
       devOptions: {
         enabled: command === "serve"

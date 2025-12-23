@@ -1,5 +1,28 @@
 const sessionStore = new Map();
 
+// ============================================================================
+// Cache API Error Handler
+// Patch Cache.prototype.put to gracefully handle concurrent cache operations
+// ============================================================================
+if (self.Cache) {
+  const originalPut = Cache.prototype.put;
+  Cache.prototype.put = async function(request, response) {
+    try {
+      return await originalPut.call(this, request, response);
+    } catch (error) {
+      // Handle "Entry already exists" error gracefully
+      if (error instanceof DOMException && error.name === 'InvalidAccessError') {
+        if (error.message && error.message.includes('Entry already exists')) {
+          console.debug('[ZIP Preview SW] Cache entry already exists, skipping duplicate put operation');
+          return;
+        }
+      }
+      throw error;
+    }
+  };
+  console.debug('[ZIP Preview SW] Cache API error handler installed');
+}
+
 const normalizePath = (path) => {
   if (!path) return "";
   return path.replace(/^\/+/, "").replace(/\/+/g, "/");

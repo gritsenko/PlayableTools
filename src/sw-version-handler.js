@@ -1,6 +1,34 @@
 // Service Worker message handler for version checking
 // This file should be included in your service worker
 
+// ============================================================================
+// Cache API Error Handler
+// Patch Cache.prototype.put to gracefully handle concurrent cache operations
+// ============================================================================
+if (self.Cache) {
+  const originalPut = Cache.prototype.put;
+  Cache.prototype.put = async function(request, response) {
+    try {
+      return await originalPut.call(this, request, response);
+    } catch (error) {
+      // Handle "Entry already exists" error gracefully
+      // This can occur when multiple concurrent cache.put() operations target the same URL
+      if (error instanceof DOMException && error.name === 'InvalidAccessError') {
+        if (error.message && error.message.includes('Entry already exists')) {
+          console.debug('[Service Worker] Cache entry already exists, skipping duplicate put operation', {
+            url: request.url || request,
+            cacheName: this.name
+          });
+          return; // Continue without throwing
+        }
+      }
+      // Re-throw other DOMException errors or unexpected errors
+      throw error;
+    }
+  };
+  console.debug('[Service Worker] Cache API error handler installed');
+}
+
 // Listen for messages from the main thread
 self.addEventListener('message', (event) => {
   const { type } = event.data;

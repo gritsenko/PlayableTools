@@ -90,8 +90,15 @@ export class PreviewPage extends ComponentBase {
       const playableId = this.routeParams[0];
       console.log(`📁 preview-page: Loading portfolio playable: ${playableId}`);
       this.portfolioPlayableId = playableId;
+      this.portfolioPlayableData = null;
+      this.portfolioProjectTitle = null;
       this.loadPortfolioPlayable(playableId);
     } else {
+      // No route params - clear portfolio-related state
+      this.portfolioPlayableId = null;
+      this.portfolioPlayableData = null;
+      this.portfolioProjectTitle = null;
+      
       // Load recent URLs from localStorage for quick access
       const stored = localStorage.getItem("preview-recent-urls");
       if (stored) {
@@ -109,7 +116,7 @@ export class PreviewPage extends ComponentBase {
       const serviceFileName = this.previewService.getUploadedFileName();
       if (serviceFileName) {
         this.uploadedFileName = serviceFileName;
-        this.portfolioPlayableId = this.previewService.getPortfolioPlayableId();
+        // portfolioPlayableId is already cleared above
       }
     }
     
@@ -117,6 +124,9 @@ export class PreviewPage extends ComponentBase {
     window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", this._onBeforeUnload);
     window.addEventListener("hashchange", this._onHashChange);
+
+    // Force re-render with cleared/initialized state
+    this.requestUpdate();
 
     // playable-screen-lock is handled inside the previewer component
   }
