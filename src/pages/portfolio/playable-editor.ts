@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, state, inject, property } from "fw";
+import { ComponentBase, customElement, html, state, inject, property, route } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
 import "./project-manager";
 
@@ -11,6 +11,10 @@ export interface PlayableVariation {
 }
 
 @customElement("playable-editor")
+@route("/editor/:creativeId?/:variationId?", {
+  title: "Edit Playable | PlayableTools",
+  description: "Edit and manage your playable advertisements.",
+})
 export class PlayableEditor extends ComponentBase {
   @inject(PortfolioService)
   private portfolioService!: PortfolioService;
@@ -20,6 +24,9 @@ export class PlayableEditor extends ComponentBase {
 
   @property({ attribute: false })
   existingPlayable: PlayableAdData | null = null;
+
+  @property({ attribute: false })
+  routeParams: string[] = [];
 
   @state()
   title: string = "";
@@ -75,15 +82,75 @@ export class PlayableEditor extends ComponentBase {
   @state()
   projects: Array<{ id: string; name: string; appStore: string; googlePlay: string }> = [];
 
+  @state()
+  isProjectModalOpen: boolean = false;
+
+  @state()
+  newProjectForm = {
+    name: "",
+    shortName: "",
+    appStore: "",
+    googlePlay: "",
+  };
+
+  @state()
+  projectFormError: string = "";
+
+  @state()
+  projectFormLoading: boolean = false;
+
   connectedCallback() {
     super.connectedCallback();
-    this.loadProjects();
-    if (this.existingPlayable) {
-      this.title = this.existingPlayable.title || this.existingPlayable.name;
-      this.details = this.existingPlayable.details || this.existingPlayable.description || "";
-      this.projectId = this.existingPlayable.project || "";
-      this.tags = this.existingPlayable.tags?.join(", ") || "";
-      this.fileName = this.existingPlayable.name;
+    
+    // Load projects first, then load playable data
+    this.loadProjects().then(() => {
+      // Load playable data from route params if provided
+      if (this.routeParams && this.routeParams.length > 0 && this.routeParams[0]) {
+        const creativeId = parseInt(this.routeParams[0], 10);
+        this.loadPlayableFromId(creativeId);
+      } else if (this.existingPlayable) {
+        // Fallback to property-based data
+        this.title = this.existingPlayable.title || this.existingPlayable.name;
+        this.details = this.existingPlayable.details || this.existingPlayable.description || "";
+        this.projectId = this.existingPlayable.project || "";
+        this.tags = this.existingPlayable.tags?.join(", ") || "";
+        this.fileName = this.existingPlayable.name;
+      }
+    });
+  }
+
+  async loadPlayableFromId(creativeId: number) {
+    this.isLoading = true;
+    this.errorMessage = "";
+    
+    try {
+      const creative = await this.portfolioService.getCreativeById(creativeId);
+      if (creative && creative.variations && creative.variations.length > 0) {
+        const latestVariation = creative.variations[creative.variations.length - 1];
+        this.existingPlayable = {
+          id: `${creative.id}_${latestVariation.id}`,
+          name: latestVariation.title,
+          title: creative.title,
+          details: creative.details,
+          project: creative.project,
+          tags: creative.tags,
+          createdAt: creative.createdAt,
+          updatedAt: latestVariation.createdAt,
+          creativeId: creative.id,
+          variationId: latestVariation.id
+        };
+        
+        this.title = creative.title;
+        this.details = creative.details;
+        this.projectId = creative.project || "";
+        this.tags = creative.tags?.join(", ") || "";
+        this.fileName = latestVariation.title;
+      }
+    } catch (error) {
+      console.error("Error loading playable:", error);
+      this.errorMessage = error instanceof Error ? error.message : "Failed to load playable";
+    } finally {
+      this.isLoading = false;
     }
   }
 
@@ -177,6 +244,73 @@ export class PlayableEditor extends ComponentBase {
     this.projectId = (e.target as HTMLSelectElement).value;
   };
 
+  openProjectModal = () => {
+    this.isProjectModalOpen = true;
+    this.newProjectForm = {
+      name: "",
+      shortName: "",
+      appStore: "",
+      googlePlay: "",
+    };
+    this.projectFormError = "";
+  };
+
+  closeProjectModal = () => {
+    this.isProjectModalOpen = false;
+    this.newProjectForm = {
+      name: "",
+      shortName: "",
+      appStore: "",
+      googlePlay: "",
+    };
+    this.projectFormError = "";
+  };
+
+  handleNewProjectNameInput = (e: Event) => {
+    this.newProjectForm.name = (e.target as HTMLInputElement).value;
+  };
+
+  handleNewProjectShortNameInput = (e: Event) => {
+    this.newProjectForm.shortName = (e.target as HTMLInputElement).value;
+  };
+
+  handleNewProjectAppStoreInput = (e: Event) => {
+    this.newProjectForm.appStore = (e.target as HTMLInputElement).value;
+  };
+
+  handleNewProjectGooglePlayInput = (e: Event) => {
+    this.newProjectForm.googlePlay = (e.target as HTMLInputElement).value;
+  };
+
+  async saveNewProject() {
+    if (!this.newProjectForm.name || !this.newProjectForm.shortName) {
+      this.projectFormError = "Project name and short name are required";
+      return;
+    }
+
+    this.projectFormLoading = true;
+    this.projectFormError = "";
+
+    try {
+      await this.portfolioService.saveProject(this.newProjectForm);
+      
+      // Reload projects
+      await this.loadProjects();
+      
+      // Select the newly created project (assuming it's added to the list)
+      const newProject = this.projects.find(p => p.name === this.newProjectForm.name);
+      if (newProject) {
+        this.projectId = newProject.id;
+      }
+      
+      this.closeProjectModal();
+    } catch (error) {
+      this.projectFormError = error instanceof Error ? error.message : "Failed to create project";
+    } finally {
+      this.projectFormLoading = false;
+    }
+  }
+
   handleTagsInput = (e: Event) => {
     this.tags = (e.target as HTMLInputElement).value;
   };
@@ -257,8 +391,9 @@ async handleSavePlayable() {
         this.successMessage = "Playable created successfully!";
       }
 
+      // Redirect to portfolio page after 1 second
       setTimeout(() => {
-        this.dispatchEvent(new CustomEvent("playable-saved", { bubbles: true }));
+        window.location.hash = "#/portfolio";
       }, 1000);
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : "Failed to save playable";
@@ -478,7 +613,15 @@ async handleSavePlayable() {
                 </div>
 
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project:</label>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project:</label>
+                    <button
+                      @click=${this.openProjectModal}
+                      class="text-xs text-primary hover:underline font-medium"
+                    >
+                      + Add Project
+                    </button>
+                  </div>
                   <select
                     .value=${this.projectId}
                     @change=${this.handleProjectChange}
@@ -656,6 +799,104 @@ async handleSavePlayable() {
           </div>
         </div>
       </div>
+
+      <!-- Project Modal -->
+      ${this.isProjectModalOpen
+        ? html`
+            <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div class="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                  <h2 class="text-xl font-bold text-slate-900 dark:text-white">Create New Project</h2>
+                  <button
+                    @click=${this.closeProjectModal}
+                    class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div class="p-6 space-y-4">
+                  ${this.projectFormError
+                    ? html`
+                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                          <p class="text-red-700 dark:text-red-400 text-sm">${this.projectFormError}</p>
+                        </div>
+                      `
+                    : ""}
+
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Project Name:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="My App Project"
+                      .value=${this.newProjectForm.name}
+                      @input=${this.handleNewProjectNameInput}
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Short Name:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="HC, ZC, etc."
+                      maxlength="10"
+                      .value=${this.newProjectForm.shortName}
+                      @input=${this.handleNewProjectShortNameInput}
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      App Store Link (optional):
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://apps.apple.com/app/..."
+                      .value=${this.newProjectForm.appStore}
+                      @input=${this.handleNewProjectAppStoreInput}
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Google Play Link (optional):
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://play.google.com/store/apps/details?id=..."
+                      .value=${this.newProjectForm.googlePlay}
+                      @input=${this.handleNewProjectGooglePlayInput}
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                <div class="p-6 border-t border-slate-200 dark:border-slate-800 flex gap-3">
+                  <button
+                    @click=${this.saveNewProject}
+                    ?disabled=${this.projectFormLoading}
+                    class="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ${this.projectFormLoading ? "Creating..." : "Create"}
+                  </button>
+                  <button
+                    @click=${this.closeProjectModal}
+                    class="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          `
+        : ""}
     `;
   }
 }

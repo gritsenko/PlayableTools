@@ -91,8 +91,10 @@ export class PreviewService {
 
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
   private _uploadedContent: string | null = null;
+  private _uploadedFileName: string | null = null;
   private _uploadedListeners = new Set<(content: string | null) => void>();
   private _lastUploadedSizeBytes: number | undefined;
+  private _portfolioPlayableId: string | null = null;
   
   // ZIP preview session metadata served through a dedicated service worker
   private _zipSessionId: string | null = null;
@@ -120,6 +122,56 @@ export class PreviewService {
 
   getUploadedContent(): string | null {
     return this._uploadedContent;
+  }
+
+  getUploadedFileName(): string | null {
+    return this._uploadedFileName;
+  }
+
+  setUploadedFileName(name: string | null): void {
+    this._uploadedFileName = name;
+  }
+
+  /**
+   * Loads HTML content provided as a string (e.g. from portfolio/backend),
+   * applies the current preset transformations, runs validation, and publishes
+   * the processed content via the usual listeners.
+   */
+  async loadHtmlContentFromString(content: string, fileName?: string | null): Promise<string> {
+    const preset = this.getCurrentPreset();
+
+    // Treat as a non-ZIP HTML load; clear any existing ZIP session.
+    await this.clearZipSession();
+    this.setZipPreviewUrl(null);
+
+    // Store original content for preset switching.
+    this._originalUploadedContent = content;
+    this._originalGithubContent = null;
+
+    const processedContent = await this.processContentWithPreset(content, preset || undefined);
+    const originalSizeBytes = new Blob([content]).size;
+
+    await this.runValidation(processedContent, originalSizeBytes);
+    this._lastUploadedSizeBytes = originalSizeBytes;
+
+    if (fileName !== undefined) {
+      this.setUploadedFileName(fileName);
+    }
+
+    this.setUploadedContent(processedContent);
+    return processedContent;
+  }
+
+  getPortfolioPlayableId(): string | null {
+    return this._portfolioPlayableId;
+  }
+
+  setPortfolioPlayableId(id: string | null): void {
+    this._portfolioPlayableId = id;
+  }
+
+  hasUnsavedChanges(): boolean {
+    return !!this._uploadedFileName && !this._portfolioPlayableId;
   }
 
   onUploadedContentChange(cb: (content: string | null) => void): () => void {

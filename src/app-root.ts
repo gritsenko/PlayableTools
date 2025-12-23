@@ -1,9 +1,10 @@
 import "reflect-metadata";
 
-import { ComponentBase, customElement, html, state } from "./fw";
+import { ComponentBase, customElement, html, state, inject } from "./fw";
 import "./Layout/nav-menu";
 import { MainLayout } from "./Layout/main-layout";
 import { VersionService } from "./services/VersionService";
+import { PreviewService } from "./services/PreviewService";
 import "./fw/update-notification";
 
 import "./theme.css";
@@ -13,15 +14,39 @@ import.meta.glob("./pages/**/*.ts", { eager: true });
 
 @customElement("app-root")
 export class AppRoot extends ComponentBase {
+  @inject(PreviewService) previewService!: PreviewService;
+  
   private versionService = new VersionService();
 
   @state()
   private updateAvailable = false;
 
+  private _onHashChange = (e: HashChangeEvent) => {
+    // Check if PreviewService has unsaved changes
+    if (this.previewService.hasUnsavedChanges() && !(window as any).isSavingPlayable) {
+      const oldHash = new URL(e.oldURL).hash;
+      const newHash = new URL(e.newURL).hash;
+
+      // If navigating away from preview, show confirmation
+      if (newHash !== oldHash && !newHash.startsWith("#preview")) {
+        if (!confirm("You have unsaved changes. Are you sure you want to leave?")) {
+          window.removeEventListener("hashchange", this._onHashChange);
+          window.location.hash = oldHash;
+          setTimeout(() => {
+            window.addEventListener("hashchange", this._onHashChange);
+          }, 0);
+        }
+      }
+    }
+  };
+
   async connectedCallback() {
     super.connectedCallback();
     
     console.log('🔧 Initializing PlayableTools...');
+    
+    // Add global navigation guard for unsaved changes
+    window.addEventListener("hashchange", this._onHashChange);
     
     // Initialize version checking
     await this.initializeVersionService();
@@ -29,6 +54,7 @@ export class AppRoot extends ComponentBase {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener("hashchange", this._onHashChange);
     this.versionService.destroy();
   }
 
