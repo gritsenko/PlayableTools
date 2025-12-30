@@ -138,22 +138,49 @@ export class PreviewPage extends ComponentBase {
     this.portfolioPlayableData = null;
     this.portfolioProjectTitle = null;
     this.requestUpdate();
-    
+
     try {
       await this.portfolioService.initialize();
       const playable = await this.portfolioService.getPlayableById(playableId);
-      
-      if (playable && playable.content) {
-        console.log(`✅ preview-page: Portfolio playable loaded: ${playable.name}, ${playable.content.length} chars`);
+
+      if (playable) {
+        console.log(`✅ preview-page: Portfolio playable loaded: ${playable.name}, contentType: ${playable.contentType}`);
         this.uploadedFileName = playable.title || playable.name || "Portfolio Playable";
-        // Load content into PreviewService using the same pipeline as file uploads (preset processing + validation)
-        await this.previewService.loadHtmlContentFromString(playable.content, this.uploadedFileName);
+
+        // Check if playable is a ZIP file
+        if (playable.contentType === 'application/zip') {
+          // Download ZIP file as blob
+          const zipBlob = await this.portfolioService.getPlayableAsBlob(playableId);
+          const zipFile = new File(
+            [zipBlob],
+            playable.originalName || 'playable.zip',
+            { type: 'application/zip' }
+          );
+
+          // Use ZIP preview flow (handles all assets via service worker)
+          await this.previewService.handleZipUpload(zipFile);
+          console.log(`✅ preview-page: Loaded ZIP playable with ${zipFile.size} bytes`);
+        } else {
+          // Use existing HTML flow for non-ZIP files
+          if (playable.content) {
+            // Load content into PreviewService using same pipeline as file uploads (preset processing + validation)
+            await this.previewService.loadHtmlContentFromString(playable.content, this.uploadedFileName);
+            console.log(`✅ preview-page: Loaded HTML playable with ${playable.content.length} chars`);
+          } else {
+            console.error("❌ preview-page: Playable has no content");
+            this.uploadedFileName = "";
+            this.portfolioPlayableData = null;
+            this.portfolioProjectTitle = null;
+            return;
+          }
+        }
+
         this.portfolioPlayableData = playable;
 
         const projectKey = (playable.project ?? "").trim();
         if (projectKey.length > 0) {
           try {
-            // Try to fetch the project by ID for its full name
+            // Try to fetch project by ID for its full name
             const project = await this.portfolioService.getProjectById(projectKey);
             this.portfolioProjectTitle = project?.name ?? projectKey;
           } catch {
@@ -164,7 +191,7 @@ export class PreviewPage extends ComponentBase {
           this.portfolioProjectTitle = null;
         }
       } else {
-        console.error("❌ preview-page: Playable not found or has no content");
+        console.error("❌ preview-page: Playable not found");
         this.uploadedFileName = "";
         this.portfolioPlayableData = null;
         this.portfolioProjectTitle = null;
