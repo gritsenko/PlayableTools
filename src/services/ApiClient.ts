@@ -1,4 +1,5 @@
-import { injectable, ServiceLifetime } from "fw";
+import { injectable, ServiceLifetime, inject } from "fw";
+import { AuthenticationService } from "./AuthenticationService";
 
 /**
  * Centralized API client for all backend interactions
@@ -6,6 +7,9 @@ import { injectable, ServiceLifetime } from "fw";
  */
 @injectable(ServiceLifetime.Singleton)
 export class ApiClient {
+  @inject(AuthenticationService)
+  private authService!: AuthenticationService;
+
   private token: string | null = null;
 
   private get baseUrl(): string {
@@ -44,8 +48,9 @@ export class ApiClient {
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (response.status === 401) {
-      // Token expired, clear it
+      // Token expired, clear it and notify authentication service
       this.token = null;
+      this.authService.handleUnauthorized("Your session has expired. Please sign in again.");
       throw new Error("Your session has expired. Please sign in again.");
     }
     if (!response.ok) {

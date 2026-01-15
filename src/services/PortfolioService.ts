@@ -1,5 +1,6 @@
 import { injectable, ServiceLifetime, inject } from "fw";
 import { ApiClient, type Creative, type Variation, type FileMeta, type Project } from "./ApiClient";
+import { AuthenticationService } from "./AuthenticationService";
 
 export interface PlayableAdData {
   id: string;
@@ -47,6 +48,9 @@ export interface CreativeWithVariations {
 export class PortfolioService {
   @inject(ApiClient)
   private apiClient!: ApiClient;
+
+  @inject(AuthenticationService)
+  private authService!: AuthenticationService;
 
   private currentUser: User | null = null;
   private isInitialized = false;
@@ -465,6 +469,22 @@ export class PortfolioService {
   }
 
   async signOut(): Promise<void> {
+    this.currentUser = null;
+    this.apiClient.setToken(null);
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    // @ts-ignore
+    if (window.google && window.google.accounts) {
+      // @ts-ignore
+      google.accounts.id.disableAutoSelect();
+    }
+  }
+
+  /**
+   * Called by AuthenticationService when a 401 error occurs
+   * Ensures the service state is cleared and handles logout
+   */
+  handleSessionExpired(): void {
     this.currentUser = null;
     this.apiClient.setToken(null);
     localStorage.removeItem("authToken");

@@ -1,6 +1,7 @@
 import { ComponentBase, customElement, html, route, inject, state } from "fw";
 import { PortfolioService, type CreativeWithVariations } from "../../services/PortfolioService";
 import { PreviewService } from "../../services/PreviewService";
+import { AuthenticationService } from "../../services/AuthenticationService";
 import "./project-manager";
 
 @customElement("portfolio-page")
@@ -11,6 +12,7 @@ import "./project-manager";
 export class PortfolioPage extends ComponentBase {
   @inject(PortfolioService) portfolioService!: PortfolioService;
   @inject(PreviewService) previewService!: PreviewService;
+  @inject(AuthenticationService) authService!: AuthenticationService;
 
   @state()
   creatives: CreativeWithVariations[] = [];
@@ -40,6 +42,17 @@ export class PortfolioPage extends ComponentBase {
     super.connectedCallback();
     this.checkAuthentication();
     window.addEventListener("click", this._onWindowClick);
+    
+    // Subscribe to logout events (e.g., when 401 happens)
+    this.authService.subscribe((reason?: string) => {
+      console.log("Session expired:", reason);
+      this.isAuthenticated = false;
+      this.creatives = [];
+      this.projects = [];
+      this.errorMessage = reason || "Your session has expired. Please sign in again.";
+      this.portfolioService.handleSessionExpired();
+      this.requestUpdate();
+    });
   }
 
   disconnectedCallback() {
