@@ -1,6 +1,5 @@
 import { injectable, ServiceLifetime, inject } from "fw";
 import { ApiClient, type Creative, type Variation, type FileMeta, type Project } from "./ApiClient";
-import { AuthenticationService } from "./AuthenticationService";
 
 export interface PlayableAdData {
   id: string;
@@ -10,6 +9,7 @@ export interface PlayableAdData {
   project: string;
   tags: string[];
   content?: string;
+  fileBlob?: Blob;
   description?: string;
   createdAt: number;
   updatedAt: number;
@@ -48,9 +48,6 @@ export interface CreativeWithVariations {
 export class PortfolioService {
   @inject(ApiClient)
   private apiClient!: ApiClient;
-
-  @inject(AuthenticationService)
-  private authService!: AuthenticationService;
 
   private currentUser: User | null = null;
   private isInitialized = false;
@@ -298,14 +295,25 @@ export class PortfolioService {
       const variationId = Number(match[2]);
       const storageName = match[3];
 
-      const [content, creative] = await Promise.all([
-        this.apiClient.getFileAsText(storageName),
-        this.getCreativeById(creativeId),
-      ]);
+      const creative = await this.getCreativeById(creativeId);
       if (!creative) return null;
 
       const variation = creative.variations.find(v => v.id === variationId);
       if (!variation) return null;
+
+      const contentType = variation.file?.contentType;
+      const originalName = variation.file?.originalName;
+      const isZip = (contentType && contentType.toLowerCase().includes("zip")) || 
+                    (originalName && originalName.toLowerCase().endsWith(".zip"));
+
+      let content: string | undefined;
+      let fileBlob: Blob | undefined;
+
+      if (isZip) {
+        fileBlob = await this.apiClient.getFile(storageName);
+      } else {
+        content = await this.apiClient.getFileAsText(storageName);
+      }
 
       return {
         id,
@@ -315,6 +323,7 @@ export class PortfolioService {
         project: creative.project,
         tags: creative.tags,
         content,
+        fileBlob,
         createdAt: creative.createdAt,
         updatedAt: variation.createdAt,
         originalName: variation.file?.originalName,

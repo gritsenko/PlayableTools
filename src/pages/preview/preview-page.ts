@@ -145,34 +145,34 @@ export class PreviewPage extends ComponentBase {
 
       if (playable) {
         console.log(`✅ preview-page: Portfolio playable loaded: ${playable.name}, contentType: ${playable.contentType}`);
-        this.uploadedFileName = playable.title || playable.name || "Portfolio Playable";
+        const fileDisplayName = playable.originalName || playable.title || playable.name || "Portfolio Playable";
+        this.uploadedFileName = fileDisplayName;
 
-        // Check if playable is a ZIP file
-        if (playable.contentType === 'application/zip') {
-          // Download ZIP file as blob
-          const zipBlob = await this.portfolioService.getPlayableAsBlob(playableId);
+        // Check if playable has binary content (ZIP)
+        if (playable.fileBlob) {
+          const fileName = fileDisplayName.toLowerCase().endsWith(".zip") ? fileDisplayName : `${fileDisplayName}.zip`;
           const zipFile = new File(
-            [zipBlob],
-            playable.originalName || 'playable.zip',
-            { type: 'application/zip' }
+            [playable.fileBlob],
+            fileName,
+            { type: playable.contentType || 'application/zip' }
           );
 
           // Use ZIP preview flow (handles all assets via service worker)
           await this.previewService.handleZipUpload(zipFile);
+          // Ensure filename is set correctly in service for proper UI display
+          this.previewService.setUploadedFileName(fileDisplayName);
           console.log(`✅ preview-page: Loaded ZIP playable with ${zipFile.size} bytes`);
-        } else {
+        } else if (playable.content) {
           // Use existing HTML flow for non-ZIP files
-          if (playable.content) {
-            // Load content into PreviewService using same pipeline as file uploads (preset processing + validation)
-            await this.previewService.loadHtmlContentFromString(playable.content, this.uploadedFileName);
-            console.log(`✅ preview-page: Loaded HTML playable with ${playable.content.length} chars`);
-          } else {
-            console.error("❌ preview-page: Playable has no content");
-            this.uploadedFileName = "";
-            this.portfolioPlayableData = null;
-            this.portfolioProjectTitle = null;
-            return;
-          }
+          // Load content into PreviewService using same pipeline as file uploads (preset processing + validation)
+          await this.previewService.loadHtmlContentFromString(playable.content, this.uploadedFileName);
+          console.log(`✅ preview-page: Loaded HTML playable with ${playable.content.length} chars`);
+        } else {
+          console.error("❌ preview-page: Playable has no content (no blob, no string)");
+          this.uploadedFileName = "";
+          this.portfolioPlayableData = null;
+          this.portfolioProjectTitle = null;
+          return;
         }
 
         this.portfolioPlayableData = playable;

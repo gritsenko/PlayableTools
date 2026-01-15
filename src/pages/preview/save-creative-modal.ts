@@ -32,6 +32,9 @@ export class SaveCreativeModal extends ComponentBase {
     this.htmlContent = htmlContent;
     this.fileName = fileName;
     this.zipFile = zipFile || null;
+    
+    console.log(`📁 save-creative-modal.show(): zipFile=${zipFile ? `File(${zipFile.name}, ${zipFile.size} bytes)` : 'null'}, htmlContent length=${htmlContent.length}, fileName='${fileName}'`);
+    
     this.screenshotUrl = URL.createObjectURL(screenshot);
 
     this.isOpen = true;
@@ -151,6 +154,8 @@ export class SaveCreativeModal extends ComponentBase {
 
       if (this.isNew) {
         if (this.zipFile) {
+          console.log(`📦 save-creative-modal: Uploading ZIP playable: ${this.zipFile.name} (${this.zipFile.size} bytes)`);
+          
           // Create creative first
           const creative = await this.portfolioService.createCreative(
             this.creativeTitle,
@@ -159,12 +164,17 @@ export class SaveCreativeModal extends ComponentBase {
             tagList
           );
 
+          console.log(`✅ Creative created with ID ${creative.id}, uploading ZIP variation...`);
+
           // Upload ZIP file as variation
           const variation = await this.portfolioService.uploadVariation(
             creative.id,
             this.zipFile,
             this.zipFile.name
           );
+          
+          console.log(`✅ ZIP variation uploaded with ID ${variation.id}`);
+
 
           // Upload screenshot if available
           if (this.screenshotBlob) {

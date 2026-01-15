@@ -302,6 +302,20 @@ export class PlayablePreviewer extends ComponentBase {
         @load="${this._installFocusGuards}"
       ></iframe>`;
     }
+    
+    // If content has a base href (ZIP playable), don't render srcdoc until ZIP preview URL is ready
+    if (this.pageContent && this.pageContent.includes('<base href=')) {
+      console.log(`⏳ playable-previewer: Waiting for ZIP preview URL to be set before rendering`);
+      return html`<div class="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800">
+        <div class="text-center">
+          <div class="inline-flex items-center justify-center mb-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+          </div>
+          <p class="text-slate-600 dark:text-slate-400">Initializing ZIP preview...</p>
+        </div>
+      </div>`;
+    }
+    
     if (this.pageContent) {
       return html`<iframe
         srcdoc="${this.pageContent}"
@@ -426,6 +440,7 @@ export class PlayablePreviewer extends ComponentBase {
         const name = this.fileName || "Playable Ad.html";
         // Check if current preview is from ZIP
         const zipFile = this.previewService.getOriginalZipFile();
+        console.log(`📱 playable-previewer.handleSaveToLibrary: zipFile=${zipFile ? `File(${zipFile.name}, ${zipFile.size} bytes)` : 'null'}, passing to modal.show()`);
         await modal.show(blob, content, name, zipFile);
       } else {
         console.warn('Modal not found in DOM');

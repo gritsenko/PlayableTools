@@ -439,6 +439,7 @@ export class PreviewService {
 
     // Store original ZIP file for saving to portfolio
     this._originalZipFile = file;
+    console.log(`💾 PreviewService.handleZipUpload: Stored original ZIP file for portfolio: ${file.name} (${file.size} bytes)`);
 
     await this.clearZipSession();
 

@@ -134,7 +134,7 @@ src/
 - CSS custom properties pattern: `var(--pico-*)`
 
 ### Build & Development
-- **Dev server**: `npm run dev` (Vite task available)
+- **Dev server**: don't run directly. It's already run by developer.
 - **Build**: `npm run build` (TypeScript compilation + Vite build)
 - **Base path**: `/` for dev, `/PlayableTools/` for production
 - **PWA**: Auto-update service worker with version checking. The `VersionService` fetches `/version.json` to detect new builds and prompt the user to update.
