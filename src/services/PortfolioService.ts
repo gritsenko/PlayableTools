@@ -280,6 +280,14 @@ export class PortfolioService {
     return this.apiClient.getFileAsText(storageName);
   }
 
+  async getPlayableAsBlob(id: string): Promise<Blob> {
+    // Parse composite ID (creativeId_variationId_storageName)
+    const storageNameMatch = id.match(/([a-f0-9\-]+)$/);
+    if (!storageNameMatch) throw new Error("Invalid playable ID format");
+    const storageName = storageNameMatch[1];
+    return this.apiClient.getFile(storageName);
+  }
+
   async getPlayableById(id: string): Promise<PlayableAdData | null> {
     try {
       // Allow anonymous access for viewing playables

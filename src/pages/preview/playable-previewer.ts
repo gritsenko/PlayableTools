@@ -424,7 +424,9 @@ export class PlayablePreviewer extends ComponentBase {
         const content = this.pageContent;
         // Use fileName property or default
         const name = this.fileName || "Playable Ad.html";
-        await modal.show(blob, content, name);
+        // Check if current preview is from ZIP
+        const zipFile = this.previewService.getOriginalZipFile();
+        await modal.show(blob, content, name, zipFile);
       } else {
         console.warn('Modal not found in DOM');
       }

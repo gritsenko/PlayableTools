@@ -45,18 +45,11 @@ export class PlayableEditor extends ComponentBase {
 
   @state()
   fileContent: string = "";
-
-  @state()
-  fileName: string = "";
-
-  @state()
   fileSource: "computer" | "url" | "paste" = "computer";
-
-  @state()
-  externalUrl: string = "";
-
-  @state()
-  pastedContent: string = "";
+  fileName: string = "";
+  variationName: string = "";
+  variationType: "version" | "ab_test" | "localization" = "version";
+  uploadedFile: File | null = null;
 
   @state()
   isLoading: boolean = false;
@@ -68,16 +61,16 @@ export class PlayableEditor extends ComponentBase {
   successMessage: string = "";
 
   @state()
+  externalUrl: string = "";
+
+  @state()
+  pastedContent: string = "";
+
+  @state()
   variations: PlayableVariation[] = [];
 
   @state()
   showVariationUpload: boolean = false;
-
-  @state()
-  variationType: "version" | "ab_test" | "localization" = "version";
-
-  @state()
-  variationName: string = "";
 
   @state()
   projects: Array<{ id: string; name: string; appStore: string; googlePlay: string }> = [];
@@ -173,16 +166,18 @@ export class PlayableEditor extends ComponentBase {
       this.title = this.fileName;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      this.fileContent = event.target?.result as string;
+    if (file.name.endsWith(".zip")) {
+      this.uploadedFile = file;
+      this.fileContent = `<ZIP FILE: ${file.name}>`;
       this.fileSource = "computer";
       this.requestUpdate();
-    };
-
-    if (file.name.endsWith(".zip")) {
-      reader.readAsArrayBuffer(file);
     } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        this.fileContent = event.target?.result as string;
+        this.fileSource = "computer";
+        this.requestUpdate();
+      };
       reader.readAsText(file);
     }
   };
@@ -385,10 +380,19 @@ async handleSavePlayable() {
         );
         this.successMessage = "Playable updated successfully!";
       } else {
-        // Create new playable
+        // Create new creative
         const tagsList = this.tags.split(",").map(t => t.trim()).filter(t => t);
-        await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details, this.projectId, tagsList);
-        this.successMessage = "Playable created successfully!";
+        
+        if (this.uploadedFile && this.uploadedFile.name.endsWith(".zip")) {
+          // Handle ZIP file upload
+          const creative = await this.portfolioService.createCreative(this.title, this.details, this.projectId, tagsList);
+          await this.portfolioService.uploadVariation(creative.id, this.uploadedFile, this.uploadedFile.name);
+          this.successMessage = "Playable created successfully!";
+        } else {
+          // Handle HTML file upload
+          await this.portfolioService.uploadPlayable(this.title, this.fileContent, this.details, this.projectId, tagsList);
+          this.successMessage = "Playable created successfully!";
+        }
       }
 
       // Redirect to portfolio page after 1 second

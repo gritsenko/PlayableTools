@@ -20,25 +20,27 @@ export class SaveCreativeModal extends ComponentBase {
   private screenshotBlob: Blob | null = null;
   private htmlContent: string = "";
   private fileName: string = "";
+  private zipFile: File | null = null;
   
   @state() private isSaving: boolean = false;
   @state() private error: string = "";
   @state() private isAuthenticated: boolean = false;
   @state() private isLoading: boolean = false;
 
-  async show(screenshot: Blob, htmlContent: string, fileName: string) {
+  async show(screenshot: Blob, htmlContent: string, fileName: string, zipFile?: File | null) {
     this.screenshotBlob = screenshot;
     this.htmlContent = htmlContent;
     this.fileName = fileName;
+    this.zipFile = zipFile || null;
     this.screenshotUrl = URL.createObjectURL(screenshot);
-    
+
     this.isOpen = true;
     this.isNew = true;
     this.selectedId = null;
     this.creativeTitle = this.extractTitle(htmlContent) || fileName.replace(/\.html$/i, "");
     this.tags = "";
     this.error = "";
-    
+
     await this.checkAuthentication();
   }
 
@@ -146,25 +148,52 @@ export class SaveCreativeModal extends ComponentBase {
 
     try {
       const tagList = this.tags.split(/[\s,]+/).filter(t => t.length > 0);
-      
+
       if (this.isNew) {
-        // Create new creative with variation
-        const playable = await this.portfolioService.uploadPlayable(
-          this.creativeTitle,
-          this.htmlContent,
-          "",
-          this.selectedProject || "",
-          tagList
-        );
-        
-        // Upload screenshot if available
-        if (this.screenshotBlob && playable.creativeId && playable.variationId) {
-          const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
-          await this.portfolioService.uploadScreenshot(
-            jpgBlob,
-            playable.creativeId,
-            playable.variationId
+        if (this.zipFile) {
+          // Create creative first
+          const creative = await this.portfolioService.createCreative(
+            this.creativeTitle,
+            "",
+            this.selectedProject || "",
+            tagList
           );
+
+          // Upload ZIP file as variation
+          const variation = await this.portfolioService.uploadVariation(
+            creative.id,
+            this.zipFile,
+            this.zipFile.name
+          );
+
+          // Upload screenshot if available
+          if (this.screenshotBlob) {
+            const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
+            await this.portfolioService.uploadScreenshot(
+              jpgBlob,
+              creative.id,
+              variation.id
+            );
+          }
+        } else {
+          // Create new creative with variation (HTML file)
+          const playable = await this.portfolioService.uploadPlayable(
+            this.creativeTitle,
+            this.htmlContent,
+            "",
+            this.selectedProject || "",
+            tagList
+          );
+
+          // Upload screenshot if available
+          if (this.screenshotBlob && playable.creativeId && playable.variationId) {
+            const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
+            await this.portfolioService.uploadScreenshot(
+              jpgBlob,
+              playable.creativeId,
+              playable.variationId
+            );
+          }
         }
       } else if (this.selectedId) {
         // Update existing creative

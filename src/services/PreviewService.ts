@@ -95,6 +95,7 @@ export class PreviewService {
   private _uploadedListeners = new Set<(content: string | null) => void>();
   private _lastUploadedSizeBytes: number | undefined;
   private _portfolioPlayableId: string | null = null;
+  private _originalZipFile: File | null = null;
   
   // ZIP preview session metadata served through a dedicated service worker
   private _zipSessionId: string | null = null;
@@ -130,6 +131,10 @@ export class PreviewService {
 
   setUploadedFileName(name: string | null): void {
     this._uploadedFileName = name;
+  }
+
+  getOriginalZipFile(): File | null {
+    return this._originalZipFile;
   }
 
   /**
@@ -432,6 +437,9 @@ export class PreviewService {
       throw new Error(`ZIP size must be less than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
     }
 
+    // Store original ZIP file for saving to portfolio
+    this._originalZipFile = file;
+
     await this.clearZipSession();
 
     const JSZip = (await import('jszip')).default as any;
@@ -551,6 +559,7 @@ export class PreviewService {
     this.setUploadedContent(null);
     this._originalUploadedContent = null;
     this._originalGithubContent = null;
+    this._originalZipFile = null;
     void this.clearZipSession();
     this._lastUploadedSizeBytes = undefined;
     console.log(`🧹 Cleared all content (processed and original)`);
