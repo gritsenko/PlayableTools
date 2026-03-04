@@ -131,7 +131,15 @@ export class PortfolioPage extends ComponentBase {
       this.creatives = await this.portfolioService.getCreativesWithVariations();
     } catch (error) {
       console.error("Loading playables error:", error);
-      this.errorMessage = error instanceof Error ? error.message : "Failed to load playables";
+      const errorMessage = error instanceof Error ? error.message : "Failed to load playables";
+      
+      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+        console.log("Session expired, automatically signing out");
+        await this.handleSignOut();
+        this.errorMessage = "Your session has expired. Please sign in again.";
+      } else {
+        this.errorMessage = errorMessage;
+      }
     } finally {
       this.isLoading = false;
     }

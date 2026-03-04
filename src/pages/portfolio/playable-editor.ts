@@ -1,5 +1,6 @@
 import { ComponentBase, customElement, html, state, inject, property, route } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
+import { AuthenticationService } from "../../services/AuthenticationService";
 import "./project-manager";
 
 export interface PlayableVariation {
@@ -18,6 +19,9 @@ export interface PlayableVariation {
 export class PlayableEditor extends ComponentBase {
   @inject(PortfolioService)
   private portfolioService!: PortfolioService;
+
+  @inject(AuthenticationService)
+  private authService!: AuthenticationService;
 
   @property({ attribute: false })
   playableId: string | null = null;
@@ -95,6 +99,12 @@ export class PlayableEditor extends ComponentBase {
   connectedCallback() {
     super.connectedCallback();
     
+    this.authService.subscribe((reason?: string) => {
+      console.log("Session expired:", reason);
+      this.errorMessage = reason || "Your session has expired. Please sign in again.";
+      this.requestUpdate();
+    });
+    
     // Load projects first, then load playable data
     this.loadProjects().then(() => {
       // Load playable data from route params if provided
@@ -152,6 +162,12 @@ export class PlayableEditor extends ComponentBase {
       this.projects = await this.portfolioService.getProjects();
     } catch (error) {
       console.error("Error loading projects:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to load projects";
+      
+      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+        console.log("Session expired, redirecting to portfolio");
+        this.authService.logout("Your session has expired. Please sign in again.");
+      }
     }
   }
 

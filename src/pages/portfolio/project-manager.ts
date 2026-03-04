@@ -1,5 +1,6 @@
 import { ComponentBase, customElement, html, state, inject, route } from "fw";
 import { PortfolioService } from "../../services/PortfolioService";
+import { AuthenticationService } from "../../services/AuthenticationService";
 
 export interface Project {
   id: string;
@@ -18,6 +19,9 @@ export class ProjectManager extends ComponentBase {
   @inject(PortfolioService)
   private portfolioService!: PortfolioService;
 
+  @inject(AuthenticationService)
+  private authService!: AuthenticationService;
+
   @state()
   projects: Project[] = [];
 
@@ -30,6 +34,13 @@ export class ProjectManager extends ComponentBase {
   connectedCallback() {
     super.connectedCallback();
     this.loadProjects();
+    
+    this.authService.subscribe((reason?: string) => {
+      console.log("Session expired:", reason);
+      this.projects = [];
+      this.errorMessage = reason || "Your session has expired. Please sign in again.";
+      this.requestUpdate();
+    });
   }
 
   async loadProjects() {
@@ -40,7 +51,14 @@ export class ProjectManager extends ComponentBase {
       this.projects = await this.portfolioService.getProjects();
     } catch (error) {
       console.error("Error loading projects:", error);
-      this.errorMessage = error instanceof Error ? error.message : "Failed to load projects";
+      const errorMessage = error instanceof Error ? error.message : "Failed to load projects";
+      
+      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+        console.log("Session expired, redirecting to portfolio");
+        this.authService.logout("Your session has expired. Please sign in again.");
+      } else {
+        this.errorMessage = errorMessage;
+      }
     } finally {
       this.isLoading = false;
     }
