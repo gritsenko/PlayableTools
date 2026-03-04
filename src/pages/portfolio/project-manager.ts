@@ -53,7 +53,7 @@ export class ProjectManager extends ComponentBase {
       console.error("Error loading projects:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to load projects";
       
-      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+      if (this.authService.isAuthError(error)) {
         console.log("Session expired, redirecting to portfolio");
         this.authService.logout("Your session has expired. Please sign in again.");
       } else {
