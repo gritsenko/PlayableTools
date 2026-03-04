@@ -142,11 +142,25 @@ export class PreviewPage extends ComponentBase {
 
         const projectKey = (playable.project ?? "").trim();
         if (projectKey.length > 0) {
-          const projects = await this.portfolioService.getProjects();
-          const matched = projects.find(p =>
-            p.id === projectKey || p.shortName === projectKey || p.name === projectKey
-          );
-          this.portfolioProjectTitle = matched?.name ?? projectKey;
+          try {
+            const projects = await this.portfolioService.getProjects();
+            const matched = projects.find(p =>
+              p.id === projectKey || p.shortName === projectKey || p.name === projectKey
+            );
+            this.portfolioProjectTitle = matched?.name ?? projectKey;
+          } catch (error) {
+            console.error("Failed to load projects:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to load projects";
+            
+            if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+              console.log("Session expired, signing out");
+              await this.portfolioService.signOut();
+              this.uploadedFileName = "";
+              this.portfolioPlayableData = null;
+              this.portfolioProjectTitle = null;
+              window.location.hash = "#/portfolio";
+            }
+          }
         } else {
           this.portfolioProjectTitle = null;
         }

@@ -105,7 +105,16 @@ export class SaveCreativeModal extends ComponentBase {
       }
     } catch (e) {
       console.error("Failed to load creatives", e);
-      this.error = e instanceof Error ? e.message : "Failed to load creatives";
+      const errorMessage = e instanceof Error ? e.message : "Failed to load creatives";
+      
+      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+        console.log("Session expired, signing out");
+        await this.portfolioService.signOut();
+        this.isAuthenticated = false;
+        this.error = "Your session has expired. Please sign in again.";
+      } else {
+        this.error = errorMessage;
+      }
     } finally {
       this.isLoading = false;
     }

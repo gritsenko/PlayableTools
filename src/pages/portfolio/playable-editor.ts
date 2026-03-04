@@ -159,6 +159,13 @@ export class PlayableEditor extends ComponentBase {
       this.projects = await this.portfolioService.getProjects();
     } catch (error) {
       console.error("Error loading projects:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to load projects";
+      
+      if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+        console.log("Session expired, redirecting to portfolio");
+        await this.portfolioService.signOut();
+        window.location.hash = "#/portfolio";
+      }
     }
   }
 
