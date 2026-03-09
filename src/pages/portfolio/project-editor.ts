@@ -1,5 +1,6 @@
 import { ComponentBase, customElement, html, state, inject, route } from "fw";
 import { PortfolioService } from "../../services/PortfolioService";
+import { AuthenticationService } from "../../services/AuthenticationService";
 
 export interface Project {
   id?: string;
@@ -21,6 +22,9 @@ export interface Project {
 export class ProjectEditor extends ComponentBase {
   @inject(PortfolioService)
   private portfolioService!: PortfolioService;
+
+  @inject(AuthenticationService)
+  private authService!: AuthenticationService;
 
   @state()
   projectId: string | null = null;
@@ -47,6 +51,12 @@ export class ProjectEditor extends ComponentBase {
 
   async connectedCallback() {
     super.connectedCallback();
+    
+    this.authService.subscribe((reason?: string) => {
+      console.log("Session expired:", reason);
+      this.errorMessage = reason || "Your session has expired. Please sign in again.";
+      this.requestUpdate();
+    });
     
     // Get project ID from URL if editing
     const pathSegments = window.location.hash.split("/");
@@ -79,7 +89,14 @@ export class ProjectEditor extends ComponentBase {
       }
     } catch (error) {
       console.error("Error loading project:", error);
-      this.errorMessage = error instanceof Error ? error.message : "Failed to load project";
+      const errorMessage = error instanceof Error ? error.message : "Failed to load project";
+      
+      if (this.authService.isAuthError(error)) {
+        console.log("Session expired, redirecting to portfolio");
+        this.authService.logout("Your session has expired. Please sign in again.");
+      } else {
+        this.errorMessage = errorMessage;
+      }
     } finally {
       this.isLoading = false;
     }

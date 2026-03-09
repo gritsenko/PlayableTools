@@ -1,10 +1,12 @@
 import { ComponentBase, customElement, html, inject, state } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
+import { AuthenticationService } from "../../services/AuthenticationService";
 import type { Project } from "../../services/ApiClient";
 
 @customElement("save-creative-modal")
 export class SaveCreativeModal extends ComponentBase {
   @inject(PortfolioService) portfolioService!: PortfolioService;
+  @inject(AuthenticationService) private authService!: AuthenticationService;
 
   @state() private isOpen: boolean = false;
   @state() private creatives: PlayableAdData[] = [];
@@ -44,6 +46,13 @@ export class SaveCreativeModal extends ComponentBase {
     this.tags = "";
     this.error = "";
 
+    this.authService.subscribe((reason?: string) => {
+      console.log("Session expired in modal:", reason);
+      this.isAuthenticated = false;
+      this.error = reason || "Your session has expired. Please sign in again.";
+      this.requestUpdate();
+    });
+    
     await this.checkAuthentication();
   }
 
@@ -110,7 +119,15 @@ export class SaveCreativeModal extends ComponentBase {
       }
     } catch (e) {
       console.error("Failed to load creatives", e);
-      this.error = e instanceof Error ? e.message : "Failed to load creatives";
+      
+      if (this.authService.isAuthError(e)) {
+        console.log("Session expired, signing out");
+        await this.portfolioService.signOut();
+        this.isAuthenticated = false;
+        this.error = "Your session has expired. Please sign in again.";
+      } else {
+        this.error = e instanceof Error ? e.message : "Failed to load creatives";
+      }
     } finally {
       this.isLoading = false;
     }

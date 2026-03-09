@@ -13,6 +13,18 @@ export class AuthenticationService {
     this.logout(reason);
   }
 
+  public isAuthError(error: unknown): boolean {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const lowerMessage = errorMessage.toLowerCase();
+    return (
+      lowerMessage.includes("session") ||
+      lowerMessage.includes("expired") ||
+      lowerMessage.includes("401") ||
+      lowerMessage.includes("unauthorized") ||
+      lowerMessage.includes("failed to fetch")
+    );
+  }
+
   public logout(reason?: string): void {
     if (this.isLoggingOut) {
       return;
