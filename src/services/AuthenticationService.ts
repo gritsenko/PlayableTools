@@ -5,8 +5,11 @@ export class AuthenticationService {
   private callbacks: Array<(reason?: string) => void> = [];
   private isLoggingOut = false;
 
-  public subscribe(callback: (reason?: string) => void): void {
+  public subscribe(callback: (reason?: string) => void): () => void {
     this.callbacks.push(callback);
+    return () => {
+      this.callbacks = this.callbacks.filter((item) => item !== callback);
+    };
   }
 
   public handleUnauthorized(reason: string = 'Your session has expired'): void {
@@ -44,5 +47,6 @@ export class AuthenticationService {
     });
     
     window.location.hash = '#/portfolio';
+    this.isLoggingOut = false;
   }
 }

@@ -137,6 +137,10 @@ export class PreviewService {
     return this._originalZipFile;
   }
 
+  getOriginalUploadedContent(): string | null {
+    return this._originalUploadedContent;
+  }
+
   /**
    * Loads HTML content provided as a string (e.g. from portfolio/backend),
    * applies the current preset transformations, runs validation, and publishes

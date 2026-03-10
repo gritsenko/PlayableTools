@@ -17,7 +17,34 @@ export interface PlayableProcessOptions {
   suffix?: string;
   outputDirectory?: FileSystemDirectoryHandle;
   onProgress?: (progress: number, platform?: string) => void;
-  // Add more options as needed
+  selectedPlatforms?: string[];
+}
+
+export interface PublishLaunchContext {
+  playableTitle?: string;
+  fileName?: string;
+  htmlContent?: string;
+  googlePlayUrl?: string;
+  appStoreUrl?: string;
+  projectId?: string;
+  projectName?: string;
+  sourceLabel?: string;
+}
+
+export interface PublishValidationIssue {
+  level: "error" | "warning";
+  message: string;
+}
+
+export interface GeneratedPlatformArtifact {
+  platformName: string;
+  platformLabel: string;
+  format: "html" | "zip";
+  outputFileName: string;
+  directoryName: string;
+  htmlFileName: string;
+  htmlContent: string;
+  blob: Blob;
 }
 
 export interface PreviewScript {

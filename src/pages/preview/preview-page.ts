@@ -8,6 +8,8 @@ import {
 } from "fw";
 import { PreviewService } from "../../services/PreviewService";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
+import { AuthenticationService } from "../../services/AuthenticationService";
+import { PlayablePublishService } from "../../services/PlayablePublishService";
 
 @customElement("preview-page")
 @route("/preview/:playableId?", {
@@ -17,8 +19,12 @@ import { PortfolioService, type PlayableAdData } from "../../services/PortfolioS
 export class PreviewPage extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
   @inject(PortfolioService) portfolioService!: PortfolioService;
+  @inject(AuthenticationService) authService!: AuthenticationService;
+  @inject(PlayablePublishService) publishService!: PlayablePublishService;
   
   routeParams: string[] = [];
+  private unsubscribeAuth?: () => void;
+  isAuthenticated: boolean = false;
   disconnectedCallback() {
     super.disconnectedCallback?.();
     // On page unload, reload recentUrls for next mount
@@ -33,6 +39,8 @@ export class PreviewPage extends ComponentBase {
     window.removeEventListener("popstate", this.handlePopState);
     window.removeEventListener("beforeunload", this._onBeforeUnload);
     window.removeEventListener("hashchange", this._onHashChange);
+    this.unsubscribeAuth?.();
+    this.unsubscribeAuth = undefined;
     // playable-screen-lock handled inside previewer
   }
 
@@ -82,6 +90,15 @@ export class PreviewPage extends ComponentBase {
 
   connectedCallback() {
     super.connectedCallback();
+    void this.initializeAuthState();
+    this.unsubscribeAuth?.();
+    this.unsubscribeAuth = this.authService.subscribe((reason?: string) => {
+      this.isAuthenticated = false;
+      this.requestUpdate();
+      if (reason) {
+        console.log("Preview session expired:", reason);
+      }
+    });
     
     console.log(`📄 preview-page: connectedCallback, routeParams=${JSON.stringify(this.routeParams)}`);
     
@@ -129,6 +146,16 @@ export class PreviewPage extends ComponentBase {
     this.requestUpdate();
 
     // playable-screen-lock is handled inside the previewer component
+  }
+
+  private async initializeAuthState() {
+    try {
+      await this.portfolioService.initialize();
+      this.isAuthenticated = this.portfolioService.isAuthenticated();
+      this.requestUpdate();
+    } catch {
+      this.isAuthenticated = false;
+    }
   }
 
   private async loadPortfolioPlayable(playableId: string) {
@@ -283,6 +310,34 @@ export class PreviewPage extends ComponentBase {
     }
   }
 
+  private async triggerPublishFromPreview() {
+    if (!this.portfolioPlayableData) {
+      return;
+    }
+
+    if (!this.portfolioPlayableData.content) {
+      alert("Publish currently supports HTML portfolio items only.");
+      return;
+    }
+
+    const project = this.portfolioPlayableData.project
+      ? await this.portfolioService.getProjectById(this.portfolioPlayableData.project)
+      : null;
+
+    this.publishService.setLaunchContext({
+      playableTitle: this.portfolioPlayableData.title || this.portfolioPlayableData.name,
+      fileName: this.portfolioPlayableData.originalName || `${this.portfolioPlayableData.name}.html`,
+      htmlContent: this.portfolioPlayableData.content,
+      googlePlayUrl: project?.googlePlay || "",
+      appStoreUrl: project?.appStore || "",
+      projectId: this.portfolioPlayableData.project || "",
+      projectName: project?.name || "",
+      sourceLabel: `Preview: ${this.portfolioPlayableData.title || this.portfolioPlayableData.name}`,
+    });
+
+    window.location.hash = "#/publish";
+  }
+
   render() {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
     const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
@@ -326,6 +381,17 @@ export class PreviewPage extends ComponentBase {
                 `
               : hasContent && isFromPortfolio
               ? html`
+                  ${this.isAuthenticated && this.portfolioPlayableData?.content
+                    ? html`
+                        <button
+                          @click=${() => this.triggerPublishFromPreview()}
+                          class="px-6 py-2.5 rounded bg-primary text-white font-semibold hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors flex items-center gap-2"
+                        >
+                          <span class="material-icons-outlined">publish</span>
+                          Publish for Ad networks
+                        </button>
+                      `
+                    : null}
                   <button
                     @click=${() => {
                       // Clear all content and return to input mode

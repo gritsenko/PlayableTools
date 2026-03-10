@@ -1,49 +1,62 @@
-import { ComponentBase, html, inject } from "fw";
+import { ComponentBase, customElement, html, inject, state } from "fw";
 import { PlayablePublishService } from "../../services/PlayablePublishService";
+import { PortfolioService } from "../../services/PortfolioService";
+import type { Project } from "../../services/ApiClient";
+import type { PublishValidationIssue } from "../../services/types";
 
+@customElement("playable-publisher")
 export class PlayablePublisher extends ComponentBase {
-  dragActive = false;
-  loadedFile: File | null = null;
-  isPublishing = false;
-  publishProgress = 0;
-  currentPlatform: string | null = null;
-  publishStartTime: number | null = null;
-  publishElapsed: string | null = null;
+  @inject(PlayablePublishService) playablePublishService!: PlayablePublishService;
+  @inject(PortfolioService) portfolioService!: PortfolioService;
 
-  // Form inputs
-  playableTitle = '';
-  googlePlayUrl = '';
-  appStoreUrl = '';
-  customSuffix = 'EN';
-  outputDirectory = '';
+  @state() private dragActive = false;
+  @state() private loadedFile: File | null = null;
+  @state() private isPublishing = false;
+  @state() private publishProgress = 0;
+  @state() private currentPlatform: string | null = null;
+  @state() private publishStartTime: number | null = null;
+  @state() private publishElapsed: string | null = null;
+  @state() private playableTitle = "";
+  @state() private googlePlayUrl = "";
+  @state() private appStoreUrl = "";
+  @state() private customSuffix = "EN";
+  @state() private availablePlatforms: string[] = [];
+  @state() private selectedPlatforms: string[] = [];
+  @state() private validationIssues: PublishValidationIssue[] = [];
+  @state() private projects: Project[] = [];
+  @state() private selectedProjectId = "";
+  @state() private isAuthenticated = false;
+  @state() private sourceLabel = "";
 
-  // Platform checklist state
-  availablePlatforms: string[] = [];
-  selectedPlatforms: string[] = [];
-
-  // LocalStorage keys
   private readonly STORAGE_KEYS = {
-    playableTitle: 'playable-publisher-title',
-    googlePlayUrl: 'playable-publisher-google-url',
-    appStoreUrl: 'playable-publisher-app-store-url',
-    customSuffix: 'playable-publisher-suffix',
-    selectedPlatforms: 'playable-publisher-selected-platforms',
-  };
+    playableTitle: "playable-publisher-title",
+    googlePlayUrl: "playable-publisher-google-url",
+    appStoreUrl: "playable-publisher-app-store-url",
+    customSuffix: "playable-publisher-suffix",
+    selectedPlatforms: "playable-publisher-selected-platforms",
+    selectedProjectId: "playable-publisher-selected-project-id",
+  } as const;
 
   connectedCallback() {
     super.connectedCallback();
+    void this.initialize();
+  }
+
+  private async initialize() {
     this.loadFromLocalStorage();
-    // Load available platforms from service
-    if (this.playablePublishService && typeof this.playablePublishService.getAvailablePlatforms === 'function') {
-      this.availablePlatforms = this.playablePublishService.getAvailablePlatforms();
-      // If no selectedPlatforms loaded, default to all
-      if (!this.selectedPlatforms || this.selectedPlatforms.length === 0) {
-        this.selectedPlatforms = [...this.availablePlatforms];
-      }
+    this.availablePlatforms = this.playablePublishService.getAvailablePlatforms();
+    if (this.selectedPlatforms.length === 0) {
+      this.selectedPlatforms = [...this.availablePlatforms];
     }
+    await this.loadProjects();
+    await this.applyLaunchContext();
+    await this.validateCurrentState();
   }
 
   render() {
+    const errors = this.validationIssues.filter((issue) => issue.level === "error");
+    const warnings = this.validationIssues.filter((issue) => issue.level === "warning");
+
     return html`
       <div class="max-w-4xl mx-auto">
         <div class="mb-8">
@@ -53,6 +66,7 @@ export class PlayablePublisher extends ComponentBase {
             for different platforms.<br />
             Drop your .html file below or select it manually.
           </div>
+          ${this.sourceLabel ? html`<div class="text-sm font-medium text-primary">Prefilled from ${this.sourceLabel}</div>` : null}
         </div>
 
         ${!this.loadedFile
@@ -70,12 +84,7 @@ export class PlayablePublisher extends ComponentBase {
                 <p class="text-slate-600 dark:text-slate-400 mb-4">Drop your .html file here or</p>
                 <label class="inline-block px-6 py-2 bg-primary text-white rounded-lg cursor-pointer hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20">
                   Select file
-                  <input
-                    type="file"
-                    accept=".html"
-                    @change=${this._onFileChange}
-                    class="hidden"
-                  />
+                  <input type="file" accept=".html" @change=${this._onFileChange} class="hidden" />
                 </label>
               </div>
             `
@@ -94,13 +103,10 @@ export class PlayablePublisher extends ComponentBase {
                       <div class="mt-4">
                         <div class="text-sm text-slate-600 dark:text-slate-400 mb-2 flex justify-between">
                           <span>Publishing... ${Math.round(this.publishProgress)}%</span>
-                          ${this.currentPlatform ? html`<span class="font-medium text-primary">(${this.currentPlatform})</span>` : ''}
+                          ${this.currentPlatform ? html`<span class="font-medium text-primary">(${this.currentPlatform})</span>` : null}
                         </div>
                         <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                          <div 
-                            class="bg-primary h-2.5 rounded-full transition-all duration-300"
-                            style="width: ${this.publishProgress}%;"
-                          ></div>
+                          <div class="bg-primary h-2.5 rounded-full transition-all duration-300" style="width: ${this.publishProgress}%;"></div>
                         </div>
                       </div>
                     `
@@ -108,125 +114,160 @@ export class PlayablePublisher extends ComponentBase {
               </div>
             `}
 
-        <!-- Form inputs: only show when file is loaded -->
-        ${this.loadedFile ? html`
-          <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
-            <div class="flex justify-between items-center mb-6">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">Playable Configuration</h3>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label for="playableTitle" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Playable Title:</label>
-                <input
-                  id="playableTitle"
-                  type="text"
-                  .value=${this.playableTitle}
-                  @input=${(e: Event) => {
-                    this.updateField('playableTitle', (e.target as HTMLInputElement).value);
-                  }}
-                  placeholder="e.g., GoH_PBCustomHero3D"
-                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-              
-              <div>
-                <label for="customSuffix" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Suffix:</label>
-                <input
-                  id="customSuffix"
-                  type="text"
-                  .value=${this.customSuffix}
-                  @input=${(e: Event) => {
-                    this.updateField('customSuffix', (e.target as HTMLInputElement).value);
-                  }}
-                  placeholder="EN"
-                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-              
-              <div>
-                <label for="googlePlayUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Google Play URL:</label>
-                <input
-                  id="googlePlayUrl"
-                  type="url"
-                  .value=${this.googlePlayUrl}
-                  @input=${(e: Event) => {
-                    this.updateField('googlePlayUrl', (e.target as HTMLInputElement).value);
-                  }}
-                  placeholder="https://play.google.com/store/apps/details?id=..."
-                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-              
-              <div>
-                <label for="appStoreUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">App Store URL:</label>
-                <input
-                  id="appStoreUrl"
-                  type="url"
-                  .value=${this.appStoreUrl}
-                  @input=${(e: Event) => {
-                    this.updateField('appStoreUrl', (e.target as HTMLInputElement).value);
-                  }}
-                  placeholder="https://apps.apple.com/app/..."
-                  class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-            </div>
+        ${this.loadedFile
+          ? html`
+              <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+                <div class="flex justify-between items-center mb-6">
+                  <h3 class="text-xl font-bold text-slate-900 dark:text-white">Playable Configuration</h3>
+                </div>
 
-            <!-- Platform checklist -->
-            <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
-              <div class="flex justify-between items-center mb-4">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Platforms:</label>
-                <div class="flex gap-4 text-sm">
-                  <a href="#" @click=${this._selectAllPlatforms} class="text-primary hover:underline">Select all</a>
-                  <a href="#" @click=${this._clearAllPlatforms} class="text-primary hover:underline">Clear all</a>
+                ${errors.length > 0
+                  ? html`
+                      <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                        ${errors.map((issue) => html`<div>${issue.message}</div>`) }
+                      </div>
+                    `
+                  : null}
+
+                ${warnings.length > 0
+                  ? html`
+                      <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                        ${warnings.map((issue) => html`<div>${issue.message}</div>`) }
+                      </div>
+                    `
+                  : null}
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  ${this.isAuthenticated
+                    ? html`
+                        <div class="md:col-span-2">
+                          <label for="projectSelect" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project URLs:</label>
+                          <select
+                            id="projectSelect"
+                            .value=${this.selectedProjectId}
+                            @change=${this._onProjectChange}
+                            class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          >
+                            <option value="">Manual URLs</option>
+                            ${this.projects.map((project) => html`<option value=${project.id}>${project.name}</option>`) }
+                          </select>
+                        </div>
+                      `
+                    : null}
+
+                  <div>
+                    <label for="playableTitle" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Playable Title:</label>
+                    <input
+                      id="playableTitle"
+                      type="text"
+                      .value=${this.playableTitle}
+                      @input=${(e: Event) => this.updateField("playableTitle", (e.target as HTMLInputElement).value)}
+                      placeholder="e.g., GoH_PBCustomHero3D"
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="customSuffix" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Suffix:</label>
+                    <input
+                      id="customSuffix"
+                      type="text"
+                      .value=${this.customSuffix}
+                      @input=${(e: Event) => this.updateField("customSuffix", (e.target as HTMLInputElement).value)}
+                      placeholder="EN"
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="googlePlayUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Google Play URL:</label>
+                    <input
+                      id="googlePlayUrl"
+                      type="url"
+                      .value=${this.googlePlayUrl}
+                      @input=${(e: Event) => this.updateField("googlePlayUrl", (e.target as HTMLInputElement).value)}
+                      placeholder="https://play.google.com/store/apps/details?id=..."
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="appStoreUrl" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">App Store URL:</label>
+                    <input
+                      id="appStoreUrl"
+                      type="url"
+                      .value=${this.appStoreUrl}
+                      @input=${(e: Event) => this.updateField("appStoreUrl", (e.target as HTMLInputElement).value)}
+                      placeholder="https://apps.apple.com/app/..."
+                      class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+                  <div class="flex justify-between items-center mb-4">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Platforms:</label>
+                    <div class="flex gap-4 text-sm">
+                      <a href="#" @click=${this._selectAllPlatforms} class="text-primary hover:underline">Select all</a>
+                      <a href="#" @click=${this._clearAllPlatforms} class="text-primary hover:underline">Clear all</a>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    ${this.availablePlatforms.map((platform) => html`
+                      <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                        <input
+                          type="checkbox"
+                          .checked=${this.selectedPlatforms.includes(platform)}
+                          @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
+                          class="rounded text-primary focus:ring-primary"
+                        />
+                        <span class="text-sm text-slate-700 dark:text-slate-300">${this.playablePublishService.getPlatformLabel(platform)}</span>
+                      </label>
+                    `)}
+                  </div>
                 </div>
               </div>
-              
-              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                ${this.availablePlatforms.map(platform => html`
-                  <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                    <input
-                      type="checkbox"
-                      .checked=${this.selectedPlatforms.includes(platform)}
-                      @change=${(e: Event) => this._onPlatformCheckboxChange(e, platform)}
-                      class="rounded text-primary focus:ring-primary"
-                    />
-                    <span class="text-sm text-slate-700 dark:text-slate-300">${platform}</span>
-                  </label>
-                `)}
-              </div>
-            </div>
-          </div>
-        ` : null}
+            `
+          : null}
 
-        <!-- Publish/Cancel buttons below the form -->
         <div class="mb-8 flex gap-4 justify-center">
-          ${this.loadedFile && this.playableTitle && !this.isPublishing ? html`
-            <button 
-              @click=${this._publishPlayable}
-              class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              ?disabled=${!this.selectedPlatforms.length}
-            >
-              <span class="material-icons-outlined">publish</span>
-              Publish
-            </button>
-          ` : null}
-          ${this.loadedFile && !this.isPublishing ? html`
-            <button 
-              @click=${this._resetFile}
-              class="px-8 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium"
-            >
-              Cancel
-            </button>
-          ` : null}
+          ${this.loadedFile && !this.isPublishing
+            ? html`
+                <button
+                  @click=${() => this._publishPlayable("directory")}
+                  class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  ?disabled=${errors.length > 0}
+                >
+                  <span class="material-icons-outlined">folder_open</span>
+                  Save to folder
+                </button>
+                <button
+                  @click=${() => this._publishPlayable("zip")}
+                  class="px-8 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  ?disabled=${errors.length > 0}
+                >
+                  <span class="material-icons-outlined">archive</span>
+                  Download zip
+                </button>
+              `
+            : null}
         </div>
       </div>
     `;
   }
-  /**
-   * Handle platform checkbox change
-   */
+
+  private _onProjectChange = async (e: Event) => {
+    this.selectedProjectId = (e.target as HTMLSelectElement).value;
+    const project = this.projects.find((item) => item.id === this.selectedProjectId);
+    if (project) {
+      this.googlePlayUrl = project.googlePlay || this.googlePlayUrl;
+      this.appStoreUrl = project.appStore || this.appStoreUrl;
+    }
+    this.saveToLocalStorage();
+    await this.validateCurrentState();
+  };
+
   private _onPlatformCheckboxChange(e: Event, platform: string) {
     const checked = (e.target as HTMLInputElement).checked;
     if (checked) {
@@ -234,248 +275,280 @@ export class PlayablePublisher extends ComponentBase {
         this.selectedPlatforms = [...this.selectedPlatforms, platform];
       }
     } else {
-      this.selectedPlatforms = this.selectedPlatforms.filter(p => p !== platform);
+      this.selectedPlatforms = this.selectedPlatforms.filter((value) => value !== platform);
     }
     this.saveToLocalStorage();
-    this.requestUpdate();
+    void this.validateCurrentState();
   }
 
-  /**
-   * Select all platforms
-   */
   private _selectAllPlatforms(e: Event) {
     e.preventDefault();
     this.selectedPlatforms = [...this.availablePlatforms];
     this.saveToLocalStorage();
-    this.requestUpdate();
+    void this.validateCurrentState();
   }
 
-  /**
-   * Clear all platforms
-   */
   private _clearAllPlatforms(e: Event) {
     e.preventDefault();
     this.selectedPlatforms = [];
     this.saveToLocalStorage();
-    this.requestUpdate();
+    void this.validateCurrentState();
   }
-  @inject(PlayablePublishService) playablePublishService!: PlayablePublishService;
 
-  _onDragOver(e: DragEvent) {
+  private _onDragOver(e: DragEvent) {
     e.preventDefault();
     this.dragActive = true;
-    this.requestUpdate();
   }
 
-  _onDragLeave(e: DragEvent) {
+  private _onDragLeave(e: DragEvent) {
     e.preventDefault();
     this.dragActive = false;
-    this.requestUpdate();
   }
 
-  _onDrop(e: DragEvent) {
+  private _onDrop(e: DragEvent) {
     e.preventDefault();
     this.dragActive = false;
-    this.requestUpdate();
     const files = e.dataTransfer?.files;
-    if (files && files.length) {
-      this._processFile(files[0]);
+    if (files && files.length > 0) {
+      void this.processFile(files[0]);
     }
   }
 
-  _onFileChange(e: Event) {
+  private _onFileChange(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (file) {
-      this._processFile(file);
+      void this.processFile(file);
     }
   }
 
-  _processFile(file: File) {
-    if (file && file.name.endsWith(".html")) {
-      this.loadedFile = file;
-      this.requestUpdate();
-      const event = new CustomEvent("file-selected", { detail: file });
-      this.dispatchEvent(event);
-    } else {
+  private async processFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".html") && !file.name.toLowerCase().endsWith(".htm")) {
       alert("Please select a valid .html file.");
-    }
-  }
-
-  _resetFile() {
-    this.loadedFile = null;
-    this.requestUpdate();
-  }
-
-  async _publishPlayable() {
-    if (!this.loadedFile || !this.playableTitle) {
-      alert('Please provide a playable title and select a file.');
       return;
     }
-    if (!this.selectedPlatforms || this.selectedPlatforms.length === 0) {
-      alert('Please select at least one platform to publish.');
+
+    this.loadedFile = file;
+    if (!this.playableTitle) {
+      this.playableTitle = this.smartPrefillTitle(file.name);
+    }
+    this.saveToLocalStorage();
+    await this.validateCurrentState();
+    this.dispatchEvent(new CustomEvent("file-selected", { detail: file }));
+  }
+
+  private async _publishPlayable(mode: "directory" | "zip") {
+    if (!this.loadedFile) {
       return;
     }
+
+    this.isPublishing = true;
+    this.publishProgress = 10;
+    this.currentPlatform = null;
+    this.publishElapsed = null;
+    this.publishStartTime = Date.now();
 
     try {
-      this.isPublishing = true;
-      this.publishProgress = 0;
-      this.currentPlatform = null;
-      this.publishElapsed = null;
-      this.requestUpdate();
+      const htmlContent = await this.readFileContent(this.loadedFile);
+      this.validationIssues = this.playablePublishService.validatePublishRequest(htmlContent, {
+        title: this.playableTitle,
+        googlePlayUrl: this.googlePlayUrl,
+        appStoreUrl: this.appStoreUrl,
+        selectedPlatforms: [...this.selectedPlatforms],
+      });
+      if (this.validationIssues.some((issue) => issue.level === "error")) {
+        this.isPublishing = false;
+        this.publishProgress = 0;
+        return;
+      }
 
-      // Request output directory
-      this.publishProgress = 10;
-      this.requestUpdate();
-      const outputDir = await this.playablePublishService.requestOutputDirectory();
-
-      // Start elapsed time after user selects folder
-      this.publishStartTime = Date.now();
-
-      // Read file content
-      this.publishProgress = 20;
-      this.requestUpdate();
-      const htmlContent = await this._readFileContent(this.loadedFile);
-
-      // Prepare options
       const options = {
         name: this.playableTitle,
         title: this.playableTitle,
         googlePlayUrl: this.googlePlayUrl,
         appStoreUrl: this.appStoreUrl,
         suffix: this.customSuffix,
-        outputDirectory: outputDir,
+        selectedPlatforms: [...this.selectedPlatforms],
         onProgress: (progress: number, platform?: string) => {
           this.publishProgress = progress;
-          if (platform) this.currentPlatform = platform;
-          this.requestUpdate();
+          this.currentPlatform = platform ?? null;
         },
-        selectedPlatforms: [...this.selectedPlatforms],
       };
 
-      this.publishProgress = 30;
-      this.requestUpdate();
-
-      // Process only selected platforms
-      await this.playablePublishService.processAllPlatforms(htmlContent, options);
-      this.publishProgress = 100;
-      this.currentPlatform = null;
-      // Calculate elapsed time
-      if (this.publishStartTime) {
-        const elapsedMs = Date.now() - this.publishStartTime;
-        this.publishElapsed = this._formatElapsed(elapsedMs);
+      if (mode === "zip") {
+        await this.playablePublishService.downloadAggregateZip(htmlContent, options);
+        this.publishProgress = 100;
+      } else {
+        const outputDirectory = await this.playablePublishService.requestOutputDirectory();
+        await this.playablePublishService.processAllPlatforms(htmlContent, {
+          ...options,
+          outputDirectory,
+        });
+        this.publishProgress = 100;
       }
-      this.requestUpdate();
 
-      // Show success message
-      setTimeout(() => {
-        let msg = `Publishing completed successfully! Files have been saved to the selected directory with subfolders for each platform.`;
-        if (this.publishElapsed) {
-          msg += `\n\nElapsed time: ${this.publishElapsed}`;
-        }
-        alert(msg);
-        this.isPublishing = false;
-        this.publishProgress = 0;
-        this.publishElapsed = null;
-        this.publishStartTime = null;
-        this.requestUpdate();
-      }, 500);
+      if (this.publishStartTime) {
+        this.publishElapsed = this.formatElapsed(Date.now() - this.publishStartTime);
+      }
+
+      let message = mode === "zip"
+        ? "Publishing completed successfully! One ZIP archive has been downloaded."
+        : "Publishing completed successfully! Files have been saved to the selected directory with subfolders for each platform.";
+      if (this.publishElapsed) {
+        message += `\n\nElapsed time: ${this.publishElapsed}`;
+      }
+      alert(message);
     } catch (error) {
-      console.error('Publishing failed:', error);
-      let errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      // Add browser compatibility hint for File System API errors
-      if (errorMessage.includes('File System Access API is not supported')) {
-        errorMessage += '\n\nFor best results, please use Chrome 86+, Edge 86+, or another browser that supports the File System Access API.';
+      let errorMessage = error instanceof Error ? error.message : "Unknown error";
+      if (errorMessage.includes("File System Access API is not supported")) {
+        errorMessage += "\n\nFor best results, please use Chrome 86+, Edge 86+, or another browser that supports the File System Access API.";
       }
       alert(`Publishing failed: ${errorMessage}`);
+    } finally {
       this.isPublishing = false;
       this.publishProgress = 0;
-      this.requestUpdate();
+      this.currentPlatform = null;
     }
   }
 
-  /**
-   * Formats elapsed time in ms to human readable string
-   */
-  private _formatElapsed(ms: number): string {
-    const sec = Math.floor(ms / 1000);
-    const min = Math.floor(sec / 60);
-    const s = sec % 60;
-    if (min > 0) return `${min}m ${s}s`;
-    return `${s}s`;
+  private smartPrefillTitle(fileName: string): string {
+    return fileName.replace(/\.(html|htm)$/i, "").trim();
   }
 
-  private _readFileContent(file: File): Promise<string> {
+  private formatElapsed(ms: number): string {
+    const sec = Math.floor(ms / 1000);
+    const min = Math.floor(sec / 60);
+    const seconds = sec % 60;
+    if (min > 0) {
+      return `${min}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  }
+
+  private readFileContent(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result;
-        if (typeof result === 'string') {
+        if (typeof result === "string") {
           resolve(result);
         } else {
-          reject(new Error('Failed to read file as text'));
+          reject(new Error("Failed to read file as text"));
         }
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => reject(new Error("Failed to read file"));
       reader.readAsText(file);
     });
   }
 
-  /**
-   * Loads saved form data from localStorage
-   */
   private loadFromLocalStorage() {
-    this.playableTitle = localStorage.getItem(this.STORAGE_KEYS.playableTitle) || '';
-    this.googlePlayUrl = localStorage.getItem(this.STORAGE_KEYS.googlePlayUrl) || '';
-    this.appStoreUrl = localStorage.getItem(this.STORAGE_KEYS.appStoreUrl) || '';
-    this.customSuffix = localStorage.getItem(this.STORAGE_KEYS.customSuffix) || 'EN';
+    this.playableTitle = localStorage.getItem(this.STORAGE_KEYS.playableTitle) || "";
+    this.googlePlayUrl = localStorage.getItem(this.STORAGE_KEYS.googlePlayUrl) || "";
+    this.appStoreUrl = localStorage.getItem(this.STORAGE_KEYS.appStoreUrl) || "";
+    this.customSuffix = localStorage.getItem(this.STORAGE_KEYS.customSuffix) || "EN";
+    this.selectedProjectId = localStorage.getItem(this.STORAGE_KEYS.selectedProjectId) || "";
 
-    // Load selected platforms
     const selectedPlatformsStr = localStorage.getItem(this.STORAGE_KEYS.selectedPlatforms);
     if (selectedPlatformsStr) {
       try {
-        const arr = JSON.parse(selectedPlatformsStr);
-        if (Array.isArray(arr)) {
-          this.selectedPlatforms = arr;
+        const parsed = JSON.parse(selectedPlatformsStr);
+        if (Array.isArray(parsed)) {
+          this.selectedPlatforms = parsed;
         }
-      } catch {}
+      } catch {
+        this.selectedPlatforms = [];
+      }
     }
-
-    this.requestUpdate();
   }
 
-  /**
-   * Saves form data to localStorage
-   */
   private saveToLocalStorage() {
     localStorage.setItem(this.STORAGE_KEYS.playableTitle, this.playableTitle);
     localStorage.setItem(this.STORAGE_KEYS.googlePlayUrl, this.googlePlayUrl);
     localStorage.setItem(this.STORAGE_KEYS.appStoreUrl, this.appStoreUrl);
     localStorage.setItem(this.STORAGE_KEYS.customSuffix, this.customSuffix);
     localStorage.setItem(this.STORAGE_KEYS.selectedPlatforms, JSON.stringify(this.selectedPlatforms));
+    localStorage.setItem(this.STORAGE_KEYS.selectedProjectId, this.selectedProjectId);
   }
 
-  /**
-   * Updates a form field and saves to localStorage
-   */
   private updateField(field: keyof typeof this.STORAGE_KEYS, value: string) {
     switch (field) {
-      case 'playableTitle':
+      case "playableTitle":
         this.playableTitle = value;
         break;
-      case 'googlePlayUrl':
+      case "googlePlayUrl":
         this.googlePlayUrl = value;
         break;
-      case 'appStoreUrl':
+      case "appStoreUrl":
         this.appStoreUrl = value;
         break;
-      case 'customSuffix':
+      case "customSuffix":
         this.customSuffix = value;
+        break;
+      default:
         break;
     }
     this.saveToLocalStorage();
-    this.requestUpdate();
+    void this.validateCurrentState();
+  }
+
+  private async loadProjects() {
+    try {
+      await this.portfolioService.initialize();
+      this.isAuthenticated = this.portfolioService.isAuthenticated();
+      if (this.isAuthenticated) {
+        this.projects = await this.portfolioService.getProjects();
+      }
+    } catch {
+      this.isAuthenticated = false;
+      this.projects = [];
+    }
+  }
+
+  private async applyLaunchContext() {
+    const context = this.playablePublishService.consumeLaunchContext();
+    if (!context) {
+      return;
+    }
+
+    this.sourceLabel = context.sourceLabel || "Preview";
+    if (context.playableTitle) {
+      this.playableTitle = context.playableTitle;
+    }
+    if (context.googlePlayUrl) {
+      this.googlePlayUrl = context.googlePlayUrl;
+    }
+    if (context.appStoreUrl) {
+      this.appStoreUrl = context.appStoreUrl;
+    }
+    if (context.projectId) {
+      this.selectedProjectId = context.projectId;
+    }
+    if (context.htmlContent) {
+      const fileName = context.fileName || `${context.playableTitle || "playable"}.html`;
+      this.loadedFile = new File([context.htmlContent], fileName, { type: "text/html" });
+    }
+    if (!this.playableTitle && context.fileName) {
+      this.playableTitle = this.smartPrefillTitle(context.fileName);
+    }
+    this.saveToLocalStorage();
+  }
+
+  private async validateCurrentState() {
+    if (!this.loadedFile) {
+      this.validationIssues = [];
+      return;
+    }
+
+    try {
+      const htmlContent = await this.readFileContent(this.loadedFile);
+      this.validationIssues = this.playablePublishService.validatePublishRequest(htmlContent, {
+        title: this.playableTitle,
+        googlePlayUrl: this.googlePlayUrl,
+        appStoreUrl: this.appStoreUrl,
+        selectedPlatforms: [...this.selectedPlatforms],
+      });
+    } catch {
+      this.validationIssues = [{ level: "error", message: "Failed to read loaded HTML file." }];
+    }
   }
 }
-
-customElements.define("playable-publisher", PlayablePublisher);

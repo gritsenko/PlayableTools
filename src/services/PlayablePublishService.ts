@@ -1,5 +1,11 @@
 import { injectable, ServiceLifetime } from "fw";
-import type { PlatformConfig, PlayableProcessOptions } from "./types";
+import type {
+  GeneratedPlatformArtifact,
+  PlatformConfig,
+  PlayableProcessOptions,
+  PublishLaunchContext,
+  PublishValidationIssue,
+} from "./types";
 import { UrlUtils } from "../utils/url-utils";
 import { AsstesExtractor } from "../utils/AsstesExtractor";
 // @ts-ignore
@@ -9,208 +15,272 @@ import platformsConfig from "../assets/platforms-config.json";
 export class PlayablePublishService {
   private config: PlatformConfig[] = [];
   private globalDefaults: { replaceTokens?: Record<string, string> } = {};
+  private launchContext: PublishLaunchContext | null = null;
 
   constructor() {
-    // Load config from JSON file at construction
     this.loadConfig(platformsConfig);
   }
-  /**
-   * Loads the platforms config from the provided JSON object.
-   */
+
   loadConfig(configJson: any) {
-    if (Array.isArray(configJson.platforms)) {
-      this.config = configJson.platforms;
-      if (
-        configJson.globalDefaults &&
-        typeof configJson.globalDefaults === "object"
-      ) {
-        this.globalDefaults = configJson.globalDefaults;
-      }
-      console.log(
-        "PlayablePublishService: Loaded platforms config:",
-        this.config
-      );
-    } else {
+    if (!Array.isArray(configJson.platforms)) {
       throw new Error("Invalid config: platforms array missing");
+    }
+
+    this.config = configJson.platforms;
+    if (configJson.globalDefaults && typeof configJson.globalDefaults === "object") {
+      this.globalDefaults = configJson.globalDefaults;
     }
   }
 
-  /**
-   * Returns the loaded platform configs.
-   */
   getPlatforms(): PlatformConfig[] {
     return this.config;
   }
 
-  /**
-   * Returns the list of available platform names.
-   */
-  getAvailablePlatforms(): string[] {
-    return this.config.map((p) => p.Name);
+  getPlatformByName(platformName: string): PlatformConfig | undefined {
+    return this.config.find((platform) => platform.Name === platformName);
   }
 
-  /**
-   * Processes an uploaded HTML file according to the platform rules.
-   * @param htmlContent The HTML file content as string
-   * @param platformName The name of the platform to process for
-   * @param options Optional processing options
-   * @returns Processed HTML as string
-   */
+  getAvailablePlatforms(): string[] {
+    return this.config.map((platform) => platform.Name);
+  }
+
+  getPlatformLabel(platformName: string): string {
+    const platform = this.getPlatformByName(platformName);
+    return `${platformName} (${platform?.format === "zip" ? "ZIP" : "HTML"})`;
+  }
+
+  setLaunchContext(context: PublishLaunchContext | null): void {
+    this.launchContext = context ? { ...context } : null;
+  }
+
+  getLaunchContext(): PublishLaunchContext | null {
+    return this.launchContext ? { ...this.launchContext } : null;
+  }
+
+  consumeLaunchContext(): PublishLaunchContext | null {
+    const context = this.getLaunchContext();
+    this.launchContext = null;
+    return context;
+  }
+
+  detectCtaIntegration(htmlContent: string): boolean {
+    return /document\s*\[\s*["']CTA["']\s*\]\s*(?:\?\.)?\s*onClick\s*(?:\?\.)?\s*\(/i.test(htmlContent)
+      || /document\s*\.\s*CTA\s*(?:\?\.)?\s*\.\s*onClick\s*(?:\?\.)?\s*\(/i.test(htmlContent);
+  }
+
+  validatePublishRequest(htmlContent: string, options: PlayableProcessOptions): PublishValidationIssue[] {
+    const issues: PublishValidationIssue[] = [];
+    const selectedPlatforms = options.selectedPlatforms ?? [];
+
+    if (!options.title?.trim()) {
+      issues.push({ level: "error", message: "Playable title is required." });
+    }
+
+    if (selectedPlatforms.length === 0) {
+      issues.push({ level: "error", message: "Select at least one platform to publish." });
+    }
+
+    const selectedConfigs = this.resolvePlatforms(selectedPlatforms);
+    const requiresMraidUrls = selectedConfigs.some((platform) =>
+      (platform.InjeectScripts ?? []).some((script) => /mraid/i.test(script))
+    );
+
+    if (requiresMraidUrls && !options.googlePlayUrl?.trim()) {
+      issues.push({ level: "error", message: "Google Play URL is required for MRAID-based platforms." });
+    }
+
+    if (requiresMraidUrls && !options.appStoreUrl?.trim()) {
+      issues.push({ level: "error", message: "App Store URL is required for MRAID-based platforms." });
+    }
+
+    if (!this.detectCtaIntegration(htmlContent)) {
+      issues.push({
+        level: "warning",
+        message: 'CTA SDK hook was not detected. Expected one of: document["CTA"].onClick(), document["CTA"]?.onClick?.(), or document.CTA.onClick().',
+      });
+    }
+
+    return issues;
+  }
+
   async processHtml(
     htmlContent: string,
     platformName: string,
     options?: PlayableProcessOptions
   ): Promise<string> {
-    const platform = this.config.find((p) => p.Name === platformName);
-    if (!platform)
+    const platform = this.getPlatformByName(platformName);
+    if (!platform) {
       throw new Error(`Platform '${platformName}' not found in config`);
+    }
 
     let resultHtml = htmlContent;
-
-    // Build effective replaceTokens for this processing run.
-    // Start with platform-specific tokens (if any), then merge tokens provided via options
-    // (googlePlayUrl/appStoreUrl) and finally any globalDefaults (already applied earlier
-    // in processAllPlatforms for global pass).
     const effectiveTokens: Record<string, string> = {};
     if (platform.replaceTokens) {
       Object.assign(effectiveTokens, platform.replaceTokens);
     }
-
-    // Add run-time tokens for app store links. Use the exact placeholders used in CTA templates.
-    if (options) {
-      if (options.googlePlayUrl) {
-        effectiveTokens["{{google}}"] = options.googlePlayUrl;
-      }
-      if (options.appStoreUrl) {
-        effectiveTokens["{{apple}}"] = options.appStoreUrl;
-      }
+    if (options?.googlePlayUrl) {
+      effectiveTokens["{{google}}"] = options.googlePlayUrl;
+    }
+    if (options?.appStoreUrl) {
+      effectiveTokens["{{apple}}"] = options.appStoreUrl;
     }
 
-    // Platform replaceTokens stopwatch
-    let t0 = performance.now();
     if (Object.keys(effectiveTokens).length > 0) {
       resultHtml = this.applyReplaceTokens(resultHtml, effectiveTokens);
     }
-    let t1 = performance.now();
-    console.log(
-      `[PlayablePublishService] Platform replaceTokens (${platformName}): ${(
-        t1 - t0
-      ).toFixed(2)} ms`
-    );
 
-    // Script injection stopwatch
     if (platform.InjeectScripts && Array.isArray(platform.InjeectScripts)) {
-      let t2 = performance.now();
-      // Pass effectiveTokens so we can replace placeholders inside fetched scripts as well
-      resultHtml = await this.injectScripts(
-        resultHtml,
-        platform.InjeectScripts,
-        effectiveTokens
-      );
-      let t3 = performance.now();
-      console.log(
-        `[PlayablePublishService] Script injection (${platformName}): ${(
-          t3 - t2
-        ).toFixed(2)} ms`
-      );
+      resultHtml = await this.injectScripts(resultHtml, platform.InjeectScripts, effectiveTokens);
     }
-
-    // Output index.html name replacement
-    if (platform.OutputIndexHtmlName && options?.name) {
-      // Optionally handle renaming logic here
-      // This is just a placeholder for actual file renaming logic
-      // e.g., options.outputFileName = platform.OutputIndexHtmlName.replace('%name%', options.name);
-    }
-
-    // Additional processing rules can be added here (e.g., ExtractScripts, ExtraFiles, Sizes, etc.)
 
     return resultHtml;
   }
-  /**
-   * Applies replaceTokens to the input HTML string.
-   */
-  private applyReplaceTokens(
-    html: string,
-    replaceTokens: Record<string, string>
-  ): string {
-    // If no tokens, return original
-    if (!replaceTokens || Object.keys(replaceTokens).length === 0) return html;
 
-    // Determine which tokens actually occur in the input and log counts
-    const tokens = Object.keys(replaceTokens);
-    const matched: { token: string; count: number }[] = [];
-    for (const token of tokens) {
-      try {
-        const esc = token.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
-        const matches = html.match(new RegExp(esc, "g"));
-        const count = matches ? matches.length : 0;
-        if (count > 0) matched.push({ token, count });
-      } catch (e) {
-        // ignore malformed token regex
-      }
+  async processAllPlatforms(htmlContent: string, options: PlayableProcessOptions): Promise<void> {
+    if (!options.outputDirectory) {
+      throw new Error("Output directory is required");
     }
 
-    // Escape regex special chars in search tokens for global replacement
-    const escapedTokens = tokens.map((token) =>
-      token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    );
-    // Build a regex that matches any token
-    const regex = new RegExp(escapedTokens.join("|"), "g");
-
-    // Replace using a single pass
-    const result = html.replace(regex, (match) => replaceTokens[match] ?? match);
-
-    if (matched.length > 0) {
-      console.log(
-        `[PlayablePublishService] applyReplaceTokens: replaced ${matched.length} token(s): ${matched
-          .map((m) => `${m.token}(${m.count})`)
-          .join(", ")}`
-      );
-    } else {
-      console.log(`[PlayablePublishService] applyReplaceTokens: no tokens matched`);
+    const artifacts = await this.buildPlatformArtifacts(htmlContent, options);
+    for (let index = 0; index < artifacts.length; index++) {
+      const artifact = artifacts[index];
+      const directory = await this.createPlatformDirectory(options.outputDirectory, artifact.directoryName);
+      await this.saveBlobToDirectory(artifact.blob, artifact.outputFileName, directory);
+      options.onProgress?.(30 + ((index + 1) / artifacts.length) * 70, artifact.platformName);
     }
-
-    return result;
   }
 
-  /**
-   * Injects script tags in the head section before any existing script tags.
-   */
+  async buildPlatformArtifacts(
+    htmlContent: string,
+    options: PlayableProcessOptions
+  ): Promise<GeneratedPlatformArtifact[]> {
+    const playableName = options.name || "Playable";
+    const suffix = options.suffix || "EN";
+    const globalProcessedHtml = this.applyGlobalTokens(htmlContent);
+    const platforms = this.resolvePlatforms(options.selectedPlatforms);
+    const artifacts: GeneratedPlatformArtifact[] = [];
+
+    for (const platform of platforms) {
+      const processedHtml = await this.processHtml(globalProcessedHtml, platform.Name, options);
+      const htmlFileName = this.generateFileName(playableName, platform.Name, suffix, platform, true);
+      const zipBaseHtmlName = this.generateFileName(playableName, platform.Name, suffix, platform, false);
+      const outputFileName = platform.format === "zip"
+        ? zipBaseHtmlName.replace(/\.html$/i, ".zip")
+        : htmlFileName;
+      const blob = platform.format === "zip"
+        ? await this.buildZipPackageBlob(processedHtml, htmlFileName, platform)
+        : new Blob([processedHtml], { type: "text/html" });
+
+      artifacts.push({
+        platformName: platform.Name,
+        platformLabel: this.getPlatformLabel(platform.Name),
+        format: platform.format === "zip" ? "zip" : "html",
+        outputFileName,
+        directoryName: platform.Name,
+        htmlFileName,
+        htmlContent: processedHtml,
+        blob,
+      });
+    }
+
+    return artifacts;
+  }
+
+  async buildAggregateZipBlob(htmlContent: string, options: PlayableProcessOptions): Promise<Blob> {
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    const artifacts = await this.buildPlatformArtifacts(htmlContent, options);
+
+    for (const artifact of artifacts) {
+      zip.file(`${artifact.directoryName}/${artifact.outputFileName}`, await artifact.blob.arrayBuffer());
+    }
+
+    return this.generateZipBlob(zip);
+  }
+
+  async downloadAggregateZip(htmlContent: string, options: PlayableProcessOptions): Promise<void> {
+    const blob = await this.buildAggregateZipBlob(htmlContent, options);
+    const fileName = `${options.name || "Playable"}_${options.suffix || "EN"}_all-platforms.zip`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async requestOutputDirectory(): Promise<FileSystemDirectoryHandle> {
+    if (!("showDirectoryPicker" in window)) {
+      throw new Error(
+        "File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser."
+      );
+    }
+
+    try {
+      // @ts-ignore
+      return await window.showDirectoryPicker();
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Directory selection was cancelled");
+      }
+      throw new Error(`Failed to select directory: ${error}`);
+    }
+  }
+
+  private applyGlobalTokens(htmlContent: string): string {
+    if (!this.globalDefaults.replaceTokens) {
+      return htmlContent;
+    }
+    return this.applyReplaceTokens(htmlContent, this.globalDefaults.replaceTokens);
+  }
+
+  private resolvePlatforms(selectedPlatforms?: string[]): PlatformConfig[] {
+    if (!selectedPlatforms || selectedPlatforms.length === 0) {
+      return this.config;
+    }
+    return this.config.filter((platform) => selectedPlatforms.includes(platform.Name));
+  }
+
+  private applyReplaceTokens(html: string, replaceTokens: Record<string, string>): string {
+    if (!replaceTokens || Object.keys(replaceTokens).length === 0) {
+      return html;
+    }
+
+    const escapedTokens = Object.keys(replaceTokens).map((token) =>
+      token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    );
+    const regex = new RegExp(escapedTokens.join("|"), "g");
+    return html.replace(regex, (match) => replaceTokens[match] ?? match);
+  }
+
   private async injectScripts(
     html: string,
     scripts: string[],
-    // Optional replace tokens to apply inside fetched script contents
     replaceTokens?: Record<string, string>
   ): Promise<string> {
     let result = html;
+    const scriptTags = (await Promise.all(
+      scripts.map(async (scriptSrc) => {
+        try {
+          const fetchUrl = UrlUtils.buildFetchUrl("publish-data/", scriptSrc);
+          const response = await fetch(fetchUrl);
+          if (!response.ok) {
+            return null;
+          }
 
-    // Fetch all scripts in parallel using UrlUtils
-    const scriptFetches = scripts.map(async (scriptSrc) => {
-      try {
-        const fetchUrl = UrlUtils.buildFetchUrl("publish-data/", scriptSrc);
-        const response = await fetch(fetchUrl);
-        if (response.ok) {
           let scriptContent = await response.text();
-          // Apply replace tokens to fetched script content as well
           if (replaceTokens && Object.keys(replaceTokens).length > 0) {
             scriptContent = this.applyReplaceTokens(scriptContent, replaceTokens);
           }
           return `<script>\n${scriptContent}\n</script>`;
-        } else {
-          console.warn(`Could not load script: ${scriptSrc} from ${fetchUrl}`);
+        } catch {
           return null;
         }
-      } catch (error) {
-        console.warn(`Failed to inject script ${scriptSrc}:`, error);
-        return null;
-      }
-    });
+      })
+    )).filter(Boolean) as string[];
 
-    const scriptTags = (await Promise.all(scriptFetches)).filter(
-      Boolean
-    ) as string[];
-
-    // Inject all script tags in order
     for (const scriptTag of scriptTags) {
       if (/<head[^>]*>/i.test(result)) {
         const headMatch = result.match(/(<head[^>]*>)([\s\S]*?)(<\/head>)/i);
@@ -218,14 +288,8 @@ export class PlayablePublishService {
           const headContent = headMatch[2];
           const firstScriptMatch = headContent.match(/<script[^>]*>/i);
           if (firstScriptMatch) {
-            const insertIndex =
-              headMatch.index! +
-              headMatch[1].length +
-              headContent.indexOf(firstScriptMatch[0]);
-            result =
-              result.slice(0, insertIndex) +
-              `\n${scriptTag}\n` +
-              result.slice(insertIndex);
+            const insertIndex = headMatch.index! + headMatch[1].length + headContent.indexOf(firstScriptMatch[0]);
+            result = `${result.slice(0, insertIndex)}\n${scriptTag}\n${result.slice(insertIndex)}`;
           } else {
             result = result.replace(/<\/head>/i, `${scriptTag}\n</head>`);
           }
@@ -233,133 +297,19 @@ export class PlayablePublishService {
       } else if (/<\/body>/i.test(result)) {
         result = result.replace(/<\/body>/i, `${scriptTag}\n</body>`);
       } else {
-        result = result + scriptTag;
+        result += scriptTag;
       }
     }
 
     return result;
   }
 
-  /**
-   * Processes the playable for all platforms and saves to the specified directory
-   * @param htmlContent The HTML file content as string
-   * @param options Processing options including output directory and metadata
-   * @returns Promise that resolves when processing is complete
-   */
-  /**
-   * Processes the playable for selected platforms and saves to the specified directory
-   * @param htmlContent The HTML file content as string
-   * @param options Processing options including output directory and metadata
-   * @param options.selectedPlatforms Optional array of platform names to process
-   * @returns Promise that resolves when processing is complete
-   */
-  async processAllPlatforms(
-    htmlContent: string,
-    options: PlayableProcessOptions & { selectedPlatforms?: string[] }
-  ): Promise<void> {
-    if (!options.outputDirectory) {
-      throw new Error("Output directory is required");
-    }
-
-    // Ensure we have default values
-    const playableName = options.name || "Playable";
-    const suffix = options.suffix || "EN";
-
-    // Apply global replaceTokens once to input HTML
-    let globalProcessedHtml = htmlContent;
-    let t0 = performance.now();
-    if (this.globalDefaults.replaceTokens) {
-      globalProcessedHtml = this.applyReplaceTokens(
-        globalProcessedHtml,
-        this.globalDefaults.replaceTokens
-      );
-    }
-    let t1 = performance.now();
-    console.log(
-      `[PlayablePublishService] Global replaceTokens: ${(t1 - t0).toFixed(
-        2
-      )} ms`
-    );
-
-    // Determine which platforms to process
-    let platformsToProcess = this.config;
-    if (
-      options.selectedPlatforms &&
-      Array.isArray(options.selectedPlatforms) &&
-      options.selectedPlatforms.length > 0
-    ) {
-      platformsToProcess = this.config.filter((p) =>
-        options.selectedPlatforms!.includes(p.Name)
-      );
-    }
-
-    const totalPlatforms = platformsToProcess.length;
-    let completedPlatforms = 0;
-
-    for (const platform of platformsToProcess) {
-      // Create platform subdirectory
-      const platformDirHandle = await this.createPlatformDirectory(
-        options.outputDirectory,
-        platform.Name
-      );
-
-      // Only pass globalProcessedHtml to processHtml, which will apply platform-specific tokens/scripts
-      const processedHtml = await this.processHtml(
-        globalProcessedHtml,
-        platform.Name,
-        options
-      );
-      // Generate HTML file name (allow platform.OutputIndexHtmlName to override)
-      const htmlFileName = this.generateFileName(
-        playableName,
-        platform.Name,
-        suffix,
-        platform,
-        true
-      );
-
-      // Generate ZIP file name: do NOT use OutputIndexHtmlName — always use default pattern and .zip extension
-      const zipBaseHtmlName = this.generateFileName(
-        playableName,
-        platform.Name,
-        suffix,
-        platform,
-        false
-      );
-      const zipFileName = zipBaseHtmlName.replace(/\.html$/i, ".zip");
-
-      if (platform.format === "zip") {
-        await this.createZipPackageToDirectory(
-          processedHtml,
-          htmlFileName,
-          zipFileName,
-          platformDirHandle,
-          platform
-        );
-      } else {
-        await this.saveHtmlFileToDirectory(
-          processedHtml,
-          htmlFileName,
-          platformDirHandle
-        );
-      }
-
-      completedPlatforms++;
-      const progress = 30 + (completedPlatforms / totalPlatforms) * 70; // 30% to 100%
-      options.onProgress?.(progress, platform.Name);
-    }
-  }
-
-  /**
-   * Generates the output filename based on the pattern
-   */
   private generateFileName(
     playableName: string,
     platformName: string,
     suffix: string,
     platform: PlatformConfig,
-    // When false, ignore platform.OutputIndexHtmlName and use default pattern (useful for ZIP naming)
-    useOutputIndexHtmlName: boolean = true
+    useOutputIndexHtmlName: boolean
   ): string {
     if (useOutputIndexHtmlName && platform.OutputIndexHtmlName) {
       if (platform.OutputIndexHtmlName.includes("%name%")) {
@@ -367,183 +317,71 @@ export class PlayablePublishService {
       }
       return platform.OutputIndexHtmlName;
     }
-    // Default pattern: GoH_PBCustomHero3D_Facebook_EN.html
     return `${playableName}_${platformName}_${suffix}.html`;
   }
 
-  /**
-   * Creates a platform subdirectory using the File System Access API
-   */
   private async createPlatformDirectory(
     parentDir: FileSystemDirectoryHandle,
     platformName: string
   ): Promise<FileSystemDirectoryHandle> {
-    try {
-      // Try to get existing directory or create new one
-      const platformDir = await parentDir.getDirectoryHandle(platformName, {
-        create: true,
-      });
-      console.log(`Created/accessed directory: ${platformName}`);
-      return platformDir;
-    } catch (error) {
-      throw new Error(
-        `Failed to create platform directory ${platformName}: ${error}`
-      );
-    }
+    return parentDir.getDirectoryHandle(platformName, { create: true });
   }
 
-  /**
-   * Saves an HTML file to the specified directory using File System Access API
-   */
-  private async saveHtmlFileToDirectory(
-    content: string,
+  private async saveBlobToDirectory(
+    blob: Blob,
     fileName: string,
     directory: FileSystemDirectoryHandle
   ): Promise<void> {
-    // Save HTML file to the specified directory using File System Access API
-    let tSaveStart = performance.now();
-    try {
-      const fileHandle = await directory.getFileHandle(fileName, {
-        create: true,
-      });
-      const writable = await fileHandle.createWritable();
-      await writable.write(content);
-      await writable.close();
-
-      const sizeKB = (content.length / 1024).toFixed(2);
-      console.log(`Saved HTML file: ${fileName} (${sizeKB} KB)`);
-    } catch (error) {
-      throw new Error(`Failed to save HTML file ${fileName}: ${error}`);
-    }
-    let tSaveEnd = performance.now();
-    console.log(
-      `[PlayablePublishService] Save HTML (${fileName}): ${(
-        tSaveEnd - tSaveStart
-      ).toFixed(2)} ms`
-    );
+    const fileHandle = await directory.getFileHandle(fileName, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
   }
 
-  /**
-   * Creates a ZIP package with the processed HTML and extra files and saves to directory
-   */
-  private async createZipPackageToDirectory(
+  private async buildZipPackageBlob(
     htmlContent: string,
     htmlFileName: string,
-    zipFileName: string,
-    directory: FileSystemDirectoryHandle,
     platform: PlatformConfig
-  ): Promise<void> {
-    try {
-      // Dynamic import of JSZip and use installed Pako for compression
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
+  ): Promise<Blob> {
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
 
-      // If platform requests script extraction, split inline scripts into separate files
-      if (platform.ExtractScripts) {
-        try {
-          const extracted = AsstesExtractor.extractScripts(htmlContent);
-          // Add processed HTML (with script src links) under the desired html filename
-          zip.file(htmlFileName, extracted.html);
-          // Add each extracted JS file
-          for (const [fileName, content] of Object.entries(extracted.files)) {
-            zip.file(fileName, content);
-          }
-        } catch (err) {
-          console.warn(`ExtractScripts failed for platform ${platform.Name}:`, err);
-          // Fallback: add original HTML
-          zip.file(htmlFileName, htmlContent);
+    if (platform.ExtractScripts) {
+      try {
+        const extracted = AsstesExtractor.extractScripts(htmlContent);
+        zip.file(htmlFileName, extracted.html);
+        for (const [fileName, content] of Object.entries(extracted.files)) {
+          zip.file(fileName, content);
         }
-      } else {
-        // Add the main HTML file as-is
+      } catch {
         zip.file(htmlFileName, htmlContent);
       }
+    } else {
+      zip.file(htmlFileName, htmlContent);
+    }
 
-      // Add extra files if specified
-      if (platform.ExtraFiles) {
-        for (const extraFile of platform.ExtraFiles) {
-          try {
-            // Try to load from public folder
-            const publicPath = `/publish-data/${extraFile.from.replace(
-              "./",
-              ""
-            )}`;
-            const response = await fetch(publicPath);
-            if (response.ok) {
-              const content = await response.text();
-              zip.file(extraFile.to.replace("./", ""), content);
-            } else {
-              console.warn(`Could not load extra file from: ${publicPath}`);
-            }
-          } catch (error) {
-            console.warn(`Could not load extra file: ${extraFile.from}`, error);
+    if (platform.ExtraFiles) {
+      for (const extraFile of platform.ExtraFiles) {
+        try {
+          const publicPath = `/publish-data/${extraFile.from.replace("./", "")}`;
+          const response = await fetch(publicPath);
+          if (response.ok) {
+            zip.file(extraFile.to.replace("./", ""), await response.text());
           }
+        } catch {
+          // Ignore missing extra files and keep remaining artifacts intact.
         }
       }
-
-      // Generate zip as Uint8Array with quick/good compression
-      let tZipStart = performance.now();
-      const zipUint8 = await zip.generateAsync({
-        type: "uint8array",
-        compression: "DEFLATE",
-        compressionOptions: { level: 3 }, // 1-3 is quick/good, 9 is max
-      });
-  // Use JSZip output directly for Blob (do NOT re-compress with Pako)
-  // Ensure we pass an ArrayBuffer to Blob (zipUint8.buffer may be a SharedArrayBuffer-like in some envs)
-      // Convert Uint8Array to a standalone ArrayBuffer slice to satisfy Blob typing
-      const zipArrayBuffer = zipUint8.buffer.slice(
-        zipUint8.byteOffset,
-        zipUint8.byteOffset + zipUint8.byteLength
-      );
-  const zipBlob = new Blob([zipArrayBuffer as unknown as ArrayBuffer], { type: "application/zip" });
-      let tZipEnd = performance.now();
-      console.log(
-        `[PlayablePublishService] Zipping (${zipFileName}): ${(
-          tZipEnd - tZipStart
-        ).toFixed(2)} ms`
-      );
-
-      // Save zip file to directory
-      let tSaveStart = performance.now();
-      const fileHandle = await directory.getFileHandle(zipFileName, {
-        create: true,
-      });
-      const writable = await fileHandle.createWritable();
-      await writable.write(zipBlob);
-      await writable.close();
-      let tSaveEnd = performance.now();
-      console.log(
-        `[PlayablePublishService] Save ZIP (${zipFileName}): ${(
-          tSaveEnd - tSaveStart
-        ).toFixed(2)} ms`
-      );
-
-      const sizeKB = (zipBlob.size / 1024).toFixed(2);
-      console.log(`Saved ZIP file: ${zipFileName} (${sizeKB} KB)`);
-    } catch (error) {
-      throw new Error(`Failed to create ZIP package ${zipFileName}: ${error}`);
     }
+
+    return this.generateZipBlob(zip);
   }
 
-  /**
-   * Requests a directory handle from the user using File System Access API
-   */
-  async requestOutputDirectory(): Promise<FileSystemDirectoryHandle> {
-    if ("showDirectoryPicker" in window) {
-      try {
-        // @ts-ignore - File System Access API
-        const dirHandle = await window.showDirectoryPicker();
-        console.log(`Selected output directory: ${dirHandle.name}`);
-        return dirHandle;
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error("Directory selection was cancelled");
-        }
-        throw new Error(`Failed to select directory: ${error}`);
-      }
-    } else {
-      throw new Error(
-        "File System Access API is not supported in this browser. Please use Chrome, Edge, or another supported browser."
-      );
-    }
+  private async generateZipBlob(zip: { generateAsync: (options: any) => Promise<any> }): Promise<Blob> {
+    return zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 3 },
+    });
   }
 }

@@ -2,6 +2,7 @@ import { ComponentBase, customElement, html, route, inject, state } from "fw";
 import { PortfolioService, type CreativeWithVariations } from "../../services/PortfolioService";
 import { PreviewService } from "../../services/PreviewService";
 import { AuthenticationService } from "../../services/AuthenticationService";
+import { PlayablePublishService } from "../../services/PlayablePublishService";
 import "./project-manager";
 
 @customElement("portfolio-page")
@@ -13,6 +14,7 @@ export class PortfolioPage extends ComponentBase {
   @inject(PortfolioService) portfolioService!: PortfolioService;
   @inject(PreviewService) previewService!: PreviewService;
   @inject(AuthenticationService) authService!: AuthenticationService;
+  @inject(PlayablePublishService) publishService!: PlayablePublishService;
 
   @state()
   creatives: CreativeWithVariations[] = [];
@@ -37,6 +39,7 @@ export class PortfolioPage extends ComponentBase {
       this.openMenuId = null;
     }
   };
+  private _unsubscribeAuth?: () => void;
 
   connectedCallback() {
     super.connectedCallback();
@@ -44,7 +47,7 @@ export class PortfolioPage extends ComponentBase {
     window.addEventListener("click", this._onWindowClick);
     
     // Subscribe to logout events (e.g., when 401 happens)
-    this.authService.subscribe((reason?: string) => {
+    this._unsubscribeAuth = this.authService.subscribe((reason?: string) => {
       console.log("Session expired:", reason);
       this.isAuthenticated = false;
       this.creatives = [];
@@ -58,6 +61,8 @@ export class PortfolioPage extends ComponentBase {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("click", this._onWindowClick);
+    this._unsubscribeAuth?.();
+    this._unsubscribeAuth = undefined;
   }
 
   async checkAuthentication() {
@@ -181,6 +186,38 @@ export class PortfolioPage extends ComponentBase {
 
   handleEditCreative = (creative: CreativeWithVariations) => {
     window.location.hash = `#editor/${creative.id}`;
+  };
+
+  handlePublishCreative = async (creative: CreativeWithVariations) => {
+    const latestVariation = creative.variations[creative.variations.length - 1];
+    if (!latestVariation?.file) {
+      this.errorMessage = "No playable file found for publishing.";
+      return;
+    }
+
+    const previewId = `${creative.id}_${latestVariation.id}_${(latestVariation.file as any).storageName}`;
+    const playable = await this.portfolioService.getPlayableById(previewId);
+    if (!playable?.content) {
+      this.errorMessage = "Publish currently supports HTML portfolio items only.";
+      this.openMenuId = null;
+      return;
+    }
+
+    const project = creative.project ? this.projects.find((item: any) => item.id === creative.project) : null;
+
+    this.publishService.setLaunchContext({
+      playableTitle: creative.title || playable?.name || latestVariation.title,
+      fileName: latestVariation.file.originalName,
+      htmlContent: playable.content,
+      googlePlayUrl: project?.googlePlay || "",
+      appStoreUrl: project?.appStore || "",
+      projectId: creative.project || "",
+      projectName: project?.name || "",
+      sourceLabel: `Portfolio: ${creative.title}`,
+    });
+
+    this.openMenuId = null;
+    window.location.hash = "#/publish";
   };
 
   handleCopyCreativeLink = async (creative: CreativeWithVariations) => {
@@ -393,6 +430,12 @@ export class PortfolioPage extends ComponentBase {
                         class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
                       >
                         <span class="material-icons-outlined text-lg">edit</span> Edit
+                      </button>
+                      <button
+                        @click=${() => this.handlePublishCreative(creative)}
+                        class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                      >
+                        <span class="material-icons-outlined text-lg">publish</span> Publish
                       </button>
                       <button
                         @click=${() => this.handleCopyCreativeLink(creative)}

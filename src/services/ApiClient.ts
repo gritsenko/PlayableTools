@@ -46,6 +46,30 @@ export class ApiClient {
     return headers;
   }
 
+  private async parseSuccessfulResponse<T>(response: Response): Promise<T> {
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (contentLength === "0") {
+      return undefined as T;
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      const text = await response.text();
+      return (text ? text : undefined) as T;
+    }
+
+    const text = await response.text();
+    if (!text.trim()) {
+      return undefined as T;
+    }
+
+    return JSON.parse(text) as T;
+  }
+
   private async handleResponse<T>(response: Response): Promise<T> {
     if (response.status === 401) {
       // Token expired, clear it and notify authentication service
@@ -57,7 +81,7 @@ export class ApiClient {
       const error = await response.text().catch(() => "Unknown error");
       throw new Error(error || `HTTP ${response.status}`);
     }
-    return response.json();
+    return this.parseSuccessfulResponse<T>(response);
   }
 
   // === AUTHENTICATION ===
@@ -143,6 +167,23 @@ export class ApiClient {
     return this.handleResponse(response);
   }
 
+  async replaceVariationFile(creativeId: number, variationId: number, file: File, title?: string): Promise<Variation> {
+    if (!this.token) throw new Error("Not authenticated");
+    const formData = new FormData();
+    formData.append("file", file);
+    if (title) formData.append("title", title);
+
+    const response = await fetch(
+      `${this.baseUrl}/api/creatives/${creativeId}/variations/${variationId}/file`,
+      {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${this.token}` },
+        body: formData
+      }
+    );
+    return this.handleResponse(response);
+  }
+
   async updateVariation(
     creativeId: number,
     variationId: number,
@@ -185,6 +226,26 @@ export class ApiClient {
       `${this.baseUrl}/api/creatives/${creativeId}/variations/${variationId}/screenshot`,
       {
         method: "POST",
+        headers: { Authorization: `Bearer ${this.token}` },
+        body: formData
+      }
+    );
+    return this.handleResponse(response);
+  }
+
+  async replaceVariationScreenshot(
+    creativeId: number,
+    variationId: number,
+    file: File
+  ): Promise<{ screenshotFileId: number }> {
+    if (!this.token) throw new Error("Not authenticated");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${this.baseUrl}/api/creatives/${creativeId}/variations/${variationId}/screenshot`,
+      {
+        method: "PUT",
         headers: { Authorization: `Bearer ${this.token}` },
         body: formData
       }

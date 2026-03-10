@@ -28,6 +28,8 @@ export class SaveCreativeModal extends ComponentBase {
   @state() private error: string = "";
   @state() private isAuthenticated: boolean = false;
   @state() private isLoading: boolean = false;
+  @state() private replaceExistingVariation: boolean = false;
+  private _unsubscribeAuth?: () => void;
 
   async show(screenshot: Blob, htmlContent: string, fileName: string, zipFile?: File | null) {
     this.screenshotBlob = screenshot;
@@ -45,8 +47,10 @@ export class SaveCreativeModal extends ComponentBase {
     this.creativeTitle = this.extractTitle(htmlContent) || fileName.replace(/\.html$/i, "");
     this.tags = "";
     this.error = "";
+    this.replaceExistingVariation = false;
 
-    this.authService.subscribe((reason?: string) => {
+    this._unsubscribeAuth?.();
+    this._unsubscribeAuth = this.authService.subscribe((reason?: string) => {
       console.log("Session expired in modal:", reason);
       this.isAuthenticated = false;
       this.error = reason || "Your session has expired. Please sign in again.";
@@ -135,6 +139,8 @@ export class SaveCreativeModal extends ComponentBase {
 
   close() {
     this.isOpen = false;
+    this._unsubscribeAuth?.();
+    this._unsubscribeAuth = undefined;
     if (this.screenshotUrl) {
       URL.revokeObjectURL(this.screenshotUrl);
       this.screenshotUrl = "";
@@ -147,6 +153,7 @@ export class SaveCreativeModal extends ComponentBase {
     this.creativeTitle = this.extractTitle(this.htmlContent) || this.fileName.replace(/\.html$/i, "");
     this.tags = "";
     this.selectedProject = "";
+    this.replaceExistingVariation = false;
   }
 
   private selectCreative(c: PlayableAdData) {
@@ -155,6 +162,19 @@ export class SaveCreativeModal extends ComponentBase {
     this.creativeTitle = c.title;
     this.tags = c.tags.join(" ");
     this.selectedProject = c.project || "";
+    this.replaceExistingVariation = false;
+  }
+
+  private buildVariationFile(): File {
+    if (this.zipFile) {
+      return this.zipFile;
+    }
+
+    const preferredName = this.fileName.trim().length > 0
+      ? this.fileName
+      : `${this.creativeTitle}.html`;
+    const fileName = preferredName.toLowerCase().endsWith(".html") ? preferredName : `${preferredName}.html`;
+    return new File([this.htmlContent], fileName, { type: "text/html" });
   }
 
   private async save() {
@@ -227,13 +247,54 @@ export class SaveCreativeModal extends ComponentBase {
         const match = this.selectedId.match(/^(\d+)/);
         if (match) {
           const creativeId = parseInt(match[1], 10);
-          await this.portfolioService.updateCreative(
+          const updatedCreative = await this.portfolioService.updateCreative(
             creativeId,
             this.creativeTitle,
             "",
             this.selectedProject || "",
             tagList
           );
+
+          const variationMatch = this.selectedId.match(/^\d+_(\d+)/);
+          const variationId = variationMatch ? parseInt(variationMatch[1], 10) : null;
+          if (!variationId) {
+            throw new Error("Could not determine variation to update");
+          }
+
+          if (this.replaceExistingVariation) {
+            const replacementFile = this.buildVariationFile();
+            await this.portfolioService.replaceVariationFile(
+              creativeId,
+              variationId,
+              replacementFile,
+              replacementFile.name
+            );
+
+            if (this.screenshotBlob) {
+              const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
+              await this.portfolioService.replaceVariationScreenshot(
+                jpgBlob,
+                creativeId,
+                variationId
+              );
+            }
+          } else {
+            const newVariationFile = this.buildVariationFile();
+            const variation = await this.portfolioService.uploadVariation(
+              creativeId,
+              newVariationFile,
+              newVariationFile.name
+            );
+
+            if (this.screenshotBlob) {
+              const jpgBlob = await this.convertBlobToJpg(this.screenshotBlob);
+              await this.portfolioService.uploadScreenshot(
+                jpgBlob,
+                updatedCreative.id,
+                variation.id
+              );
+            }
+          }
         }
       }
 
@@ -338,6 +399,21 @@ export class SaveCreativeModal extends ComponentBase {
                       ${this.projects.map(p => html`<option value=${p.id}>${p.name}</option>`)}
                     </select>
                   </label>
+                  ${!this.isNew ? html`
+                    <label class="toggle-row">
+                      <input
+                        type="checkbox"
+                        .checked=${this.replaceExistingVariation}
+                        @change=${(e: Event) => {
+                          this.replaceExistingVariation = (e.target as HTMLInputElement).checked;
+                        }}
+                      >
+                      <span>
+                        Replace current variation file
+                        <small>Leave unchecked to keep history and add a new variation version.</small>
+                      </span>
+                    </label>
+                  ` : ''}
                   <label>Preview</label>
                   <div class="preview-container">
                     ${this.screenshotUrl ? html`
@@ -417,6 +493,21 @@ export class SaveCreativeModal extends ComponentBase {
           padding: 1.5rem;
           overflow-y: auto;
           flex: 1;
+        }
+        .toggle-row {
+          display: flex;
+          gap: 0.75rem;
+          align-items: flex-start;
+          margin: 1rem 0;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+        .toggle-row small {
+          display: block;
+          margin-top: 0.25rem;
+          color: #64748b;
         }
         .modal-footer {
           display: flex;

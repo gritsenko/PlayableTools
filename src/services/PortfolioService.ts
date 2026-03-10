@@ -18,6 +18,7 @@ export interface PlayableAdData {
   contentType?: string;
   creativeId?: number;
   variationId?: number;
+  fileStorageName?: string;
 }
 
 export interface User {
@@ -39,7 +40,7 @@ export interface CreativeWithVariations {
     id: number;
     title: string;
     createdAt: number;
-    file?: { originalName: string; contentType: string };
+    file?: { storageName: string; originalName: string; contentType: string };
     screenshotFile?: { storageName: string; originalName: string };
   }>;
 }
@@ -330,6 +331,7 @@ export class PortfolioService {
         contentType: variation.file?.contentType,
         creativeId,
         variationId,
+        fileStorageName: variation.file?.storageName,
       };
     } catch (error) {
       console.error("Failed to fetch playable by ID:", error);
@@ -389,6 +391,18 @@ export class PortfolioService {
   async uploadVariation(creativeId: number, file: File, title?: string): Promise<Variation> {
     if (!this.isAuthenticated()) throw new Error("Not authenticated");
     return this.apiClient.uploadVariation(creativeId, file, title);
+  }
+
+  async replaceVariationFile(creativeId: number, variationId: number, file: File, title?: string): Promise<Variation> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.replaceVariationFile(creativeId, variationId, file, title);
+  }
+
+  async replaceVariationScreenshot(screenshotBlob: Blob, creativeId: number, variationId: number): Promise<number> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    const file = new File([screenshotBlob], "screenshot.jpg", { type: "image/jpeg" });
+    const result = await this.apiClient.replaceVariationScreenshot(creativeId, variationId, file);
+    return result.screenshotFileId;
   }
 
   async getProjects(): Promise<Project[]> {
