@@ -1,6 +1,16 @@
-﻿document.CTA = {
+﻿console.log('%c  %c  %c Playable Ad Tools v1.7 ', 'background:#e63946;padding:3px 0', 'background:#457b9d;padding:3px 0', 'color:#fff;background:#1d3557;padding:3px 6px');
+document.CTA = {
+    platform: "Applovin",
+    sdk: "mraid2",
+    analytics: {
+        trackEvent: function(name) {
+            if (typeof window.ALPlayableAnalytics !== 'undefined') {
+                window.ALPlayableAnalytics.trackEvent(name);
+            }
+        }
+    },
     onClick: function (store) {
-
+        document.CTA.analytics.trackEvent('CTA_CLICKED');
         if (store === undefined)
             store = navigator.userAgent.toLowerCase().indexOf("android") > -1 ? "google" : "apple";
 
