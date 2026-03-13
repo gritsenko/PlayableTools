@@ -2,7 +2,7 @@ import { injectable } from "fw";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
-import { GeneralValidator, FacebookValidator, MraidValidator, type ValidationResult } from "./PreviewServiceValidators";
+import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, type ValidationResult } from "./PreviewServiceValidators";
 
 type ZipAssetPayload = {
   path: string;
@@ -139,6 +139,10 @@ export class PreviewService {
 
   getOriginalUploadedContent(): string | null {
     return this._originalUploadedContent;
+  }
+
+  getOriginalSourceContent(): string | null {
+    return this._originalUploadedContent ?? this._originalGithubContent;
   }
 
   /**
@@ -622,6 +626,13 @@ export class PreviewService {
   }
 
   /**
+   * Returns the size of the last uploaded file/zip in bytes, or 0 if not available.
+   */
+  getUploadedSizeBytes(): number {
+    return this._lastUploadedSizeBytes ?? 0;
+  }
+
+  /**
    * Checks if we have original content that can be reprocessed
    */
   hasOriginalContent(): boolean {
@@ -751,18 +762,27 @@ export class PreviewService {
       if (preset) {
         console.log(`⚙️ PreviewService: Running ${preset.name} preset validation`);
         switch (preset.id) {
-          case 'facebook':
+          case 'preview-cta': {
+            const ctaSdkValidator = new CtaSdkValidator();
+            const ctaSdkResults = ctaSdkValidator.validate(this._originalUploadedContent || content, fileSize);
+            results.categories.push(...ctaSdkResults.categories);
+            console.log(`✅ PreviewService: CTA SDK validation complete`);
+            break;
+          }
+          case 'facebook': {
             const facebookValidator = new FacebookValidator();
             const facebookResults = facebookValidator.validate(content, fileSize);
             results.categories.push(...facebookResults.categories);
             console.log(`✅ PreviewService: Facebook validation complete`);
             break;
-          case 'mraid':
+          }
+          case 'mraid': {
             const mraidValidator = new MraidValidator();
             const mraidResults = mraidValidator.validate(content, fileSize);
             results.categories.push(...mraidResults.categories);
             console.log(`✅ PreviewService: MRAID validation complete`);
             break;
+          }
           default:
             console.log(`ℹ️ PreviewService: No preset-specific validation for ${preset.id}`);
         }

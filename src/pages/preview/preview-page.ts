@@ -10,6 +10,8 @@ import { PreviewService } from "../../services/PreviewService";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
 import { AuthenticationService } from "../../services/AuthenticationService";
 import { PlayablePublishService } from "../../services/PlayablePublishService";
+import { ApiClient } from "../../services/ApiClient";
+import QRCode from "qrcode";
 
 @customElement("preview-page")
 @route("/preview/:playableId?", {
@@ -21,6 +23,7 @@ export class PreviewPage extends ComponentBase {
   @inject(PortfolioService) portfolioService!: PortfolioService;
   @inject(AuthenticationService) authService!: AuthenticationService;
   @inject(PlayablePublishService) publishService!: PlayablePublishService;
+  @inject(ApiClient) apiClient!: ApiClient;
   
   routeParams: string[] = [];
   private unsubscribeAuth?: () => void;
@@ -59,6 +62,15 @@ export class PreviewPage extends ComponentBase {
   portfolioPlayableId: string | null = null;
   portfolioPlayableData: PlayableAdData | null = null;
   portfolioProjectTitle: string | null = null;
+
+  // Share / QR / Direct Link state
+  _shareModalOpen: boolean = false;
+  _shareLoading: boolean = false;
+  _shareError: string = '';
+  _shareUrl: string | null = null;
+  _qrDataUrl: string | null = null;
+  _shareCopied: boolean = false;
+  _sharePageCopied: boolean = false;
 
   get hasUnsavedChanges(): boolean {
     return this.previewService.hasUnsavedChanges();
@@ -338,6 +350,113 @@ export class PreviewPage extends ComponentBase {
     window.location.hash = "#/publish";
   }
 
+  private async _copyPageLink() {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      this._sharePageCopied = true;
+      this.requestUpdate();
+      setTimeout(() => { this._sharePageCopied = false; this.requestUpdate(); }, 2000);
+    } catch {
+      // Clipboard not available
+    }
+  }
+
+  private async _openShareModal() {
+    const storageName = this.portfolioPlayableData?.fileStorageName;
+    if (!storageName) return;
+
+    this._shareModalOpen = true;
+    this._shareLoading = true;
+    this._shareError = '';
+    this._shareUrl = null;
+    this._qrDataUrl = null;
+    this.requestUpdate();
+
+    try {
+      const url = await this.apiClient.generateShareLink(storageName);
+      this._shareUrl = url;
+      this._qrDataUrl = await QRCode.toDataURL(url, { width: 256, margin: 2 });
+    } catch (err: any) {
+      this._shareError = err?.message || 'Failed to generate link';
+    } finally {
+      this._shareLoading = false;
+      this.requestUpdate();
+    }
+  }
+
+  private _closeShareModal() {
+    this._shareModalOpen = false;
+    this._shareCopied = false;
+    this.requestUpdate();
+  }
+
+  private async _copyShareLink() {
+    if (!this._shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(this._shareUrl);
+      this._shareCopied = true;
+      this.requestUpdate();
+      setTimeout(() => { this._shareCopied = false; this.requestUpdate(); }, 2000);
+    } catch {
+      // ignore
+    }
+  }
+
+  private _renderShareModal() {
+    if (!this._shareModalOpen) return null;
+    return html`
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click=${(e: Event) => { if (e.target === e.currentTarget) this._closeShareModal(); }}>
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <span class="material-icons-outlined text-indigo-500">qr_code_2</span>
+              QR Code &amp; Direct Link
+            </h3>
+            <button @click=${() => this._closeShareModal()} class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+
+          ${this._shareLoading ? html`
+            <div class="flex flex-col items-center gap-3 py-6">
+              <div class="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent"></div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">Generating link...</p>
+            </div>
+          ` : this._shareError ? html`
+            <div class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded text-sm">${this._shareError}</div>
+          ` : html`
+            <p class="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+              <span class="material-icons-outlined shrink-0" style="font-size:14px;margin-top:1px">schedule</span>
+              This link is valid for <strong>24 hours</strong>. Great for testing on real devices.
+            </p>
+            ${this._qrDataUrl ? html`
+              <div class="flex justify-center">
+                <img src="${this._qrDataUrl}" alt="QR Code" class="rounded-lg border border-slate-200 dark:border-slate-700" width="200" height="200" />
+              </div>
+            ` : ''}
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                type="text"
+                readonly
+                .value="${this._shareUrl || ''}"
+                class="flex-1 text-xs border border-slate-200 dark:border-slate-700 rounded px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-mono truncate focus:outline-none"
+                @click=${(e: Event) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                @click=${() => this._copyShareLink()}
+                class="px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-xs flex items-center gap-1 shrink-0"
+              >
+                <span class="material-icons-outlined" style="font-size:15px">${this._shareCopied ? 'check' : 'content_copy'}</span>
+                ${this._shareCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
     const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
@@ -420,8 +539,38 @@ export class PreviewPage extends ComponentBase {
           ? html`
               <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div class="space-y-2">
-                  <div>
-                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">${this.portfolioPlayableData.title || this.portfolioPlayableData.name}</h2>
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">${this.portfolioPlayableData.title || this.portfolioPlayableData.name}</h2>
+                    </div>
+                    <!-- Share / QR / Direct Link buttons -->
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button
+                        @click=${() => this._copyPageLink()}
+                        title="Copy link to this preview page"
+                        class="w-9 h-9 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors relative"
+                      >
+                        <span class="material-icons-outlined" style="font-size:18px">${this._sharePageCopied ? 'check' : 'share'}</span>
+                        ${this._sharePageCopied ? html`<span class="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">Copied!</span>` : ''}
+                      </button>
+                      ${this.portfolioPlayableData.fileStorageName ? html`
+                        <button
+                          @click=${() => this._openShareModal()}
+                          title="Generate QR code &amp; direct link"
+                          class="w-9 h-9 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          <span class="material-icons-outlined" style="font-size:18px">qr_code_2</span>
+                        </button>
+                      ` : html`
+                        <button
+                          disabled
+                          title="Save to Library first to generate a shareable link"
+                          class="w-9 h-9 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                        >
+                          <span class="material-icons-outlined" style="font-size:18px">qr_code_2</span>
+                        </button>
+                      `}
+                    </div>
                   </div>
                   ${this.portfolioPlayableData.details ? html`
                     <p class="text-slate-600 dark:text-slate-400 text-sm">${this.portfolioPlayableData.details}</p>
@@ -516,6 +665,7 @@ export class PreviewPage extends ComponentBase {
             }
           })()}
         </div>
+        ${this._renderShareModal()}
       </div>
     `;
   }

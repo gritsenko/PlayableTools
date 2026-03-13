@@ -1,4 +1,5 @@
 import { ComponentBase, customElement, html, inject, state, property } from "fw";
+import type { PropertyValues } from 'lit';
 import { PreviewService } from "../../services/PreviewService";
 import type { PreviewPreset } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
@@ -24,6 +25,12 @@ export class PlayablePreviewer extends ComponentBase {
   @state() private presetSuccessMessage: string = "";
   @state() private validationResults: ValidationResult | null = null;
   @state() private zipPreviewUrl: string | null = null;
+  @state() private _sdkEvents: Array<{ event: string; args: any[]; elapsedMs: number }> = [];
+  @state() private _iframeLoadMs: number | null = null;
+  @state() private _reloadKey: number = 0;
+  private _sdkEventStart: number | null = null;
+  private _iframeLoadStart: number | null = null;
+  private _onMessageHandler?: (e: MessageEvent) => void;
 
   devices = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -57,6 +64,10 @@ export class PlayablePreviewer extends ComponentBase {
         this.pageContent = content;
         this.loading = false;
         this.error = "";
+        this._sdkEvents = [];
+        this._sdkEventStart = null;
+        this._iframeLoadMs = null;
+        this._iframeLoadStart = performance.now();
         console.log(`✅ playable-previewer: Content set, loading=false`);
         this.requestUpdate();
       } else {
@@ -64,6 +75,10 @@ export class PlayablePreviewer extends ComponentBase {
         this.pageContent = "";
         this.loading = false;
         this.error = "";
+        this._sdkEvents = [];
+        this._sdkEventStart = null;
+        this._iframeLoadMs = null;
+        this._iframeLoadStart = null;
       }
     });
     
@@ -96,6 +111,26 @@ export class PlayablePreviewer extends ComponentBase {
     // Get initial validation results
     this.validationResults = this.previewService.getValidationResults();
 
+    // Listen for CTA SDK events posted from the playable iframe
+    this._onMessageHandler = (e: MessageEvent) => {
+      try {
+        const data = e.data;
+        if (!data || typeof data !== 'object') return;
+        if (data.type === 'cta-event') {
+          if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
+          const elapsedMs = typeof data.elapsedMs === 'number' ? data.elapsedMs : (Date.now() - this._sdkEventStart);
+          this._sdkEvents = [...this._sdkEvents, { event: data.event, args: data.args || [], elapsedMs }];
+          this.requestUpdate();
+        } else if (data.type === 'cta-game-start') {
+          if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
+          this.requestUpdate();
+        }
+      } catch {
+        // ignore malformed messages
+      }
+    };
+    window.addEventListener('message', this._onMessageHandler);
+
     // Listen for playable-screen-lock events so external emitters (service or page) can update UI
     this._playableLockHandler = (e: Event) => {
       try {
@@ -126,11 +161,28 @@ export class PlayablePreviewer extends ComponentBase {
     if (this._playableLockHandler) {
       window.removeEventListener('playable-screen-lock', this._playableLockHandler as EventListener);
     }
+    if (this._onMessageHandler) {
+      window.removeEventListener('message', this._onMessageHandler);
+    }
+  }
+
+  protected override updated(_changedProps: PropertyValues): void {
+    const logEl = this.querySelector('#sdk-log-scroll') as HTMLElement | null;
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
   }
 
   private _playableLockHandler?: (e: Event) => void;
   @state() private _locked: boolean = false;
   @state() private _muted: boolean = false;
+
+  private _restartPlayable() {
+    this._reloadKey++;
+    this._sdkEvents = [];
+    this._sdkEventStart = null;
+    this._iframeLoadMs = null;
+    this._iframeLoadStart = performance.now();
+    this.requestUpdate();
+  }
 
   private _toggleLock() {
     this._locked = !this._locked;
@@ -202,6 +254,12 @@ export class PlayablePreviewer extends ComponentBase {
   // Install event guards inside the iframe so normal page clicks do not pause the playable.
   // We stop blur/visibility events from reaching the playable unless the lock button is used.
   private _installFocusGuards = (e: Event) => {
+    // Record iframe load time
+    if (this._iframeLoadStart !== null) {
+      this._iframeLoadMs = performance.now() - this._iframeLoadStart;
+      this.requestUpdate();
+    }
+
     const iframe = e.currentTarget as HTMLIFrameElement;
     const win = iframe?.contentWindow as (Window & { __ptGuardInstalled?: boolean; __ptGuard?: any });
     const doc = win?.document;
@@ -293,8 +351,10 @@ export class PlayablePreviewer extends ComponentBase {
 
   private renderPlayableIframe() {
     if (this.zipPreviewUrl) {
+      // Append reload key as query param so the browser considers it a new URL
+      const reloadUrl = this.zipPreviewUrl.split('?')[0] + (this._reloadKey ? `?_r=${this._reloadKey}` : '');
       return html`<iframe
-        src="${this.zipPreviewUrl}"
+        src="${reloadUrl}"
         class="playable-iframe"
         frameborder="0"
         allowfullscreen
@@ -317,8 +377,10 @@ export class PlayablePreviewer extends ComponentBase {
     }
     
     if (this.pageContent) {
+      // Prepend a reload comment so Lit sees a new srcdoc string and destroys/recreates the iframe
+      const reloadedContent = this._reloadKey > 0 ? `<!-- reload:${this._reloadKey} -->\n${this.pageContent}` : this.pageContent;
       return html`<iframe
-        srcdoc="${this.pageContent}"
+        srcdoc="${reloadedContent}"
         class="playable-iframe"
         frameborder="0"
         allowfullscreen
@@ -435,7 +497,7 @@ export class PlayablePreviewer extends ComponentBase {
       // Modal is in light DOM, so query from the element itself (fallback to document)
       const modal = (this as any).querySelector('save-creative-modal') || document.querySelector('save-creative-modal');
       if (modal) {
-        const content = this.pageContent;
+        const content = this.previewService.getOriginalSourceContent() || this.pageContent;
         // Use fileName property or default
         const name = this.fileName || "Playable Ad.html";
         // Check if current preview is from ZIP
@@ -470,14 +532,27 @@ export class PlayablePreviewer extends ComponentBase {
     const hasPageContent = !!this.pageContent;
     const shouldShowContent = hasZip || hasPageContent;
     console.log(`🎨 playable-previewer render: loading=${this.loading}, error='${this.error}', zipPreview=${hasZip}, pageContent=${hasPageContent}, shouldShow=${shouldShowContent}`);
+
+    const uploadedSizeBytes = this.previewService.getUploadedSizeBytes?.() ?? 0;
+    const sizeKb = uploadedSizeBytes > 0 ? (uploadedSizeBytes / 1024).toFixed(1) : null;
+    const loadSec = this._iframeLoadMs !== null ? (this._iframeLoadMs / 1000).toFixed(2) : null;
     
     return html`
       <div class="flex flex-col gap-8">
         <div class="grid grid-cols-1 ${shouldStackPreview ? '' : 'lg:grid-cols-2'} gap-8 items-start">
+          <div class="flex flex-col gap-4">
           <!-- Validation Results -->
           <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
             <div class="flex items-start justify-between gap-4 mb-6">
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Validation Results</h2>
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Validation Results</h2>
+                ${sizeKb || loadSec ? html`
+                  <div class="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    ${sizeKb ? html`<span class="flex items-center gap-1"><span class="material-icons-outlined" style="font-size:13px">description</span> ${sizeKb} KB</span>` : ''}
+                    ${loadSec ? html`<span class="flex items-center gap-1"><span class="material-icons-outlined" style="font-size:13px">timer</span> ${loadSec}s load</span>` : ''}
+                  </div>
+                ` : ''}
+              </div>
 
               <div class="flex flex-col items-end gap-2">
                 <div class="flex items-center gap-2">
@@ -558,7 +633,54 @@ export class PlayablePreviewer extends ComponentBase {
               </div>
             `}
           </div>
-          
+
+          <!-- SDK Event Log -->
+          <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-indigo-500" style="font-size:18px">terminal</span>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">SDK Event Log</h2>
+                ${this._sdkEvents.length > 0 ? html`
+                  <span class="text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full px-2 py-0.5">${this._sdkEvents.length}</span>
+                ` : ''}
+                ${this.currentPreset?.id !== 'preview-cta' ? html`
+                  <span class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <span class="material-icons-outlined" style="font-size:13px">info</span>
+                    Select &ldquo;Default Preview + CTA Stub&rdquo; preset to capture events
+                  </span>
+                ` : ''}
+              </div>
+              ${this._sdkEvents.length > 0 ? html`
+                <button @click=${() => { this._sdkEvents = []; this._sdkEventStart = null; this.requestUpdate(); }}
+                  class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  title="Clear log"
+                >Clear</button>
+              ` : ''}
+            </div>
+            <div class="font-mono text-xs overflow-y-auto" style="max-height: 180px; min-height: 56px;" id="sdk-log-scroll">
+              ${this._sdkEvents.length === 0 ? html`
+                <div class="px-4 py-3 text-slate-400 dark:text-slate-500 italic">
+                  No SDK events captured yet${this.currentPreset?.id === 'preview-cta' ? ' — interact with the playable to see events' : ''}.
+                </div>
+              ` : this._sdkEvents.map((ev, i) => {
+                const ms = ev.elapsedMs;
+                const timeStr = ms < 1000 ? `+${ms}ms` : `+${(ms/1000).toFixed(2)}s`;
+                const argsStr = ev.args.length > 0 ? ev.args.map(a => JSON.stringify(a)).join(', ') : '';
+                const isClick = ev.event === 'onClick';
+                const isReady = ev.event === 'gameReady';
+                return html`
+                  <div class="px-4 py-1.5 flex items-baseline gap-3 border-b border-slate-100 dark:border-slate-800 last:border-0 ${isClick ? 'bg-green-50 dark:bg-green-900/10' : isReady ? 'bg-blue-50 dark:bg-blue-900/10' : ''} hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <span class="text-slate-400 dark:text-slate-500 shrink-0" style="min-width:60px">[${timeStr}]</span>
+                    <span class="font-semibold ${isClick ? 'text-green-700 dark:text-green-400' : isReady ? 'text-blue-700 dark:text-blue-400' : 'text-indigo-700 dark:text-indigo-300'}">${ev.event}</span>
+                    ${argsStr ? html`<span class="text-slate-500 dark:text-slate-400 truncate">(${argsStr})</span>` : html`<span class="text-slate-400">()</span>`}
+                    <span class="ml-auto text-slate-300 dark:text-slate-600 shrink-0">#${i + 1}</span>
+                  </div>
+                `;
+              })}
+            </div>
+          </div>
+          </div>
+
           <!-- Phone Preview -->
           <div class="flex flex-col items-center">
             <!-- Simulator Controls -->
@@ -581,6 +703,13 @@ export class PlayablePreviewer extends ComponentBase {
               </div>
 
               <div class="flex items-center justify-center gap-2">
+                <button 
+                  @click=${() => this._restartPlayable()} 
+                  title="Restart content"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">replay</span>
+                </button>
                 <button 
                   @click=${() => this.toggleOrientation()} 
                   title="${this.isPortrait ? 'Switch to landscape' : 'Switch to portrait'}"

@@ -2,10 +2,23 @@
   "presets": [
     {
       "id": "default",
-      "name": "Default Preview",
+      "name": "Just Preview",
       "description": "Standard preview without any ad network validation",
       "maxFileSizeMB": 10,
       "injectScripts": [],
+      "replaceTokens": {}
+    },
+    {
+      "id": "preview-cta",
+      "name": "CTA SDK",
+      "description": "Injects a CTA SDK stub for testing SDK integration. All CTA events (onClick, gameReady, trackEvent, etc.) are logged in the SDK Event Log panel.",
+      "maxFileSizeMB": 10,
+      "injectScripts": [
+        {
+          "source": "cta.Preview.js",
+          "position": "beforeHeadEnd"
+        }
+      ],
       "replaceTokens": {}
     },
     {

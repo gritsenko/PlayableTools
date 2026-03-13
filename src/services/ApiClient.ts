@@ -324,6 +324,19 @@ export class ApiClient {
     });
     await this.handleResponse(response);
   }
+
+  /**
+   * Generates a temporary shareable link for a file stored on the backend.
+   * The link is stateless (HMAC-signed, 24h expiry) and requires no authentication.
+   */
+  async generateShareLink(storageName: string): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/api/shareable/${encodeURIComponent(storageName)}/generate`);
+    if (!response.ok) {
+      throw new Error(`Failed to generate share link: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json() as { url: string };
+    return data.url;
+  }
 }
 
 // === TYPE DEFINITIONS ===
