@@ -71,3 +71,20 @@ export interface PreviewServiceOptions {
   customInjectScripts?: PreviewScript[];
   customReplaceTokens?: Record<string, string>;
 }
+
+export interface PreviewRecordingResult {
+  blob: Blob;
+  mimeType: string;
+  fileExtension: string;
+  durationMs: number;
+  width: number;
+  height: number;
+  startedAt: number;
+}
+
+export interface PreviewRecordingController {
+  startedAt: number;
+  result: Promise<PreviewRecordingResult>;
+  stop: () => Promise<PreviewRecordingResult>;
+  cancel: () => Promise<void>;
+}

@@ -1,10 +1,30 @@
 import { ComponentBase, customElement, html, inject, state, property } from "fw";
 import type { PropertyValues } from 'lit';
 import { PreviewService } from "../../services/PreviewService";
-import type { PreviewPreset } from "../../services/types";
+import type { PreviewPreset, PreviewRecordingController, PreviewRecordingResult } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
+import iframeScreenshotCaptureUrl from "./iframe-screenshot-capture.ts?url";
 import "./save-creative-modal";
+import "./preview-video-modal";
+
+type PreviewDeviceOption = {
+  name: string;
+  width?: number;
+  height?: number;
+  type?: 'phone' | 'tablet';
+  disabled?: boolean;
+};
+
+type PreviewVideoModalElement = HTMLElement & {
+  show: (clip: PreviewRecordingResult, fileBaseName: string) => Promise<void> | void;
+};
+
+type PreviewIframeWindow = Window & {
+  __ptGuardInstalled?: boolean;
+  __ptGuard?: { setLocked: (locked: boolean) => void };
+  __ptScreenshotInstalled?: boolean;
+};
 
 @customElement("playable-previewer")
 export class PlayablePreviewer extends ComponentBase {
@@ -34,7 +54,7 @@ export class PlayablePreviewer extends ComponentBase {
   private _iframeLoadStart: number | null = null;
   private _onMessageHandler?: (e: MessageEvent) => void;
 
-  devices = [
+  devices: PreviewDeviceOption[] = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
     { name: 'iPhone 14', width: 390, height: 844, type: 'phone' },
     { name: 'iPhone SE', width: 375, height: 667, type: 'phone' },
@@ -166,6 +186,14 @@ export class PlayablePreviewer extends ComponentBase {
     if (this._onMessageHandler) {
       window.removeEventListener('message', this._onMessageHandler);
     }
+    this._clearRecordingTimer();
+    const activeRecording = this._activeRecording;
+    this._activeRecording = undefined;
+    this._isRecording = false;
+    this._isStoppingRecording = false;
+    if (activeRecording) {
+      void activeRecording.cancel();
+    }
   }
 
   protected override updated(_changedProps: PropertyValues): void {
@@ -176,6 +204,12 @@ export class PlayablePreviewer extends ComponentBase {
   private _playableLockHandler?: (e: Event) => void;
   @state() private _locked: boolean = false;
   @state() private _muted: boolean = false;
+  @state() private _isRecording: boolean = false;
+  @state() private _isStoppingRecording: boolean = false;
+  @state() private _recordingElapsedMs: number = 0;
+
+  private _activeRecording?: PreviewRecordingController;
+  private _recordingTimerId?: number;
 
   private _restartPlayable() {
     this._reloadKey++;
@@ -263,7 +297,7 @@ export class PlayablePreviewer extends ComponentBase {
     }
 
     const iframe = e.currentTarget as HTMLIFrameElement;
-    const win = iframe?.contentWindow as (Window & { __ptGuardInstalled?: boolean; __ptGuard?: any });
+  const win = iframe?.contentWindow as PreviewIframeWindow | null;
     const doc = win?.document;
     if (!win || !doc) return;
     
@@ -347,10 +381,31 @@ export class PlayablePreviewer extends ComponentBase {
       }
     };
 
-    // Install screenshot capture script
-    this._installScreenshotCapture(win, doc);
+
+    this._installScreenshotCaptureHelper(doc, win);
   };
 
+
+  private _installScreenshotCaptureHelper(doc: Document, win: PreviewIframeWindow) {
+    if (win.__ptScreenshotInstalled) {
+      return;
+    }
+
+    if (doc.querySelector('script[data-pt-screenshot-helper="true"]')) {
+      return;
+    }
+
+    const script = doc.createElement('script');
+    script.type = 'module';
+    script.src = iframeScreenshotCaptureUrl;
+    script.dataset.ptScreenshotHelper = 'true';
+    script.onerror = () => {
+      console.warn('playable-previewer: failed to load iframe screenshot helper');
+    };
+
+    const target = doc.head || doc.documentElement;
+    target.appendChild(script);
+  }
   private renderPlayableIframe() {
     if (this.zipPreviewUrl) {
       // Append reload key as query param so the browser considers it a new URL
@@ -410,19 +465,6 @@ export class PlayablePreviewer extends ComponentBase {
     return PlayablePreviewer.sdkEventPresetIds.has(this.currentPreset?.id || '');
   }
 
-  private _installScreenshotCapture(_win: Window, doc: Document) {
-    // Inject the screenshot script into the iframe
-    const script = doc.createElement('script');
-    script.src = '/playable-screenshot.js';
-    script.onload = () => {
-      console.log('Screenshot capture script loaded in iframe');
-    };
-    script.onerror = () => {
-      console.warn('Failed to load screenshot capture script');
-    };
-    doc.head.appendChild(script);
-  }
-
   async _captureScreenshot() {
     try {
       this.requestUpdate();
@@ -447,6 +489,183 @@ export class PlayablePreviewer extends ComponentBase {
         this.requestUpdate();
       }, 3000);
     }
+  }
+
+  private _clearRecordingTimer() {
+    if (this._recordingTimerId !== undefined) {
+      window.clearInterval(this._recordingTimerId);
+      this._recordingTimerId = undefined;
+    }
+  }
+
+  private _startRecordingTimer(startedAt: number) {
+    this._recordingElapsedMs = 0;
+    this._clearRecordingTimer();
+    this._recordingTimerId = window.setInterval(() => {
+      this._recordingElapsedMs = Date.now() - startedAt;
+      this.requestUpdate();
+    }, 250);
+  }
+
+  private _formatDuration(ms: number): string {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private _getPrimaryCaptureSurface(): HTMLElement | null {
+    return (this as unknown as HTMLElement).querySelector('.playable-capture-surface');
+  }
+
+  private _getRecordingBaseName(): string {
+    const rawName = (this.fileName || this.previewService.getUploadedFileName() || 'playable-preview')
+      .replace(/\.(html?|zip)$/i, '')
+      .trim();
+    const normalizedName = rawName.length > 0 ? rawName : 'playable-preview';
+    return normalizedName.replace(/[^a-z0-9-_]+/gi, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'playable-preview';
+  }
+
+  private _showTransientError(message: string, timeoutMs: number = 4000) {
+    this.error = message;
+    this.requestUpdate();
+    window.setTimeout(() => {
+      if (this.error === message) {
+        this.error = '';
+        this.requestUpdate();
+      }
+    }, timeoutMs);
+  }
+
+  private _openRecordedClip(clip: PreviewRecordingResult) {
+    const modal = ((this as unknown as HTMLElement).querySelector('preview-video-modal')
+      || document.querySelector('preview-video-modal')) as PreviewVideoModalElement | null;
+
+    if (modal) {
+      void modal.show(clip, this._getRecordingBaseName());
+      return;
+    }
+
+    this._showTransientError('Recorded clip is ready, but the export modal is unavailable.');
+  }
+
+  private _watchRecording(recording: PreviewRecordingController) {
+    void recording.result.then((clip) => {
+      if (this._activeRecording !== recording) return;
+
+      this._activeRecording = undefined;
+      this._isRecording = false;
+      this._isStoppingRecording = false;
+      this._recordingElapsedMs = 0;
+      this._clearRecordingTimer();
+      this.requestUpdate();
+      this._openRecordedClip(clip);
+    }).catch((error) => {
+      if (this._activeRecording !== recording) return;
+
+      this._activeRecording = undefined;
+      this._isRecording = false;
+      this._isStoppingRecording = false;
+      this._recordingElapsedMs = 0;
+      this._clearRecordingTimer();
+      this.requestUpdate();
+
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      this._showTransientError(`Failed to record video: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  private async _toggleRecording() {
+    if (this._isStoppingRecording) {
+      return;
+    }
+
+    if (this._activeRecording) {
+      this._isStoppingRecording = true;
+      this.requestUpdate();
+
+      try {
+        await this._activeRecording.stop();
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          this._showTransientError(`Failed to stop recording: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      return;
+    }
+
+    const captureSurface = this._getPrimaryCaptureSurface();
+    if (!captureSurface) {
+      this._showTransientError('Preview surface not found for recording.');
+      return;
+    }
+
+    try {
+      const recording = await this.previewService.startPreviewRecording(captureSurface, 30);
+      this._activeRecording = recording;
+      this._isRecording = true;
+      this._isStoppingRecording = false;
+      this._startRecordingTimer(recording.startedAt);
+      this.requestUpdate();
+      this._watchRecording(recording);
+    } catch (error) {
+      this._showTransientError(`Failed to start recording: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private _formatAspectRatio(width?: number, height?: number): string {
+    if (!width || !height) {
+      return 'n/a';
+    }
+
+    const normalizedRatio = Math.max(width, height) / Math.min(width, height);
+    const ratioCandidates = [
+      { label: '4:3', value: 4 / 3 },
+      { label: '3:2', value: 3 / 2 },
+      { label: '16:10', value: 16 / 10 },
+      { label: '16:9', value: 16 / 9 },
+      { label: '18:9', value: 18 / 9 },
+      { label: '19:9', value: 19 / 9 },
+      { label: '19.5:9', value: 19.5 / 9 },
+      { label: '20:9', value: 20 / 9 },
+      { label: '21:9', value: 21 / 9 },
+    ];
+
+    let bestCandidate = ratioCandidates[0];
+    let bestDistance = Math.abs(normalizedRatio - bestCandidate.value);
+    for (const candidate of ratioCandidates.slice(1)) {
+      const distance = Math.abs(normalizedRatio - candidate.value);
+      if (distance < bestDistance) {
+        bestCandidate = candidate;
+        bestDistance = distance;
+      }
+    }
+
+    if (bestDistance <= 0.04) {
+      return bestCandidate.label;
+    }
+
+    const normalizedToNine = (normalizedRatio * 9).toFixed(1).replace(/\.0$/, '');
+    return `${normalizedToNine}:9`;
+  }
+
+  private _getDeviceLabel(device: PreviewDeviceOption): string {
+    if (device.disabled) {
+      return device.name;
+    }
+
+    const width = device.width || 0;
+    const height = device.height || 0;
+    return `${device.name} - ${width}x${height} - ${this._formatAspectRatio(width, height)}`;
+  }
+
+  private _getDeviceSummary(device: PreviewDeviceOption): string {
+    const width = device.width || 0;
+    const height = device.height || 0;
+    return `${width} x ${height} px • ${this._formatAspectRatio(width, height)}`;
   }
   
   handleDeviceChange(e: Event) {
@@ -690,25 +909,29 @@ export class PlayablePreviewer extends ComponentBase {
           <!-- Phone Preview -->
           <div class="flex flex-col items-center">
             <!-- Simulator Controls -->
-            <div class="flex items-center justify-between gap-2 mb-4" style="width: ${width + 20}px;">
-              <div class="flex items-center gap-2 min-w-0">
+            <div class="flex flex-col gap-3 mb-4" style="width: ${width + 20}px;">
+              <div class="flex flex-col gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Preview mode</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">${this._getDeviceSummary(device)}</span>
+                </div>
                 <div class="relative">
                   <select 
                     aria-label="Device"
                     @change="${this.handleDeviceChange.bind(this)}" 
-                    class="w-40 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    class="w-full appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                   >
                     ${this.devices.map((d, i) =>
                       d.disabled
                         ? html`<option disabled> ${d.name} </option>`
-                        : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${d.name}</option>`
+                        : html`<option value="${i}" ?selected="${i === this.selectedDeviceIdx}">${this._getDeviceLabel(d)}</option>`
                     )}
                   </select>
                   <span class="material-icons-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">expand_more</span>
                 </div>
               </div>
 
-              <div class="flex items-center justify-center gap-2">
+              <div class="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-3">
                 <button 
                   @click=${() => this._restartPlayable()} 
                   title="Restart content"
@@ -744,12 +967,27 @@ export class PlayablePreviewer extends ComponentBase {
                 >
                   <span class="material-icons-outlined">photo_camera</span>
                 </button>
+                <button 
+                  @click=${() => this._toggleRecording()} 
+                  title="${this._isRecording ? 'Stop recording and open trim tools' : 'Record gameplay video'}"
+                  ?disabled=${this.loading || (!this.zipPreviewUrl && !this.pageContent)}
+                  class="w-10 h-10 flex items-center justify-center rounded border transition-colors ${this._isRecording ? 'border-red-600 bg-red-600 text-white hover:bg-red-700' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'} ${this.loading || (!this.zipPreviewUrl && !this.pageContent) ? 'opacity-50 cursor-not-allowed' : ''}"
+                >
+                  <span class="material-icons-outlined">${this._isRecording ? 'stop_circle' : 'fiber_manual_record'}</span>
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between gap-3 px-1 text-xs text-slate-500 dark:text-slate-400">
+                <span>Viewport ready for capture</span>
+                ${this._isRecording
+                  ? html`<span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 dark:bg-red-900/20 px-2.5 py-1 font-semibold text-red-600 dark:text-red-300"><span class="material-icons-outlined" style="font-size:14px">fiber_manual_record</span> REC ${this._formatDuration(this._recordingElapsedMs)}</span>`
+                  : html`<span class="text-right">Choose the current tab in the share dialog to record gameplay.</span>`}
               </div>
             </div>
             
             <!-- Phone Frame -->
             <div class="bg-slate-800 dark:bg-black rounded-[40px] p-2.5 shadow-2xl transition-all duration-300" style="width: ${width + 20}px; height: ${height + 20}px;">
-              <div class="w-full h-full bg-slate-900 rounded-[30px] overflow-hidden relative">
+              <div class="playable-capture-surface w-full h-full bg-slate-900 rounded-[30px] overflow-hidden relative">
                 ${this.loading
                   ? html`
                       <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
@@ -801,6 +1039,7 @@ export class PlayablePreviewer extends ComponentBase {
           </div>
         </div>
         <save-creative-modal id="save-modal"></save-creative-modal>
+        <preview-video-modal id="preview-video-modal"></preview-video-modal>
       </div>
     `;
   }
