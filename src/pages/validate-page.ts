@@ -145,6 +145,28 @@ export class ValidatePage extends ComponentBase {
           )}
 
           ${this.renderNetworkCard(
+            "Yandex Games",
+            "100MB (unzipped archive)",
+            html`
+              <a
+                href="https://yandex.ru/dev/games/doc/ru/sdk"
+                target="_blank"
+                class="text-primary hover:underline"
+                >SDK Docs</a
+              >,
+              <a
+                href="https://yandex.ru/dev/games/doc/ru/concepts/requirements"
+                target="_blank"
+                class="text-primary hover:underline ml-1"
+                >Requirements</a
+              >
+            `,
+            html`
+              <strong>Validation focus:</strong> initialize <code>YaGames</code> correctly, call <code>LoadingAPI.ready()</code> when the game is playable, pause gameplay and audio on <code>game_api_pause</code> / fullscreen ads, use only Yandex SDK for ads and purchases, and recover unprocessed purchases via <code>payments.getPurchases()</code>.
+            `
+          )}
+
+          ${this.renderNetworkCard(
             "Mintegral",
             "5MB (ZIP)",
             html`

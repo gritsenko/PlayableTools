@@ -1,4 +1,45 @@
 const sessionStore = new Map();
+const cacheNamePrefix = 'zip-preview-session:';
+
+const getSessionCacheName = (sessionId) => `${cacheNamePrefix}${sessionId}`;
+
+const buildAssetRequestUrl = (sessionId, assetPath) => {
+  const scopeUrl = new URL(self.registration.scope);
+  return `${scopeUrl.origin}${scopeUrl.pathname}${sessionId}/${normalizePath(assetPath)}`;
+};
+
+const buildAssetResponse = (asset) => new Response(asset.buffer.slice(0), {
+  status: 200,
+  headers: {
+    'Content-Type': asset.mime || 'application/octet-stream',
+    'Cache-Control': 'no-store',
+  },
+});
+
+const persistSessionAssets = async (sessionId, assetMap) => {
+  const cache = await caches.open(getSessionCacheName(sessionId));
+  const writes = [];
+  for (const [assetPath, asset] of assetMap.entries()) {
+    writes.push(cache.put(buildAssetRequestUrl(sessionId, assetPath), buildAssetResponse(asset)));
+  }
+  await Promise.all(writes);
+};
+
+const persistSessionAsset = async (sessionId, assetPath, asset) => {
+  const cache = await caches.open(getSessionCacheName(sessionId));
+  await cache.put(buildAssetRequestUrl(sessionId, assetPath), buildAssetResponse(asset));
+};
+
+const restoreAssetFromCache = async (sessionId, requestUrl) => {
+  const cache = await caches.open(getSessionCacheName(sessionId));
+  const canonicalUrl = new URL(requestUrl);
+  canonicalUrl.search = '';
+  return cache.match(canonicalUrl.toString(), { ignoreSearch: true });
+};
+
+const clearSessionCache = async (sessionId) => {
+  await caches.delete(getSessionCacheName(sessionId));
+};
 
 // ============================================================================
 // Cache API Error Handler
@@ -42,46 +83,91 @@ self.addEventListener("message", (event) => {
     return;
   }
 
-  switch (data.type) {
-    case "ZIP_SESSION_REGISTER": {
-      const { sessionId, assets } = data;
-      if (!sessionId || !Array.isArray(assets)) {
-        return;
-      }
-      const assetMap = new Map();
-      for (const asset of assets) {
-        if (!asset || !asset.path || !asset.buffer) continue;
-        assetMap.set(normalizePath(asset.path), {
-          mime: asset.mime || "application/octet-stream",
-          buffer: asset.buffer,
-        });
-      }
-      sessionStore.set(sessionId, assetMap);
-      break;
+  const replyPort = event.ports && event.ports.length > 0 ? event.ports[0] : null;
+
+  const respond = (ok, errorMessage) => {
+    if (!replyPort || typeof replyPort.postMessage !== 'function') {
+      return;
     }
-    case "ZIP_SESSION_UPDATE_ENTRY": {
-      const { sessionId, asset } = data;
-      if (!sessionId || !asset) return;
-      const session = sessionStore.get(sessionId);
-      if (!session) return;
-      session.set(normalizePath(asset.path), {
-        mime: asset.mime || "text/html",
-        buffer: asset.buffer,
+
+    try {
+      replyPort.postMessage({
+        ok,
+        error: errorMessage || null,
       });
-      break;
+    } catch (error) {
+      console.warn('[ZIP Preview SW] Failed to post ZIP_SESSION_ACK', error);
     }
-    case "ZIP_SESSION_CLEAR": {
-      const { sessionId } = data;
-      if (sessionId) {
-        sessionStore.delete(sessionId);
-      } else {
-        sessionStore.clear();
+  };
+
+  event.waitUntil((async () => {
+    try {
+      switch (data.type) {
+        case "ZIP_SESSION_REGISTER": {
+          const { sessionId, assets } = data;
+          if (!sessionId || !Array.isArray(assets)) {
+            respond(false, 'Invalid ZIP_SESSION_REGISTER payload');
+            return;
+          }
+          const assetMap = new Map();
+          for (const asset of assets) {
+            if (!asset || !asset.path || !asset.buffer) continue;
+            assetMap.set(normalizePath(asset.path), {
+              mime: asset.mime || "application/octet-stream",
+              buffer: asset.buffer,
+            });
+          }
+          sessionStore.set(sessionId, assetMap);
+          await persistSessionAssets(sessionId, assetMap);
+          break;
+        }
+        case "ZIP_SESSION_UPDATE_ENTRY": {
+          const { sessionId, asset } = data;
+          if (!sessionId || !asset) {
+            respond(false, 'Invalid ZIP_SESSION_UPDATE_ENTRY payload');
+            return;
+          }
+
+          const normalizedPath = normalizePath(asset.path);
+          const normalizedAsset = {
+            mime: asset.mime || "text/html",
+            buffer: asset.buffer,
+          };
+
+          const session = sessionStore.get(sessionId);
+          if (session) {
+            session.set(normalizedPath, normalizedAsset);
+          }
+
+          await persistSessionAsset(sessionId, normalizedPath, normalizedAsset);
+          break;
+        }
+        case "ZIP_SESSION_CLEAR": {
+          const { sessionId } = data;
+          if (sessionId) {
+            sessionStore.delete(sessionId);
+            await clearSessionCache(sessionId);
+          } else {
+            sessionStore.clear();
+            const cacheKeys = await caches.keys();
+            await Promise.all(
+              cacheKeys
+                .filter((cacheKey) => cacheKey.startsWith(cacheNamePrefix))
+                .map((cacheKey) => caches.delete(cacheKey))
+            );
+          }
+          break;
+        }
+        default:
+          break;
       }
-      break;
+
+      respond(true);
+    } catch (error) {
+      console.error('[ZIP Preview SW] Failed to handle message', data.type, error);
+      respond(false, error instanceof Error ? error.message : String(error));
     }
-    default:
-      break;
-  }
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
@@ -101,13 +187,19 @@ self.addEventListener("fetch", (event) => {
   const assetPath = normalizePath(assetParts.join("/"));
   const session = sessionStore.get(sessionId);
   if (!session) {
-    event.respondWith(new Response("ZIP session expired", { status: 410 }));
+    event.respondWith((async () => {
+      const cachedResponse = await restoreAssetFromCache(sessionId, requestUrl.toString());
+      return cachedResponse || new Response("ZIP session expired", { status: 410 });
+    })());
     return;
   }
 
   const asset = session.get(assetPath);
   if (!asset) {
-    event.respondWith(new Response("Asset not found", { status: 404 }));
+    event.respondWith((async () => {
+      const cachedResponse = await restoreAssetFromCache(sessionId, requestUrl.toString());
+      return cachedResponse || new Response("Asset not found", { status: 404 });
+    })());
     return;
   }
 

@@ -49,6 +49,19 @@
         }
       ],
       "replaceTokens": {}
+    },
+    {
+      "id": "yandex-games",
+      "name": "Yandex Games SDK",
+      "description": "Preview configured for Yandex Games HTML5 titles. Injects a local /sdk.js shim, simulates YaGames.init(), pause/resume events, ads, purchases, leaderboards and other SDK flows used during moderation.",
+      "maxFileSizeMB": 100,
+      "injectScripts": [
+        {
+          "source": "/sdk.js",
+          "position": "beforeHeadEnd"
+        }
+      ],
+      "replaceTokens": {}
     }
   ]
 }

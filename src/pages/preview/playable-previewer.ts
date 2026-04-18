@@ -10,6 +10,8 @@ import "./save-creative-modal";
 export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
 
+  private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games']);
+
   @property() fileName: string = "";
 
   pageContent: string = "";
@@ -116,12 +118,12 @@ export class PlayablePreviewer extends ComponentBase {
       try {
         const data = e.data;
         if (!data || typeof data !== 'object') return;
-        if (data.type === 'cta-event') {
+        if (data.type === 'cta-event' || data.type === 'sdk-event') {
           if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
           const elapsedMs = typeof data.elapsedMs === 'number' ? data.elapsedMs : (Date.now() - this._sdkEventStart);
           this._sdkEvents = [...this._sdkEvents, { event: data.event, args: data.args || [], elapsedMs }];
           this.requestUpdate();
-        } else if (data.type === 'cta-game-start') {
+        } else if (data.type === 'cta-game-start' || data.type === 'sdk-session-start') {
           if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
           this.requestUpdate();
         }
@@ -404,6 +406,10 @@ export class PlayablePreviewer extends ComponentBase {
     }
   }
 
+  private _supportsSdkEventLog(): boolean {
+    return PlayablePreviewer.sdkEventPresetIds.has(this.currentPreset?.id || '');
+  }
+
   private _installScreenshotCapture(_win: Window, doc: Document) {
     // Inject the screenshot script into the iframe
     const script = doc.createElement('script');
@@ -643,10 +649,10 @@ export class PlayablePreviewer extends ComponentBase {
                 ${this._sdkEvents.length > 0 ? html`
                   <span class="text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full px-2 py-0.5">${this._sdkEvents.length}</span>
                 ` : ''}
-                ${this.currentPreset?.id !== 'preview-cta' ? html`
+                ${!this._supportsSdkEventLog() ? html`
                   <span class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <span class="material-icons-outlined" style="font-size:13px">info</span>
-                    Select &ldquo;Default Preview + CTA Stub&rdquo; preset to capture events
+                    Select &ldquo;CTA SDK&rdquo; or &ldquo;Yandex Games SDK&rdquo; preset to capture events
                   </span>
                 ` : ''}
               </div>
@@ -660,7 +666,7 @@ export class PlayablePreviewer extends ComponentBase {
             <div class="font-mono text-xs overflow-y-auto" style="max-height: 180px; min-height: 56px;" id="sdk-log-scroll">
               ${this._sdkEvents.length === 0 ? html`
                 <div class="px-4 py-3 text-slate-400 dark:text-slate-500 italic">
-                  No SDK events captured yet${this.currentPreset?.id === 'preview-cta' ? ' — interact with the playable to see events' : ''}.
+                  No SDK events captured yet${this._supportsSdkEventLog() ? ' — interact with the playable to see events' : ''}.
                 </div>
               ` : this._sdkEvents.map((ev, i) => {
                 const ms = ev.elapsedMs;

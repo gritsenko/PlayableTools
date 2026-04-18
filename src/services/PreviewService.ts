@@ -2,7 +2,7 @@ import { injectable } from "fw";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
-import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, type ValidationResult } from "./PreviewServiceValidators";
+import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, type ValidationResult } from "./PreviewServiceValidators";
 
 type ZipAssetPayload = {
   path: string;
@@ -12,6 +12,8 @@ type ZipAssetPayload = {
 
 @injectable()
 export class PreviewService {
+  private static readonly zipSwAckTimeoutMs = 10000;
+
   // Example: fetch playable ad data, generate shareable links, etc.
   getShareableLink(adId: string, size: string, orientation: string): string {
     // This is a stub. Replace with real logic as needed.
@@ -71,6 +73,7 @@ export class PreviewService {
     
     // Store original content and URL for preset switching
     this._originalGithubContent = originalContent;
+    this._validationSourceContent = originalContent;
     
     // Process content with current preset
     console.log(`⚙️ PreviewService: Processing content with preset`);
@@ -106,6 +109,7 @@ export class PreviewService {
   // Store original content separately from processed content
   private _originalUploadedContent: string | null = null;
   private _originalGithubContent: string | null = null;
+  private _validationSourceContent: string | null = null;
   
   // Preview preset configuration
   private _currentPreset: PreviewPreset | null = null;
@@ -160,6 +164,7 @@ export class PreviewService {
     // Store original content for preset switching.
     this._originalUploadedContent = content;
     this._originalGithubContent = null;
+    this._validationSourceContent = content;
 
     const processedContent = await this.processContentWithPreset(content, preset || undefined);
     const originalSizeBytes = new Blob([content]).size;
@@ -282,6 +287,11 @@ export class PreviewService {
     // Inject scripts
     for (const script of activePreset.injectScripts) {
       try {
+        if (this.hasScriptSourceReference(processedContent, script.source)) {
+          console.log(`  ⏭️ Skipping script injection for ${script.source} because it is already referenced in HTML`);
+          continue;
+        }
+
         console.log(`  📜 Injecting script from ${script.source} at position ${script.position}`);
         const startTime = performance.now();
         
@@ -314,6 +324,14 @@ export class PreviewService {
       throw new Error(`Failed to load script: ${response.status} ${response.statusText}`);
     }
     return await response.text();
+  }
+
+  private hasScriptSourceReference(html: string, source: string): boolean {
+    const normalizedSource = source.startsWith(window.location.origin)
+      ? source.slice(window.location.origin.length)
+      : source;
+    const escapedSource = normalizedSource.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`<script[^>]+src\\s*=\\s*["']${escapedSource}["']`, 'i').test(html);
   }
 
   /**
@@ -365,6 +383,7 @@ export class PreviewService {
       // Store original content for preset switching
       this._originalUploadedContent = originalContent;
       this._originalGithubContent = null; // Clear GitHub content when uploading
+      this._validationSourceContent = originalContent;
 
       // Process content with current preset
       const processedContent = await this.processContentWithPreset(originalContent, preset || undefined);
@@ -467,6 +486,7 @@ export class PreviewService {
     const rawEntryHtml = await zip.files[entryHtmlPath].async('string') as string;
     this._originalUploadedContent = rawEntryHtml;
     this._originalGithubContent = null;
+    this._validationSourceContent = await this.buildZipValidationSource(zip, entries.map(entry => entry.path));
 
     const processedContent = await this.processContentWithPreset(rawEntryHtml, preset || undefined);
     await this.runValidation(processedContent, file.size);
@@ -533,6 +553,31 @@ export class PreviewService {
     }
   }
 
+  private shouldIncludeZipTextAssetForValidation(filePath: string): boolean {
+    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    return ['html', 'htm', 'js', 'mjs', 'cjs', 'json', 'txt'].includes(ext);
+  }
+
+  private async buildZipValidationSource(zip: any, entryPaths: string[]): Promise<string> {
+    const sections: string[] = [];
+
+    for (const entryPath of entryPaths) {
+      const entry = zip.files[entryPath];
+      if (!entry || entry.dir || !this.shouldIncludeZipTextAssetForValidation(entryPath)) {
+        continue;
+      }
+
+      try {
+        const text = await entry.async('string') as string;
+        sections.push(`/* FILE: ${entryPath} */\n${text}`);
+      } catch (error) {
+        console.warn(`PreviewService: Failed to read ZIP text asset for validation: ${entryPath}`, error);
+      }
+    }
+
+    return sections.join('\n\n');
+  }
+
   private normalizePath(baseDir: string, relative: string): string {
     if (relative.startsWith('/')) {
       return relative.replace(/^\//, '');
@@ -568,6 +613,7 @@ export class PreviewService {
     this.setUploadedContent(null);
     this._originalUploadedContent = null;
     this._originalGithubContent = null;
+    this._validationSourceContent = null;
     this._originalZipFile = null;
     void this.clearZipSession();
     this._lastUploadedSizeBytes = undefined;
@@ -700,10 +746,53 @@ export class PreviewService {
       || (await resolveWorker(registration.installing));
   }
 
-  private async postMessageToZipSw(message: any, transferables: Transferable[] = []): Promise<void> {
+  private async postMessageToZipSw(message: any, transferables: Transferable[] = [], waitForAck = false): Promise<void> {
     const worker = await this.getZipServiceWorker();
     if (!worker) return;
-    worker.postMessage(message, transferables);
+
+    if (!waitForAck) {
+      worker.postMessage(message, transferables);
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const channel = new MessageChannel();
+      const timeoutId = window.setTimeout(() => {
+        try {
+          channel.port1.close();
+          channel.port2.close();
+        } catch {}
+        reject(new Error(`ZIP service worker did not acknowledge ${message.type || 'message'} in time`));
+      }, PreviewService.zipSwAckTimeoutMs);
+
+      channel.port1.onmessage = (event) => {
+        window.clearTimeout(timeoutId);
+
+        try {
+          channel.port1.close();
+          channel.port2.close();
+        } catch {}
+
+        const response = event.data;
+        if (response && response.ok === false) {
+          reject(new Error(response.error || 'ZIP service worker request failed'));
+          return;
+        }
+
+        resolve();
+      };
+
+      try {
+        worker.postMessage(message, [...transferables, channel.port2]);
+      } catch (error) {
+        window.clearTimeout(timeoutId);
+        try {
+          channel.port1.close();
+          channel.port2.close();
+        } catch {}
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   }
 
   private async registerZipSessionAssets(sessionId: string, assets: ZipAssetPayload[]): Promise<void> {
@@ -712,7 +801,7 @@ export class PreviewService {
       type: 'ZIP_SESSION_REGISTER',
       sessionId,
       assets
-    }, transferables);
+    }, transferables, true);
   }
 
   private async updateZipEntryHtmlAsset(sessionId: string, entryPath: string, html: string): Promise<void> {
@@ -726,7 +815,7 @@ export class PreviewService {
         mime: 'text/html',
         buffer
       }
-    }, [buffer]);
+    }, [buffer], true);
   }
 
   private async clearZipSession(sessionId?: string): Promise<void> {
@@ -735,7 +824,7 @@ export class PreviewService {
     await this.postMessageToZipSw({
       type: 'ZIP_SESSION_CLEAR',
       sessionId: targetSession
-    });
+    }, [], true);
     if (!sessionId) {
       this._zipSessionId = null;
       this._zipEntryPath = null;
@@ -781,6 +870,14 @@ export class PreviewService {
             const mraidResults = mraidValidator.validate(content, fileSize);
             results.categories.push(...mraidResults.categories);
             console.log(`✅ PreviewService: MRAID validation complete`);
+            break;
+          }
+          case 'yandex-games': {
+            const yandexGamesValidator = new YandexGamesValidator();
+            const yandexSourceContent = this._validationSourceContent || this._originalUploadedContent || this._originalGithubContent || content;
+            const yandexResults = yandexGamesValidator.validate(yandexSourceContent, fileSize);
+            results.categories.push(...yandexResults.categories);
+            console.log(`✅ PreviewService: Yandex Games validation complete`);
             break;
           }
           default:
