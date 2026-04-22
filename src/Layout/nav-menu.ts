@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html } from "fw";
+import { ComponentBase, customElement, html, getCurrentPath, getNavigationEventName } from "fw";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import gamepadIconSvg from "./gamepad-icon.svg?raw";
@@ -40,31 +40,20 @@ export class NavMenu extends ComponentBase {
   ];
 
   private get currentPath() {
-    // Get current hash path
-    let hash = window.location.hash ? window.location.hash.substring(1) : '';
-    if (!hash.startsWith('/')) hash = '/' + hash;
-    
-    // Return null for root path (home page) so no items are selected
-    if (hash === '/' || hash === '') return null;
-    
-    // Remove query params
-    const queryIndex = hash.indexOf('?');
-    if (queryIndex !== -1) {
-        return hash.substring(0, queryIndex);
-    }
-    
-    return hash;
+    const path = getCurrentPath();
+    return path === "/" ? null : path;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    // Listen for hash changes to update active state
-    window.addEventListener('hashchange', this.handleHashChange);
+    window.addEventListener("popstate", this.handleHashChange);
+    window.addEventListener(getNavigationEventName(), this.handleHashChange as EventListener);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    window.removeEventListener('hashchange', this.handleHashChange);
+    window.removeEventListener("popstate", this.handleHashChange);
+    window.removeEventListener(getNavigationEventName(), this.handleHashChange as EventListener);
   }
 
   private handleHashChange = () => {
@@ -91,7 +80,7 @@ export class NavMenu extends ComponentBase {
                 return html`
                   <li>
                     <a
-                      href=${ifDefined(!item.disabled ? `#${item.path.substring(1)}` : undefined)}
+                      href=${ifDefined(!item.disabled ? item.path : undefined)}
                       class="${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${item.disabled ? disabledClasses : ''}"
                       tabindex="${!item.disabled ? 0 : -1}"
                       aria-disabled="${item.disabled}"

@@ -1,0 +1,98 @@
+[
+  {
+    "routePath": "/",
+    "canonicalPath": "/",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/publish",
+    "canonicalPath": "/publish",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/cta-sdk",
+    "canonicalPath": "/cta-sdk",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/validate",
+    "canonicalPath": "/validate",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/base64",
+    "canonicalPath": "/base64",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/compress-assets",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/imba-packer",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/video2sprite",
+    "canonicalPath": "/video2sprite",
+    "indexable": true,
+    "prerender": true
+  },
+  {
+    "routePath": "/folder-size-visualizer",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/spritesheet-maker",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/portfolio",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/projects",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/projects/new",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/projects/:id/edit",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/editor/:creativeId?/:variationId?",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  },
+  {
+    "routePath": "/preview/:playableId?",
+    "indexable": false,
+    "prerender": false,
+    "robots": "noindex,follow"
+  }
+]

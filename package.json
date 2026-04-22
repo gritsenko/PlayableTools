@@ -1,11 +1,11 @@
 {
   "name": "playable_tools",
   "private": true,
-  "version": "1.9.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/prerender.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -31,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^24.0.13",
     "@types/pako": "^2.0.3",
+    "playwright-core": "^1.59.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

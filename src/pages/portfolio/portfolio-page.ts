@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, route, inject, state } from "fw";
+import { ComponentBase, customElement, html, route, inject, state, navigate } from "fw";
 import { PortfolioService, type CreativeWithVariations } from "../../services/PortfolioService";
 import { PreviewService } from "../../services/PreviewService";
 import { AuthenticationService } from "../../services/AuthenticationService";
@@ -180,12 +180,12 @@ export class PortfolioPage extends ComponentBase {
     const latestVariation = creative.variations[creative.variations.length - 1];
     if (latestVariation && latestVariation.file) {
       const previewId = `${creative.id}_${latestVariation.id}_${(latestVariation.file as any).storageName}`;
-      window.location.hash = `preview/${previewId}`;
+      navigate(`/preview/${previewId}`);
     }
   };
 
   handleEditCreative = (creative: CreativeWithVariations) => {
-    window.location.hash = `#editor/${creative.id}`;
+    navigate(`/editor/${creative.id}`);
   };
 
   handlePublishCreative = async (creative: CreativeWithVariations) => {
@@ -217,7 +217,7 @@ export class PortfolioPage extends ComponentBase {
     });
 
     this.openMenuId = null;
-    window.location.hash = "#/publish";
+    navigate("/publish");
   };
 
   handleCopyCreativeLink = async (creative: CreativeWithVariations) => {
@@ -305,7 +305,7 @@ export class PortfolioPage extends ComponentBase {
       }
       this.previewService.setUploadedFileName(file.name);
       // Navigate to preview page
-      window.location.hash = "preview";
+      navigate("/preview");
     } catch (error) {
       console.error("File upload error:", error);
       this.errorMessage = error instanceof Error ? error.message : "Failed to process file";
@@ -316,7 +316,7 @@ export class PortfolioPage extends ComponentBase {
   }
 
   handleShowProjects = () => {
-    window.location.hash = "#/projects";
+    navigate("/projects");
   };
 
   getScreenshotUrl = (screenshotStorageName: string): string => {

@@ -16,7 +16,7 @@ This project uses a custom lightweight framework built on Lit:
 - **ComponentBase**: Light DOM Lit components (no shadow DOM by default)
 - **LayoutComponentBase**: Base class for layout components  
 - **Dependency Injection**: Custom DI container with `@injectable` and `@inject` decorators
-- **Router**: Hash-based routing with `@route` decorator and metadata support
+- **Router**: Clean URL routing with `@route` decorator, History API navigation helpers, and metadata support
 - **Service Lifetimes**: Singleton (default), Scoped, Transient
 - **Update Notification**: Version checking and update prompts
 
@@ -94,10 +94,13 @@ export class MyComponent extends ComponentBase {
   - `MraidValidator` - MRAID compliance validation
 
 ### Routing & Navigation
-- **Hash-based routing** for static hosting compatibility
+- **Clean URL routing** based on `window.location.pathname`
+- **History API helpers** are exported from `fw`: `navigate()`, `getCurrentPath()`, `getCurrentSearch()`
 - Routes defined with `@route("/path", { title, description })`
 - Automatic page loading via `import.meta.glob("./pages/**/*.ts", { eager: true })`
 - Navigation handled by `nav-menu.ts`
+- Legacy `/#/...` links are migrated at bootstrap time in `index.html`
+- Public SEO landing pages are declared in `src/seo/route-manifest.json`
 
 ### File Organization
 ```
@@ -135,10 +138,11 @@ src/
 
 ### Build & Development
 - **Dev server**: don't run directly. It's already run by developer.
-- **Build**: `npm run build` (TypeScript compilation + Vite build)
+- **Build**: `npm run build` (TypeScript compilation + Vite build + prerender pass)
 - **Base path**: `/` for dev, `/PlayableTools/` for production
 - **PWA**: Auto-update service worker with version checking. The `VersionService` fetches `/version.json` to detect new builds and prompt the user to update.
 - **ZIP Preview System**: Dedicated service worker (`/zip-preview-sw.js`) for serving ZIP contents at virtual URLs
+- **SEO Output**: build generates prerendered HTML for selected public routes, plus `dist/404.html`, `dist/sitemap.xml`, and `dist/robots.txt`
 
 ## README / Landing page guidelines
 This repository doubles as a small landing page for users who come to the project looking for tools to run locally. To keep the README helpful and welcoming to non-developers, follow these guidelines when editing `README.md`:

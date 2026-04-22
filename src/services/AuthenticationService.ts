@@ -1,4 +1,4 @@
-import { injectable, ServiceLifetime } from 'fw';
+import { injectable, ServiceLifetime, navigate } from 'fw';
 
 @injectable(ServiceLifetime.Singleton)
 export class AuthenticationService {
@@ -46,7 +46,7 @@ export class AuthenticationService {
       }
     });
     
-    window.location.hash = '#/portfolio';
+    navigate('/portfolio', { replace: true });
     this.isLoggingOut = false;
   }
 }

@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import { ComponentBase, customElement, html, state, inject } from "./fw";
+import { ComponentBase, customElement, html, state, inject, getNavigationEventName } from "./fw";
 import "./Layout/nav-menu";
 import { MainLayout } from "./Layout/main-layout";
 import { VersionService } from "./services/VersionService";
@@ -17,23 +17,44 @@ export class AppRoot extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
   
   private versionService = new VersionService();
+  private suppressNavigationGuard = false;
+  private lastUrl = window.location.href;
 
   @state()
   private updateAvailable = false;
 
-  private _onHashChange = (e: HashChangeEvent) => {
+  private _onNavigation = (event: Event) => {
+    const detail = event instanceof CustomEvent
+      ? event.detail as { oldUrl: string; newUrl: string }
+      : { oldUrl: this.lastUrl, newUrl: window.location.href };
+
+    this.handleNavigationChange(detail.oldUrl, detail.newUrl);
+  };
+
+  private handleNavigationChange(oldUrlValue: string, newUrlValue: string) {
+    const oldUrl = new URL(oldUrlValue, window.location.origin);
+    const newUrl = new URL(newUrlValue, window.location.origin);
+
+    this.lastUrl = newUrl.toString();
+
+    if (this.suppressNavigationGuard || oldUrl.pathname === newUrl.pathname) {
+      return;
+    }
+
     // Check if PreviewService has unsaved changes
     if (this.previewService.hasUnsavedChanges() && !(window as any).isSavingPlayable) {
-      const oldHash = new URL(e.oldURL).hash;
-      const newHash = new URL(e.newURL).hash;
-
       // If navigating away from preview, show confirmation
-      if (newHash !== oldHash && !newHash.startsWith("#preview")) {
+      if (oldUrl.pathname.startsWith("/preview") && !newUrl.pathname.startsWith("/preview")) {
         if (!confirm("You have unsaved changes. Are you sure you want to leave?")) {
-          window.removeEventListener("hashchange", this._onHashChange);
-          window.location.hash = oldHash;
+          this.suppressNavigationGuard = true;
+          window.history.pushState({}, "", `${oldUrl.pathname}${oldUrl.search}${oldUrl.hash}`);
+          window.dispatchEvent(
+            new CustomEvent(getNavigationEventName(), {
+              detail: { oldUrl: newUrl.toString(), newUrl: oldUrl.toString() },
+            })
+          );
           setTimeout(() => {
-            window.addEventListener("hashchange", this._onHashChange);
+            this.suppressNavigationGuard = false;
           }, 0);
         }
       }
@@ -46,7 +67,8 @@ export class AppRoot extends ComponentBase {
     console.log('🔧 Initializing PlayableTools...');
     
     // Add global navigation guard for unsaved changes
-    window.addEventListener("hashchange", this._onHashChange);
+    window.addEventListener("popstate", this._onNavigation);
+    window.addEventListener(getNavigationEventName(), this._onNavigation as EventListener);
     
     // Initialize version checking
     await this.initializeVersionService();
@@ -54,7 +76,8 @@ export class AppRoot extends ComponentBase {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    window.removeEventListener("hashchange", this._onHashChange);
+    window.removeEventListener("popstate", this._onNavigation);
+    window.removeEventListener(getNavigationEventName(), this._onNavigation as EventListener);
     this.versionService.destroy();
   }
 

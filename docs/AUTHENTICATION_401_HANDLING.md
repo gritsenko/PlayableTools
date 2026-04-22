@@ -14,7 +14,7 @@ A new singleton service that manages logout flows and communicates session expir
 - `logout(reason?: string)` - Performs cleanup and redirect:
   - Clears localStorage (authToken, authUser)
   - Calls all registered callbacks
-  - Redirects to portfolio login page via `window.location.hash = '#/portfolio'`
+  - Redirects to portfolio login page via clean URL navigation to `/portfolio`
   - Prevents duplicate redirects with `isLoggingOut` flag
 
 ### 2. ApiClient Updates (`src/services/ApiClient.ts`)
@@ -77,7 +77,7 @@ AuthenticationService.handleUnauthorized() called
 AuthenticationService.logout() executes:
   - Clear localStorage
   - Call all registered callbacks
-  - Redirect to #/portfolio
+  - Redirect to /portfolio
        ↓
 PortfolioPage logout callback:
   - Clear auth state
@@ -97,7 +97,7 @@ User can sign in again
 5. **Logout Flow Triggered** - AuthenticationService.handleUnauthorized() is called
 6. **Storage Cleaned** - localStorage entries are removed
 7. **Listeners Notified** - All subscribers are called with the reason
-8. **Redirect** - User is redirected to portfolio login page
+8. **Redirect** - User is redirected to the portfolio login page at `/portfolio`
 9. **UI Updated** - Portfolio page shows login screen and error message
 
 ## Error Message Display

@@ -15,9 +15,9 @@ import darkCheckboard from "../../../media/backgrounds/dark-checkboard.svg";
 
 @customElement("video2sprite-page")
 @route("/video2sprite", {
-  title: "Video to Sprite Converter",
+  title: "Video to Sprite Converter for Playable Ads | PlayableTools",
   description:
-    "Convert MP4 videos to PNG sprite sequences for game development",
+    "Convert MP4 videos to PNG sprite sheets and frame sequences for game development and playable ads",
 })
 export class Video2spritePage extends ComponentBase {
   @state()
@@ -651,10 +651,12 @@ export class Video2spritePage extends ComponentBase {
     return html`
       <div class="max-w-6xl mx-auto">
         <div class="mb-8">
-          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Video to Sprite Converter</h1>
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Convert MP4 video to sprite sheets for playable ads</h1>
           <p class="text-lg text-slate-600 dark:text-slate-400">
-            Convert your MP4 videos into PNG sprite sequences for game development
-            and animation.
+            Turn short MP4 clips into optimized PNG sprite sheets and frame sequences for HTML5 playable ads, lightweight web games, and animation-heavy creatives.
+          </p>
+          <p class="text-slate-600 dark:text-slate-400 mt-3">
+            The tool helps with frame extraction, sprite packing, chroma-key cleanup, and transparent asset preparation so it is easier to ship rich motion inside strict file-size budgets.
           </p>
         </div>
 

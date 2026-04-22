@@ -14,6 +14,8 @@
 
 PlayableTools is a comprehensive web-based toolkit for preparing, publishing, and managing HTML5 playable ads across multiple advertising platforms. Built with modern web technologies and packaged as a Progressive Web App for seamless local development and offline use.
 
+The app now uses clean URLs such as `/publish` and `/base64` instead of hash routes, and production builds prerender the main SEO landing pages so search engines can index meaningful HTML content.
+
 ## 🚀 Main Features
 
 ### 📤 **Multi-Platform Publishing**
@@ -79,7 +81,8 @@ PlayableTools is a comprehensive web-based toolkit for preparing, publishing, an
 - **CSS Framework**: Pico CSS 2.x with custom theme
 - **PWA**: Vite PWA plugin with service worker
 - **Dependencies**: JSZip, Pako, Marked, D3.js
-- **Routing**: Custom hash-based router with metadata support
+- **Routing**: Custom clean-URL router with route metadata support
+- **SEO Build**: Static prerender step for public landing pages plus `sitemap.xml`, `robots.txt`, and `404.html` fallback generation
 
 ## 🌐 Supported Ad Platforms
 
@@ -119,6 +122,20 @@ Navigate to `http://localhost:5173/` (or the URL shown by Vite). The app support
 ```powershell
 npm run build
 ```
+
+Production build output includes:
+
+- prerendered landing pages for `/`, `/publish`, `/cta-sdk`, `/validate`, `/base64`, and `/video2sprite`
+- `dist/404.html` for GitHub Pages SPA fallback on non-prerendered routes
+- `dist/sitemap.xml` and `dist/robots.txt` for search engine discovery
+
+## 🔎 SEO & Deployment Notes
+
+- Public landing pages use prerendered HTML with route-specific `title`, `description`, `canonical`, and `robots` metadata
+- Internal routes such as `/preview`, `/portfolio`, `/projects`, and `/editor` stay functional but are marked `noindex`
+- Legacy links like `/#/base64` are automatically migrated to clean URLs on page load
+- GitHub Pages deep links work through the generated `404.html` fallback
+- The prerender route source of truth lives in `src/seo/route-manifest.json`
 
 ## 📁 Project Structure
 
@@ -160,6 +177,7 @@ The preview system supports ZIP packages with complete asset extraction:
 - **Framework Documentation**: See `AGENTS.md` for detailed architecture and patterns
 - **Service Worker**: Version checking and caching handled via `src/sw-version-handler.js`
 - **Platform Adapters**: Add new platforms by following existing patterns in `src/services/PlayablePublishService.ts`
+- **SEO Route Manifest**: Public/indexable route policy is defined in `src/seo/route-manifest.json`
 
 ## 🤝 Contributing
 

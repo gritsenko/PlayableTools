@@ -4,8 +4,8 @@ import type { Base64FileModel } from "../services/Base64ConverterService";
 
 @customElement("base64-page")
 @route("/base64", {
-  title: "Base64 Converter",
-  description: "A simple tool to convert text to Base64 and vice versa.",
+  title: "Base64 Converter for Playable Ads | PlayableTools",
+  description: "Convert creative assets to Base64 strings for HTML5 playable ads, inline demos, and embedded media workflows.",
 })
 export class HomePage extends ComponentBase {
   _downloadDataUrl(e: Event, dataUrl: string, name: string) {
@@ -111,8 +111,10 @@ export class HomePage extends ComponentBase {
         <div class="mb-8">
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Convert assets to base64 format</h1>
           <p class="text-lg text-slate-600 dark:text-slate-400">
-            This app provides a simple tool to convert media files to Base64 to use
-            in playable ads.
+            Convert images, audio files, and other creative assets into Base64 strings for HTML5 playable ads, single-file demos, and embedded creative prototypes.
+          </p>
+          <p class="text-slate-600 dark:text-slate-400 mt-3">
+            This encoder is useful when you want to inline small assets directly into markup or scripts to simplify packaging and reduce external file dependencies during playable ad production.
           </p>
         </div>
 

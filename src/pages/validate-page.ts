@@ -2,9 +2,9 @@ import { ComponentBase, customElement, html, route } from "fw";
 
 @customElement("validate-page")
 @route("/validate", {
-  title: "Ad Network Technical Requirements",
+  title: "Ad Network Technical Requirements | PlayableTools",
   description:
-    "A comprehensive guide to the technical requirements for major ad networks, including file size limits and validation tools.",
+    "Technical requirements and validation references for major ad networks, including file size limits, platform rules, and testing links for playable ads.",
 })
 export class ValidatePage extends ComponentBase {
   render() {

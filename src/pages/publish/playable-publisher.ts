@@ -60,7 +60,7 @@ export class PlayablePublisher extends ComponentBase {
     return html`
       <div class="max-w-4xl mx-auto">
         <div class="mb-8">
-          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Publish Playable Ad</h1>
+          <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Prepare your export package</h2>
           <div class="text-lg text-slate-600 dark:text-slate-400 mb-6">
             Use this tool to upload your playable ad HTML file and prepare it
             for different platforms.<br />

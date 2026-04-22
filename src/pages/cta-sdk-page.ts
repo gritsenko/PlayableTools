@@ -6,8 +6,8 @@ import markdownContent from "../assets/cta-sdk.md?raw";
 
 @customElement("cta-sdk-page")
 @route("/cta-sdk", {
-  title: "CTA SDK Documentation",
-  description: "Documentation for the CTA SDK, providing guidance on how to integrate and use the SDK in your playable ads.",
+  title: "CTA SDK Documentation for Playable Ads | PlayableTools",
+  description: "Learn how to integrate the CTA SDK into HTML5 playable ads with implementation guidance, examples, and publishing notes.",
 })
 export class CtaSdkPage extends ComponentBase {
    markdownHtml: string = "";

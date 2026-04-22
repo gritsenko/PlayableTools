@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, state, inject, property, route } from "fw";
+import { ComponentBase, customElement, html, state, inject, property, route, navigate } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
 import { AuthenticationService } from "../../services/AuthenticationService";
 import "./project-manager";
@@ -412,7 +412,7 @@ async handleSavePlayable() {
 
       // Redirect to portfolio page after 1 second
       setTimeout(() => {
-        window.location.hash = "#/portfolio";
+        navigate("/portfolio");
       }, 1000);
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : "Failed to save playable";

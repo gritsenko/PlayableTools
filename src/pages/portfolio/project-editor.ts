@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, state, inject, route } from "fw";
+import { ComponentBase, customElement, html, state, inject, route, navigate } from "fw";
 import { PortfolioService } from "../../services/PortfolioService";
 import { AuthenticationService } from "../../services/AuthenticationService";
 
@@ -49,6 +49,8 @@ export class ProjectEditor extends ComponentBase {
   @state()
   titleBlurred: boolean = false;
 
+  routeParams: string[] = [];
+
   async connectedCallback() {
     super.connectedCallback();
     
@@ -58,12 +60,8 @@ export class ProjectEditor extends ComponentBase {
       this.requestUpdate();
     });
     
-    // Get project ID from URL if editing
-    const pathSegments = window.location.hash.split("/");
-    const idIndex = pathSegments.indexOf("projects") + 1;
-    
-    if (idIndex > 0 && pathSegments[idIndex] && pathSegments[idIndex] !== "new") {
-      this.projectId = pathSegments[idIndex];
+    if (this.routeParams && this.routeParams[0]) {
+      this.projectId = this.routeParams[0];
       await this.loadProject();
     }
   }
@@ -142,7 +140,7 @@ export class ProjectEditor extends ComponentBase {
       
       // Redirect to project list after 1 second
       setTimeout(() => {
-        window.location.hash = "#/projects";
+        navigate("/projects");
       }, 1000);
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : "Failed to save project";
@@ -155,7 +153,7 @@ export class ProjectEditor extends ComponentBase {
     return html`
       <div class="max-w-2xl mx-auto">
         <div class="mb-6">
-          <a href="#/projects" class="text-primary hover:underline text-sm font-medium flex items-center gap-2">
+          <a href="/projects" class="text-primary hover:underline text-sm font-medium flex items-center gap-2">
             ← Back to projects
           </a>
         </div>
@@ -268,7 +266,7 @@ export class ProjectEditor extends ComponentBase {
                 ${this.isLoading ? "Saving..." : this.projectId ? "Update Project" : "Create Project"}
               </button>
               <a
-                href="#/projects"
+                href="/projects"
                 class="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium text-center"
               >
                 Cancel

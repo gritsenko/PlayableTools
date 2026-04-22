@@ -2,6 +2,38 @@ import { LitElement, html } from 'lit';
 import type { TemplateResult } from 'lit-html';
 import { customElement, property, state } from 'lit/decorators.js';
 import { metadataService, type PageMetadata } from '../services/MetadataService';
+import { getSeoRouteEntry } from "../seo/route-manifest";
+
+const NAVIGATION_EVENT = "playabletools:navigation";
+
+interface NavigationDetail {
+    oldUrl: string;
+    newUrl: string;
+}
+
+function dispatchNavigationEvent(detail: NavigationDetail) {
+    window.dispatchEvent(new CustomEvent<NavigationDetail>(NAVIGATION_EVENT, { detail }));
+}
+
+export function getNavigationEventName() {
+    return NAVIGATION_EVENT;
+}
+
+export function getCurrentPath() {
+    return window.location.pathname || "/";
+}
+
+export function getCurrentSearch() {
+    return window.location.search || "";
+}
+
+export function navigate(path: string, options: { replace?: boolean } = {}) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    const oldUrl = window.location.href;
+    const method = options.replace ? "replaceState" : "pushState";
+    window.history[method]({}, "", normalizedPath);
+    dispatchNavigationEvent({ oldUrl, newUrl: window.location.href });
+}
 
 @customElement('router-outlet')
 export class RouterOutlet extends LitElement {
@@ -11,16 +43,8 @@ export class RouterOutlet extends LitElement {
     @state() private currentPath = '';
 
     private handleNavigation = () => {
-        // Use hash-based routing for static hosting
-        const hash = window.location.hash;
-        console.log(`🔀 Router: hashchange event, hash='${hash}'`);
-        // Remove leading '#' and ensure leading '/'
-        let path = hash ? hash.substring(1) : '';
-        // Separate path and query string
-        const [routePath] = path.split('?');
-        let normalizedPath = routePath;
-        if (!normalizedPath.startsWith('/')) normalizedPath = '/' + normalizedPath;
-        console.log(`🔀 Router: normalized path='${normalizedPath}'`);
+        const normalizedPath = getCurrentPath();
+        console.log(`🔀 Router: navigation event, path='${normalizedPath}'`);
         this.currentPath = normalizedPath;
         this.requestUpdate();
     };
@@ -28,14 +52,16 @@ export class RouterOutlet extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        console.log(`🔀 Router: connectedCallback, current hash='${window.location.hash}'`);
-        window.addEventListener('hashchange', this.handleNavigation);
+        console.log(`🔀 Router: connectedCallback, current path='${getCurrentPath()}'`);
+        window.addEventListener('popstate', this.handleNavigation);
+        window.addEventListener(NAVIGATION_EVENT, this.handleNavigation as EventListener);
         this.handleNavigation();
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        window.removeEventListener('hashchange', this.handleNavigation);
+        window.removeEventListener('popstate', this.handleNavigation);
+        window.removeEventListener(NAVIGATION_EVENT, this.handleNavigation as EventListener);
     }
 
     createRenderRoot() {
@@ -96,10 +122,19 @@ export class RouterOutlet extends LitElement {
 
                 if (matched) {
                     console.log(`✅ Router: matched path='${path}', params=${JSON.stringify(params)}`);
+                const seoRoute = getSeoRouteEntry(path);
                 if (routeInfo.metadata) {
-                    metadataService.update(routeInfo.metadata);
+                    metadataService.update({
+                        ...routeInfo.metadata,
+                        canonicalPath: routeInfo.metadata.canonicalPath ?? seoRoute?.canonicalPath,
+                        robots: routeInfo.metadata.robots ?? seoRoute?.robots,
+                    }, {
+                        currentPath: this.currentPath,
+                    });
                 } else {
-                    metadataService.update({ title: "PlayableTools" });
+                    metadataService.update({ title: "PlayableTools" }, {
+                        currentPath: this.currentPath,
+                    });
                 }
 
                 // Normalize params (strip leading slashes if any and remove empty placeholders)
@@ -111,7 +146,9 @@ export class RouterOutlet extends LitElement {
         }
 
         console.log(`❌ Router: no route matched for path='${this.currentPath}'`);
-        metadataService.update({ title: "Page Not Found" });
+        metadataService.update({ title: "Page Not Found", robots: "noindex,follow" }, {
+            currentPath: this.currentPath,
+        });
         return this.renderContentWithLayout(() => html`<h1>404 Not Found</h1>`);
     }
 

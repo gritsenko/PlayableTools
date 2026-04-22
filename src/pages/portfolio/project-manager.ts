@@ -84,7 +84,7 @@ export class ProjectManager extends ComponentBase {
     return html`
       <div class="max-w-4xl mx-auto">
         <div class="mb-6">
-          <a href="#/portfolio" class="text-primary hover:underline text-sm font-medium flex items-center gap-2">
+          <a href="/portfolio" class="text-primary hover:underline text-sm font-medium flex items-center gap-2">
             ← Back to my playables
           </a>
         </div>
@@ -92,7 +92,7 @@ export class ProjectManager extends ComponentBase {
         <div class="flex justify-between items-center mb-8">
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Project Manager</h1>
           <a
-            href="#/projects/new"
+            href="/projects/new"
             class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium shadow-lg shadow-primary/20"
           >
             + New Project
@@ -128,7 +128,7 @@ export class ProjectManager extends ComponentBase {
                       </div>
                       <div class="flex gap-2">
                         <a
-                          href="#/projects/${project.id}/edit"
+                          href="/projects/${project.id}/edit"
                           class="px-3 py-1 text-sm bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                         >
                           Edit

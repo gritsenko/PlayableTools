@@ -1,4 +1,4 @@
-import { ComponentBase, customElement, html, inject, state } from "fw";
+import { ComponentBase, customElement, html, inject, state, navigate } from "fw";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
 import { AuthenticationService } from "../../services/AuthenticationService";
 import type { Project } from "../../services/ApiClient";
@@ -300,7 +300,7 @@ export class SaveCreativeModal extends ComponentBase {
 
       (window as any).isSavingPlayable = true;
       this.close();
-      window.location.hash = "#/portfolio";
+      navigate("/portfolio");
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     } finally {

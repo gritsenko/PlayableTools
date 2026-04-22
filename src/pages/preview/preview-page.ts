@@ -5,6 +5,7 @@ import {
   route,
   inject,
   fromQuery,
+  navigate,
 } from "fw";
 import { PreviewService } from "../../services/PreviewService";
 import { PortfolioService, type PlayableAdData } from "../../services/PortfolioService";
@@ -41,7 +42,6 @@ export class PreviewPage extends ComponentBase {
     }
     window.removeEventListener("popstate", this.handlePopState);
     window.removeEventListener("beforeunload", this._onBeforeUnload);
-    window.removeEventListener("hashchange", this._onHashChange);
     this.unsubscribeAuth?.();
     this.unsubscribeAuth = undefined;
     // playable-screen-lock handled inside previewer
@@ -80,23 +80,6 @@ export class PreviewPage extends ComponentBase {
     if (this.hasUnsavedChanges && !(window as any).isSavingPlayable) {
       e.preventDefault();
       e.returnValue = "";
-    }
-  };
-
-  private _onHashChange = (e: HashChangeEvent) => {
-    if (this.hasUnsavedChanges && !(window as any).isSavingPlayable) {
-      const oldHash = new URL(e.oldURL).hash;
-      const newHash = new URL(e.newURL).hash;
-
-      if (newHash !== oldHash && !newHash.startsWith("#preview")) {
-        if (!confirm("You have unsaved changes. Are you sure you want to leave?")) {
-          window.removeEventListener("hashchange", this._onHashChange);
-          window.location.hash = oldHash;
-          setTimeout(() => {
-            window.addEventListener("hashchange", this._onHashChange);
-          }, 0);
-        }
-      }
     }
   };
 
@@ -152,7 +135,6 @@ export class PreviewPage extends ComponentBase {
     // Listen for browser navigation (back/forward)
     window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", this._onBeforeUnload);
-    window.addEventListener("hashchange", this._onHashChange);
 
     // Force re-render with cleared/initialized state
     this.requestUpdate();
@@ -258,6 +240,10 @@ export class PreviewPage extends ComponentBase {
     this.requestUpdate();
   }
 
+  private moveToPreviewInputState() {
+    window.history.replaceState({}, "", "/preview#preview");
+  }
+
   async handleFileUpload(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -273,8 +259,7 @@ export class PreviewPage extends ComponentBase {
     this.isEncoded = false;
     this.decodedUrl = "";
     
-    // Clear URL from browser history
-    window.history.pushState({}, "", window.location.pathname + "#preview");
+    this.moveToPreviewInputState();
     
     this.requestUpdate();
 
@@ -347,7 +332,7 @@ export class PreviewPage extends ComponentBase {
       sourceLabel: `Preview: ${this.portfolioPlayableData.title || this.portfolioPlayableData.name}`,
     });
 
-    window.location.hash = "#/publish";
+    navigate("/publish");
   }
 
   private async _copyPageLink() {
@@ -490,7 +475,7 @@ export class PreviewPage extends ComponentBase {
                       this.uploadError = "";
                       this.isEncoded = false;
                       this.decodedUrl = "";
-                      window.history.pushState({}, "", window.location.pathname + "#preview");
+                      this.moveToPreviewInputState();
                       this.requestUpdate();
                     }}
                     class="px-6 py-2.5 rounded bg-red-500 text-white font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors"
@@ -523,7 +508,7 @@ export class PreviewPage extends ComponentBase {
                       this.uploadError = "";
                       this.isEncoded = false;
                       this.decodedUrl = "";
-                      window.history.pushState({}, "", window.location.pathname + "#preview");
+                      this.moveToPreviewInputState();
                       this.requestUpdate();
                     }}
                     class="px-6 py-2.5 rounded bg-red-500 text-white font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-colors"

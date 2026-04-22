@@ -7,6 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#3b82f6" />
+  <meta name="site-origin" content="https://tools.gritsenko.biz" />
+  <meta name="description" content="Open-source tools for HTML5 playable ads developers, including publishing, preview, validation, Base64 conversion, and video-to-sprite workflows." />
   <title>Playable Ads Tools - tools.gritsenko.biz</title>
   <!-- OpenGraph Meta Tags for Social Networks and Messengers -->
   <meta property="og:title" content="Gritsenko Playable Ads Tools" />
@@ -15,7 +17,7 @@
   <meta property="og:url" content="https://tools.gritsenko.biz/" />
   <meta property="og:image" content="https://tools.gritsenko.biz/large-image.jpg" />
   <meta property="og:image:alt" content="Playable Ads Tools logo" />
-  <meta name="twitter:card" content="https://tools.gritsenko.biz/large-image.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Gritsenko Playable Ads Tools" />
   <meta name="twitter:description" content="Open-source tools for HTML5 playable ads developers. Publish, validate, compress, convert, and share your ads easily. Features Base64 conversion, video to sprite, and more." />
   <meta name="twitter:image" content="https://tools.gritsenko.biz/large-image.jpg" />
@@ -72,72 +74,32 @@
     }
   </style>
 
+  <script>
+    (function () {
+      var hash = window.location.hash ? window.location.hash.slice(1) : "";
+      if (!hash) {
+        return;
+      }
+
+      var shouldTreatAsLegacyRoute = hash.startsWith("/") || window.location.pathname === "/";
+      if (!shouldTreatAsLegacyRoute) {
+        return;
+      }
+
+      var normalized = hash.startsWith("/") ? hash : "/" + hash;
+      var parts = normalized.split("?");
+      var pathname = parts[0] || "/";
+      var search = parts[1] ? "?" + parts[1] : "";
+      history.replaceState({}, "", pathname + search);
+    })();
+  </script>
+
   <script type="module" src="/src/app-root.ts"></script>
   <base href="./">
 </head>
 <body>
   <!-- Yandex.Metrika counter -->
-<app-root></app-root>
-
-<dev id="static-content-description" >
-  <!-- not sure if it help for seo, but i fill static index.html with some content that can be parsed with search engines anyway -->
-      <h1>Playable Ads Tools</h1>
-
-      <p>
-        This app provides a collection of open-source, useful tools for HTML5
-        playable ads developers.
-      </p>
-
-      <h2>Core Features:</h2>
-      <ul class="feature-list">
-        <li>
-          <strong>Publish to Ad Networks:</strong> Streamline the process of
-          deploying your playable ads to various advertising networks.
-        </li>
-        <li>
-          <strong>Assets Compression:</strong> Optimize your images, scripts,
-          and other assets to reduce file size and improve loading times.
-        </li>
-        <li>
-          <strong>Base64 Converter:</strong> Convert files and images to Base64 
-          encoding for embedding in your HTML5 playable ads.
-        </li>
-        <li>
-          <strong>Video to Sprite Converter:</strong> Transform MP4 videos into 
-          PNG sprite sequences for game development and animations.
-        </li>
-        <li>
-          <strong>Folder Size Visualizer:</strong> Analyze and visualize the 
-          size structure of local folders using interactive charts.
-        </li>
-        <li>
-          <strong>Imba Packer:</strong> Experimental HTML compression tool for 
-          maximizing file size reduction while preserving functionality.
-        </li>
-        <li>
-          <strong>CTA SDK Documentation:</strong> Complete guide for integrating 
-          the Call-to-Action SDK in your playable ads.
-        </li>
-        <li>
-          <strong>Ad Network Requirements:</strong> Stay up-to-date with the
-          specific requirements and specifications for different ad networks.
-        </li>
-        <li>
-          <strong>Playable Ads Preview:</strong> Preview and share your playable ad
-          creations from GitHub on different devices and orientations.
-        </li>
-        <li>
-          <strong>Portfolio Management:</strong> Manage and view your portfolio 
-          of playable ads from GitHub repositories.
-        </li>
-      </ul>
-</dev>
-<script>
-  const staticContent = document.getElementById("static-content-description");
-  if (staticContent) {
-    staticContent.style.display = "none";
-  }
-</script>
+  <app-root></app-root>
 </body>
 
 </html>

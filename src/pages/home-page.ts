@@ -2,9 +2,9 @@ import { ComponentBase, customElement, html, route } from "fw";
 
 @customElement("home-page")
 @route("/", {
-  title: "Playable Tools for HTML5 Ads",
+  title: "Playable Tools for HTML5 Ads | PlayableTools",
   description:
-    "A collection of open-source tools for HTML5 playable ads developers, including publishing, asset compression, and validation.",
+    "Open-source tools for HTML5 playable ads developers, including publishing workflows, CTA SDK docs, technical validation, Base64 conversion, and video-to-sprite conversion.",
 })
 export class HomePage extends ComponentBase {
   render() {
@@ -23,28 +23,28 @@ export class HomePage extends ComponentBase {
           ${this.renderCard(
             "📂 Portfolio Management",
             "GitHub integration - Manage and view your portfolio of playable ads from GitHub repositories. Organize and showcase your work.",
-            "#portfolio",
+            "/portfolio",
             "Manage Portfolio"
           )}
 
           ${this.renderCard(
             "📱 Playable Preview",
             "Multi-device testing - Preview and share your playable ad creations from GitHub on different devices and orientations.",
-            "#preview",
+            "/preview",
             "Preview Ads"
           )}
 
           ${this.renderCard(
             "📤 Publish to Ad Networks",
             "Publishing workflow automation - Streamline the process of deploying your playable ads to various advertising networks.",
-            "#publish",
+            "/publish",
             "Start Publishing"
           )}
 
           ${this.renderCard(
             "📖 CTA SDK Documentation",
             "Integration guides - Complete guide for integrating the Call-to-Action SDK in your playable ads. Essential for successful publishing.",
-            "#cta-sdk",
+            "/cta-sdk",
             "View Documentation"
           )}
 
@@ -55,42 +55,42 @@ export class HomePage extends ComponentBase {
           ${this.renderCard(
             "🔄 Base64 Converter",
             "File to Base64 encoding - Convert files and images to Base64 encoding for embedding in your HTML5 playable ads.",
-            "#base64",
+            "/base64",
             "Convert Files"
           )}
 
           ${this.renderCard(
             "🎬 Video to Sprite",
             "MP4 to PNG sprite sequences - Transform MP4 videos into PNG sprite sequences for game development and animations.",
-            "#video2sprite",
+            "/video2sprite",
             "Convert Videos"
           )}
 
           ${this.renderCard(
             "📊 Folder Size Map",
             "Interactive folder analysis - Analyze and visualize the size structure of local folders using sunburst charts, treemaps, and tree views.",
-            "#folder-size-visualizer",
+            "/folder-size-visualizer",
             "Visualize Folders"
           )}
 
           ${this.renderCard(
             "🗜️ Imba Packer",
             "Experimental HTML compression - Maximizing file size reduction while preserving functionality. Great for size-constrained ads.",
-            "#imba-packer",
+            "/imba-packer",
             "Compress HTML"
           )}
 
           ${this.renderCard(
             "🖼️ Assets Compression",
             "PNG optimization tools - Optimize your PNG images and other assets to reduce file size and improve loading times using PngChpocker.",
-            "#compress-assets",
+            "/compress-assets",
             "Compress Assets"
           )}
 
           ${this.renderCard(
             "✅ Ad Network Requirements",
             "Technical specifications - Stay up-to-date with the specific technical requirements and specifications for different advertising networks.",
-            "#validate",
+            "/validate",
             "Check Requirements"
           )}
         </div>
