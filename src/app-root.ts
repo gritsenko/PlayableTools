@@ -23,6 +23,12 @@ export class AppRoot extends ComponentBase {
   @state()
   private updateAvailable = false;
 
+  private clearPrerenderedMarkup() {
+    if (this.childNodes.length > 0) {
+      this.replaceChildren();
+    }
+  }
+
   private _onNavigation = (event: Event) => {
     const detail = event instanceof CustomEvent
       ? event.detail as { oldUrl: string; newUrl: string }
@@ -62,6 +68,7 @@ export class AppRoot extends ComponentBase {
   };
 
   async connectedCallback() {
+    this.clearPrerenderedMarkup();
     super.connectedCallback();
     
     console.log('🔧 Initializing PlayableTools...');

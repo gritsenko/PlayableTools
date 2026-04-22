@@ -1,5 +1,4 @@
 import { html, customElement, ComponentBase, state } from "fw";
-import { UrlUtils } from "../utils/url-utils";
 import { VersionService } from "../services/VersionService";
 
 @customElement("site-logo")
@@ -27,7 +26,7 @@ export class SiteLogo extends ComponentBase {
 
   render() {
     return html`
-      <a href="${UrlUtils.getBaseDir()}" class="flex items-center gap-4 text-decoration-none">
+      <a href="/" class="flex items-center gap-4 text-decoration-none">
         <svg width="40" height="40" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
           <!-- Outer circle -->
           <circle cx="256" cy="256" r="230" fill="none" stroke="#3B82F6" stroke-width="42"/>
@@ -53,7 +52,7 @@ export class SiteLogo extends ComponentBase {
           </g>
         </svg>
         <div>
-          <h1 class="text-base font-semibold text-slate-900 dark:text-white m-0">Playable Ads Tools</h1>
+          <p class="text-base font-semibold text-slate-900 dark:text-white m-0">Playable Ads Tools</p>
           <p class="text-xs text-slate-500 dark:text-slate-400 m-0">v${this.currentVersion || 'dev'}</p>
         </div>
       </a>

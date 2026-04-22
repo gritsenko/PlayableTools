@@ -134,6 +134,7 @@ async function main() {
   const manifest = await readManifest();
   const prerenderRoutes = manifest.filter((entry) => entry.indexable && entry.prerender);
   const browserExecutable = resolveBrowserExecutable();
+  const shellHtml = await fs.readFile(path.join(distDir, "index.html"), "utf8");
 
   if (!browserExecutable) {
     throw new Error(
@@ -177,7 +178,7 @@ async function main() {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 
-  await fs.copyFile(path.join(distDir, "index.html"), path.join(distDir, "404.html"));
+  await fs.writeFile(path.join(distDir, "404.html"), shellHtml, "utf8");
   await fs.writeFile(path.join(distDir, "sitemap.xml"), buildSitemap(prerenderRoutes), "utf8");
   await fs.writeFile(
     path.join(distDir, "robots.txt"),
