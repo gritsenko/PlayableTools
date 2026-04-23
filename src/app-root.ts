@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import { ComponentBase, customElement, html, state, inject, getNavigationEventName } from "./fw";
+import { ComponentBase, customElement, html, state, inject, getNavigationEventName, navigate, shouldHandleClientNavigation } from "./fw";
 import "./Layout/nav-menu";
 import { MainLayout } from "./Layout/main-layout";
 import { VersionService } from "./services/VersionService";
@@ -28,6 +28,27 @@ export class AppRoot extends ComponentBase {
       this.replaceChildren();
     }
   }
+
+  private handleDocumentClick = (event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest("a");
+    if (!(anchor instanceof HTMLAnchorElement)) {
+      return;
+    }
+
+    if (!shouldHandleClientNavigation(anchor, event)) {
+      return;
+    }
+
+    const destination = new URL(anchor.href, window.location.origin);
+    const nextPath = `${destination.pathname}${destination.search}${destination.hash}`;
+    event.preventDefault();
+    navigate(nextPath);
+  };
 
   private _onNavigation = (event: Event) => {
     const detail = event instanceof CustomEvent
@@ -76,6 +97,7 @@ export class AppRoot extends ComponentBase {
     // Add global navigation guard for unsaved changes
     window.addEventListener("popstate", this._onNavigation);
     window.addEventListener(getNavigationEventName(), this._onNavigation as EventListener);
+    this.addEventListener("click", this.handleDocumentClick);
     
     // Initialize version checking
     await this.initializeVersionService();
@@ -85,6 +107,7 @@ export class AppRoot extends ComponentBase {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this._onNavigation);
     window.removeEventListener(getNavigationEventName(), this._onNavigation as EventListener);
+    this.removeEventListener("click", this.handleDocumentClick);
     this.versionService.destroy();
   }
 

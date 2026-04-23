@@ -1,6 +1,6 @@
 import { customElement, property, state } from 'lit/decorators.js';
 import { inject } from './di';
-import { getCurrentPath, getCurrentSearch, navigate, route } from './router';
+import { getCurrentPath, getCurrentSearch, navigate, route, shouldHandleClientNavigation } from './router';
 import { html, css } from 'lit';
 
 import {fromQuery} from './from-query';
@@ -24,5 +24,6 @@ export {
     fromQuery,
     getCurrentPath,
     getCurrentSearch,
-    navigate
+    navigate,
+    shouldHandleClientNavigation
 };

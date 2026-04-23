@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 const manifestPath = path.join(rootDir, "src", "seo", "route-manifest.json");
+const routeContentPath = path.join(rootDir, "src", "seo", "route-content.json");
 const siteOrigin = (process.env.SEO_SITE_ORIGIN || "https://tools.gritsenko.biz").replace(/\/$/, "");
 
 const mimeTypes = new Map([
@@ -41,6 +42,11 @@ function resolveBrowserExecutable() {
 
 async function readManifest() {
   const content = await fs.readFile(manifestPath, "utf8");
+  return JSON.parse(content);
+}
+
+async function readRouteContent() {
+  const content = await fs.readFile(routeContentPath, "utf8");
   return JSON.parse(content);
 }
 
@@ -121,6 +127,53 @@ async function writePrerenderedHtml(routePath, html) {
   await fs.writeFile(path.join(outputDir, "index.html"), normalizedHtml, "utf8");
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
+}
+
+function renderFallbackMarkup(content) {
+  const highlights = Array.isArray(content.highlights)
+    ? content.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : "";
+
+  const secondaryText = content.secondaryText
+    ? `<p class="seo-fallback-secondary">${escapeHtml(content.secondaryText)}</p>`
+    : "";
+
+  return `
+    <section data-seo-fallback="true" class="seo-fallback max-w-4xl mx-auto px-4 py-10">
+      <h1>${escapeHtml(content.h1)}</h1>
+      <p>${escapeHtml(content.intro)}</p>
+      ${highlights ? `<ul>${highlights}</ul>` : ""}
+      ${secondaryText}
+    </section>
+  `.trim();
+}
+
+function injectFallbackIntoHtml(html, fallbackMarkup) {
+  const appRootPattern = /<app-root([^>]*)>([\s\S]*?)<\/app-root>/i;
+  if (!appRootPattern.test(html)) {
+    throw new Error("Could not find <app-root> in prerendered HTML.");
+  }
+
+  return html.replace(appRootPattern, `<app-root$1>${fallbackMarkup}</app-root>`);
+}
+
 function buildSitemap(routes) {
   const urls = routes.map((route) => {
     const url = `${siteOrigin}${route.canonicalPath || route.routePath}`;
@@ -132,6 +185,7 @@ function buildSitemap(routes) {
 
 async function main() {
   const manifest = await readManifest();
+  const routeContent = await readRouteContent();
   const prerenderRoutes = manifest.filter((entry) => entry.indexable && entry.prerender);
   const browserExecutable = resolveBrowserExecutable();
   const shellHtml = await fs.readFile(path.join(distDir, "index.html"), "utf8");
@@ -169,7 +223,14 @@ async function main() {
       }, undefined, { timeout: 30000 });
 
       const html = await page.content();
-      await writePrerenderedHtml(route.routePath, html);
+      const fallbackContent = routeContent[route.canonicalPath || route.routePath];
+      if (!fallbackContent) {
+        throw new Error(`Missing SEO fallback content for route: ${route.routePath}`);
+      }
+
+      const fallbackMarkup = renderFallbackMarkup(fallbackContent);
+      const htmlWithFallback = injectFallbackIntoHtml(html, fallbackMarkup);
+      await writePrerenderedHtml(route.routePath, htmlWithFallback);
     }
 
     await context.close();

@@ -35,6 +35,34 @@ export function navigate(path: string, options: { replace?: boolean } = {}) {
     dispatchNavigationEvent({ oldUrl, newUrl: window.location.href });
 }
 
+export function shouldHandleClientNavigation(anchor: HTMLAnchorElement, event: MouseEvent): boolean {
+    const href = anchor.getAttribute("href");
+    if (!href || href === "#" || anchor.hasAttribute("download")) {
+        return false;
+    }
+
+    if (anchor.target && anchor.target !== "_self") {
+        return false;
+    }
+
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return false;
+    }
+
+    const destination = new URL(anchor.href, window.location.origin);
+    if (destination.origin !== window.location.origin) {
+        return false;
+    }
+
+    const current = new URL(window.location.href);
+    const isHashOnlyNavigation =
+        destination.pathname === current.pathname &&
+        destination.search === current.search &&
+        destination.hash.length > 0;
+
+    return !isHashOnlyNavigation;
+}
+
 @customElement('router-outlet')
 export class RouterOutlet extends LitElement {
 

@@ -1,0 +1,62 @@
+{
+  "/": {
+    "h1": "Playable Tools for HTML5 Ads",
+    "intro": "Open-source utilities for HTML5 playable ads teams, covering packaging, validation, previews, documentation, and creative asset workflows.",
+    "highlights": [
+      "Prepare playable builds for major ad networks from one workspace.",
+      "Review technical requirements and CTA SDK guidance before submission.",
+      "Convert files, generate sprites, and streamline asset-heavy creative production."
+    ],
+    "secondaryText": "After the application loads, the interactive dashboard replaces this static overview."
+  },
+  "/publish": {
+    "h1": "Publish HTML5 Playable Ads to Major Ad Networks",
+    "intro": "Generate network-ready playable ad packages with platform-specific wrappers, launch links, and export variations for common ad platforms.",
+    "highlights": [
+      "Package creatives for Facebook, Google, Unity, AppLovin, IronSource, TikTok, Vungle, and similar networks.",
+      "Inject network-specific scripts and wrappers without rebuilding each variant by hand.",
+      "Use CTA SDK guidance alongside publishing to reduce review-time issues."
+    ],
+    "secondaryText": "This prerendered summary is replaced by the interactive publisher as soon as the SPA bootstraps."
+  },
+  "/cta-sdk": {
+    "h1": "CTA SDK Documentation for Playable Ads",
+    "intro": "Reference integration guidance for the CTA SDK used in HTML5 playable ads, with practical implementation notes for production packaging flows.",
+    "highlights": [
+      "Review CTA SDK setup before exporting creatives for ad-network submission.",
+      "Understand integration expectations that affect playable approval and launch behavior.",
+      "Keep documentation accessible from the same toolset as publishing and validation workflows."
+    ],
+    "secondaryText": "The full interactive documentation view replaces this fallback after JavaScript initializes."
+  },
+  "/validate": {
+    "h1": "Technical Requirements for Playable Ad Networks",
+    "intro": "Browse validation notes, file-size limits, and testing references for major ad networks that accept HTML5 playable ads.",
+    "highlights": [
+      "Compare size limits, supported formats, and validation tools across networks.",
+      "Check network-specific submission rules before final export.",
+      "Use one reference page to reduce avoidable QA and review failures."
+    ],
+    "secondaryText": "Once the app loads, this static overview is replaced with the full validation reference page."
+  },
+  "/base64": {
+    "h1": "Base64 Converter for Playable Ad Assets",
+    "intro": "Convert creative assets into Base64 strings for inline HTML5 playable ads, single-file demos, and embedded asset experiments.",
+    "highlights": [
+      "Encode images, audio, and other small files for inline use.",
+      "Reduce external asset dependencies in prototype or compact creative builds.",
+      "Copy or inspect generated data URLs directly inside the tool."
+    ],
+    "secondaryText": "The interactive file converter replaces this fallback when the JavaScript app becomes available."
+  },
+  "/video2sprite": {
+    "h1": "Video to Sprite Converter for Playable Creatives",
+    "intro": "Transform MP4 source footage into PNG sprite sheets and frame sequences for game-like animation workflows and HTML5 playable production.",
+    "highlights": [
+      "Extract frames from video for sprite-based creative pipelines.",
+      "Export sprite sheets or PNG sequences for animation-ready assets.",
+      "Use background removal and preview controls during conversion."
+    ],
+    "secondaryText": "This static summary disappears after the SPA loads the full conversion interface."
+  }
+}
