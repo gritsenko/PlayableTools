@@ -4,6 +4,7 @@ import {
   html,
   route,
   inject,
+  state,
   fromQuery,
   navigate,
 } from "fw";
@@ -28,6 +29,7 @@ export class PreviewPage extends ComponentBase {
   
   routeParams: string[] = [];
   private unsubscribeAuth?: () => void;
+  private portfolioLoadRequestId = 0;
   isAuthenticated: boolean = false;
   disconnectedCallback() {
     super.disconnectedCallback?.();
@@ -58,10 +60,16 @@ export class PreviewPage extends ComponentBase {
   uploadedFileName: string = "";
   uploadError: string = "";
   isUploading: boolean = false;
+  @state()
   isLoadingPortfolioPlayable: boolean = false;
+  @state()
   portfolioPlayableId: string | null = null;
+  @state()
   portfolioPlayableData: PlayableAdData | null = null;
+  @state()
   portfolioProjectTitle: string | null = null;
+  @state()
+  portfolioLoadError: string = "";
 
   // Share / QR / Direct Link state
   _shareModalOpen: boolean = false;
@@ -104,12 +112,15 @@ export class PreviewPage extends ComponentBase {
       this.portfolioPlayableId = playableId;
       this.portfolioPlayableData = null;
       this.portfolioProjectTitle = null;
+      this.portfolioLoadError = "";
       this.loadPortfolioPlayable(playableId);
     } else {
       // No route params - clear portfolio-related state
       this.portfolioPlayableId = null;
       this.portfolioPlayableData = null;
       this.portfolioProjectTitle = null;
+      this.portfolioLoadError = "";
+      this.previewService.setPortfolioPlayableId(null);
       
       // Load recent URLs from localStorage for quick access
       const stored = localStorage.getItem("preview-recent-urls");
@@ -153,16 +164,27 @@ export class PreviewPage extends ComponentBase {
   }
 
   private async loadPortfolioPlayable(playableId: string) {
+    const requestId = ++this.portfolioLoadRequestId;
     this.isLoadingPortfolioPlayable = true;
     this.portfolioPlayableId = playableId;
+    this.portfolioLoadError = "";
     this.previewService.setPortfolioPlayableId(playableId);
     this.portfolioPlayableData = null;
     this.portfolioProjectTitle = null;
+    this.previewService.clearUploadedContent();
+    this.previewService.setUploadedFileName(null);
+    this.uploadedFileName = "";
+    this.uploadError = "";
+    this.isEncoded = false;
+    this.decodedUrl = "";
     this.requestUpdate();
 
     try {
       await this.portfolioService.initialize();
       const playable = await this.portfolioService.getPlayableById(playableId);
+      if (requestId !== this.portfolioLoadRequestId) {
+        return;
+      }
 
       if (playable) {
         console.log(`✅ preview-page: Portfolio playable loaded: ${playable.name}, contentType: ${playable.contentType}`);
@@ -193,10 +215,12 @@ export class PreviewPage extends ComponentBase {
           this.uploadedFileName = "";
           this.portfolioPlayableData = null;
           this.portfolioProjectTitle = null;
+          this.portfolioLoadError = "The selected playable was found, but its file content could not be loaded.";
           return;
         }
 
         this.portfolioPlayableData = playable;
+        this.portfolioLoadError = "";
 
         const projectKey = (playable.project ?? "").trim();
         if (projectKey.length > 0) {
@@ -216,15 +240,24 @@ export class PreviewPage extends ComponentBase {
         this.uploadedFileName = "";
         this.portfolioPlayableData = null;
         this.portfolioProjectTitle = null;
+        this.portfolioLoadError = "Playable not found. It may have been deleted or the link is incomplete.";
       }
     } catch (error) {
+      if (requestId !== this.portfolioLoadRequestId) {
+        return;
+      }
       console.error("❌ preview-page: Failed to load portfolio playable:", error);
       this.uploadedFileName = "";
       this.portfolioPlayableData = null;
       this.portfolioProjectTitle = null;
+      this.portfolioLoadError = error instanceof Error
+        ? error.message
+        : "Failed to load the playable from the portfolio.";
     } finally {
-      this.isLoadingPortfolioPlayable = false;
-      this.requestUpdate();
+      if (requestId === this.portfolioLoadRequestId) {
+        this.isLoadingPortfolioPlayable = false;
+        this.requestUpdate();
+      }
     }
   }
 
@@ -444,9 +477,11 @@ export class PreviewPage extends ComponentBase {
 
   render() {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
-    const hasContent = this.isEncoded || hasUploadedContent || this.uploadedFileName;
-    const showInputSections = !hasContent;
     const isFromPortfolio = this.portfolioPlayableId !== null;
+    const hasContent = this.isEncoded || hasUploadedContent || !!this.uploadedFileName;
+    const showPortfolioLoadingState = isFromPortfolio && this.isLoadingPortfolioPlayable;
+    const showPortfolioErrorState = isFromPortfolio && !!this.portfolioLoadError && !hasContent;
+    const showInputSections = !hasContent && !showPortfolioLoadingState && !showPortfolioErrorState;
     
     console.log(`🎨 preview-page render: isEncoded=${this.isEncoded}, decodedUrl='${this.decodedUrl.substring(0, 50)}...', hasUploadedContent=${hasUploadedContent}, uploadedFileName='${this.uploadedFileName}'`);
 
@@ -580,6 +615,54 @@ export class PreviewPage extends ComponentBase {
               </div>
             `
           : ''}
+
+        ${showPortfolioLoadingState
+          ? html`
+              <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
+                <div class="flex items-start gap-4">
+                  <div class="mt-1 h-6 w-6 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                  <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Loading playable from portfolio...</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                      We found a direct preview link and are fetching the playable file from the backend now.
+                    </p>
+                    ${this.portfolioPlayableId
+                      ? html`
+                          <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
+                            Preview ID: ${this.portfolioPlayableId}
+                          </p>
+                        `
+                      : null}
+                  </div>
+                </div>
+              </div>
+            `
+          : null}
+
+        ${showPortfolioErrorState
+          ? html`
+              <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20">
+                <h2 class="text-lg font-semibold text-red-700 dark:text-red-300">Could not open this portfolio playable</h2>
+                <p class="mt-2 text-sm text-red-600 dark:text-red-400">${this.portfolioLoadError}</p>
+                <div class="mt-4">
+                  <button
+                    @click=${() => {
+                      this.portfolioPlayableId = null;
+                      this.portfolioPlayableData = null;
+                      this.portfolioProjectTitle = null;
+                      this.portfolioLoadError = "";
+                      this.previewService.setPortfolioPlayableId(null);
+                      this.moveToPreviewInputState();
+                      this.requestUpdate();
+                    }}
+                    class="px-4 py-2 rounded bg-white text-red-600 border border-red-300 font-medium hover:bg-red-50 dark:bg-slate-900 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/10 transition-colors"
+                  >
+                    Open Manual Upload Instead
+                  </button>
+                </div>
+              </div>
+            `
+          : null}
         
         ${showInputSections
           ? html`
@@ -641,7 +724,7 @@ export class PreviewPage extends ComponentBase {
         <div class="mt-6">
           ${(() => {
             const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
-            if (hasUploadedContent || this.uploadedFileName) {
+            if (!showPortfolioLoadingState && (hasUploadedContent || this.uploadedFileName)) {
               console.log(`✅ preview-page: Rendering previewer with content`);
               return html`<playable-previewer .fileName=${this.uploadedFileName}></playable-previewer>`;
             } else {
