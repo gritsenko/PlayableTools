@@ -27,6 +27,12 @@ type Mp4ExportCallbacks = {
   onProgress?: (progress: number) => void;
 };
 
+type DownloadProgressEvent = {
+  url: string | URL;
+  received: number;
+  total: number;
+};
+
 @injectable()
 export class PreviewService {
   private static readonly zipSwAckTimeoutMs = 10000;
@@ -44,6 +50,8 @@ export class PreviewService {
   private _ffmpegCoreBlobUrl: string | null = null;
   private _ffmpegWasmBlobUrl: string | null = null;
   private _ffmpegClassWorkerUrl: string | null = null;
+  private _ffmpegRecentLogs: string[] = [];
+  private _ffmpegExpectedDurationSec: number | null = null;
 
   // Example: fetch playable ad data, generate shareable links, etc.
   getShareableLink(adId: string, size: string, orientation: string): string {
@@ -1340,6 +1348,8 @@ export class PreviewService {
     try {
       exporter = await this.getMp4Exporter();
       const { ffmpeg, fetchFile } = exporter;
+      this._ffmpegRecentLogs = [];
+      this._ffmpegExpectedDurationSec = trimDurationSec;
 
       callbacks.onStatus?.('Preparing source clip...');
       await ffmpeg.writeFile(inputName, await fetchFile(sourceBlob));
@@ -1347,7 +1357,8 @@ export class PreviewService {
       callbacks.onStatus?.('Encoding MP4...');
       const exitCode = await ffmpeg.exec(this.buildMp4ExportArgs(inputName, outputName, safeStart, trimDurationSec));
       if (exitCode !== 0) {
-        throw new Error(`MP4 export failed with exit code ${exitCode}.`);
+        const details = this.getRecentFfmpegLogSummary();
+        throw new Error(details ? `MP4 export failed with exit code ${exitCode}. ${details}` : `MP4 export failed with exit code ${exitCode}.`);
       }
 
       callbacks.onStatus?.('Finalizing MP4...');
@@ -1371,6 +1382,7 @@ export class PreviewService {
       callbacks.onStatus?.('MP4 export failed.');
       throw error instanceof Error ? error : new Error(String(error));
     } finally {
+      this._ffmpegExpectedDurationSec = null;
       if (exporter) {
         try {
           await this.cleanupFfmpegFiles(exporter.ffmpeg, [inputName, outputName]);
@@ -1379,6 +1391,23 @@ export class PreviewService {
         }
       }
 
+      this._ffmpegStatusCallback = undefined;
+      this._ffmpegProgressCallback = undefined;
+    }
+  }
+
+  async prepareMp4Exporter(callbacks: Mp4ExportCallbacks = {}): Promise<void> {
+    this._ffmpegStatusCallback = callbacks.onStatus;
+    this._ffmpegProgressCallback = callbacks.onProgress;
+
+    callbacks.onProgress?.(0);
+    callbacks.onStatus?.(this._ffmpegLoadPromise ? 'Preparing MP4 exporter...' : 'Loading MP4 exporter (~31 MB on first use)...');
+
+    try {
+      await this.getMp4Exporter();
+      callbacks.onProgress?.(1);
+      callbacks.onStatus?.('MP4 exporter is ready.');
+    } finally {
       this._ffmpegStatusCallback = undefined;
       this._ffmpegProgressCallback = undefined;
     }
@@ -1413,7 +1442,7 @@ export class PreviewService {
           }
         };
 
-        const handleRuntimeDownloadProgress = (event: { url: string | URL; received: number; total: number }) => {
+        const handleRuntimeDownloadProgress = (event: DownloadProgressEvent) => {
           progressByUrl.set(String(event.url), {
             received: event.received,
             total: event.total,
@@ -1444,7 +1473,23 @@ export class PreviewService {
         const ffmpeg = new FFmpeg();
         ffmpeg.on('log', ({ message }: { message: string }) => {
           if (message.trim().length > 0) {
-            this._ffmpegStatusCallback?.(message);
+            const normalizedMessage = message.trim();
+            this._ffmpegRecentLogs.push(normalizedMessage);
+            if (this._ffmpegRecentLogs.length > 40) {
+              this._ffmpegRecentLogs.shift();
+            }
+
+            const encodedSeconds = this.parseFfmpegEncodedTime(normalizedMessage);
+            if (encodedSeconds !== null && this._ffmpegExpectedDurationSec && this._ffmpegExpectedDurationSec > 0) {
+              const progress = Math.min(Math.max(encodedSeconds / this._ffmpegExpectedDurationSec, 0), 0.99);
+              this._ffmpegProgressCallback?.(progress);
+              this._ffmpegStatusCallback?.(`Encoding MP4... ${Math.round(progress * 100)}%`);
+              return;
+            }
+
+            if (!/^frame=|^size=|^time=|^bitrate=|^speed=/.test(normalizedMessage)) {
+              this._ffmpegStatusCallback?.(normalizedMessage);
+            }
           }
         });
         ffmpeg.on('progress', ({ progress }: { progress: number }) => {
@@ -1493,7 +1538,7 @@ export class PreviewService {
   private async createBlobUrlFromFetch(
     sourceUrl: string,
     mimeType: string,
-    onProgress?: (event: { url: string | URL; received: number; total: number }) => void,
+    onProgress?: (event: DownloadProgressEvent) => void,
   ): Promise<string> {
     const response = await fetch(sourceUrl);
     if (!response.ok) {
@@ -1501,6 +1546,7 @@ export class PreviewService {
     }
 
     const contentLength = Number.parseInt(response.headers.get('Content-Length') || '-1', 10);
+    const contentEncoding = (response.headers.get('Content-Encoding') || 'identity').toLowerCase();
     const reader = response.body?.getReader();
 
     if (!reader) {
@@ -1535,7 +1581,8 @@ export class PreviewService {
       });
     }
 
-    if (contentLength > 0 && received !== contentLength) {
+    const shouldValidateExactLength = contentLength > 0 && (contentEncoding === 'identity' || contentEncoding === '');
+    if (shouldValidateExactLength && received !== contentLength) {
       throw new Error(`Incomplete download for ${sourceUrl}: received ${received} of ${contentLength} bytes.`);
     }
 
@@ -1556,7 +1603,7 @@ export class PreviewService {
   }
 
   private buildMp4ExportArgs(inputName: string, outputName: string, startTimeSec: number, durationSec: number): string[] {
-    const args: string[] = [];
+    const args: string[] = ['-y'];
     if (startTimeSec > 0.001) {
       args.push('-ss', this.formatFfmpegTime(startTimeSec));
     }
@@ -1570,11 +1617,45 @@ export class PreviewService {
     args.push(
       '-map', '0:v:0',
       '-map', '0:a?',
+      '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-profile:v', 'main',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-ar', '48000',
+      '-ac', '2',
       '-movflags', '+faststart',
       outputName,
     );
 
     return args;
+  }
+
+  private getRecentFfmpegLogSummary(): string {
+    if (this._ffmpegRecentLogs.length === 0) {
+      return '';
+    }
+
+    const tail = this._ffmpegRecentLogs.slice(-6).join(' | ');
+    return `FFmpeg log: ${tail}`;
+  }
+
+  private parseFfmpegEncodedTime(message: string): number | null {
+    const match = message.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    if (!match) {
+      return null;
+    }
+
+    const hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    const seconds = Number.parseFloat(match[3]);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return null;
+    }
+
+    return (hours * 3600) + (minutes * 60) + seconds;
   }
 
   private formatFfmpegTime(seconds: number): string {

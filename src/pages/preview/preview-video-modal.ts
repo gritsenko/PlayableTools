@@ -16,8 +16,10 @@ export class PreviewVideoModal extends ComponentBase {
   @state() private fileBaseName: string = "playable-preview";
   @state() private exportStatus: string = "";
   @state() private exportProgress: number = 0;
+  @state() private isPreparingExporter: boolean = false;
 
   private recordedClip: PreviewRecordingResult | null = null;
+  private hasStartedExporterWarmup = false;
 
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -36,9 +38,12 @@ export class PreviewVideoModal extends ComponentBase {
     this.isExporting = false;
     this.exportStatus = "";
     this.exportProgress = 0;
+    this.isPreparingExporter = false;
     this.isOpen = true;
     this.requestUpdate();
     await this.updateComplete;
+
+    this._warmUpMp4Exporter();
   }
 
   close() {
@@ -50,7 +55,9 @@ export class PreviewVideoModal extends ComponentBase {
     this.trimEndSec = 0;
     this.exportStatus = "";
     this.exportProgress = 0;
+    this.isPreparingExporter = false;
     this.recordedClip = null;
+    this.hasStartedExporterWarmup = false;
     this._disposeClipUrl();
   }
 
@@ -93,8 +100,14 @@ export class PreviewVideoModal extends ComponentBase {
     if (Number.isFinite(video.duration) && video.duration > 0) {
       this.clipDurationSec = video.duration;
       this.trimEndSec = video.duration;
-      this.requestUpdate();
     }
+
+    if (this.recordedClip && video.videoWidth > 0 && video.videoHeight > 0) {
+      this.recordedClip.width = video.videoWidth;
+      this.recordedClip.height = video.videoHeight;
+    }
+
+    this.requestUpdate();
   }
 
   private _handleTrimStartInput(event: Event) {
@@ -121,10 +134,56 @@ export class PreviewVideoModal extends ComponentBase {
     this.requestUpdate();
   };
 
+  private _downloadOriginalWebm() {
+    if (!this.recordedClip) return;
+
+    const extension = this.recordedClip.fileExtension || 'webm';
+    this._downloadBlob(this.recordedClip.blob, `${this.fileBaseName}.${extension}`);
+  }
+
+  private _warmUpMp4Exporter() {
+    if (this.hasStartedExporterWarmup || !this.isOpen) {
+      return;
+    }
+
+    this.hasStartedExporterWarmup = true;
+    this.isPreparingExporter = true;
+    this.exportStatus = 'Preparing MP4 exporter...';
+    this.exportProgress = 0;
+    this.requestUpdate();
+
+    void this.previewService.prepareMp4Exporter({
+      onStatus: (status) => {
+        if (!this.isOpen || this.isExporting) return;
+        this.exportStatus = status;
+        this.requestUpdate();
+      },
+      onProgress: (progress) => {
+        if (!this.isOpen || this.isExporting) return;
+        this.exportProgress = Math.min(Math.max(progress, 0), 1);
+        this.requestUpdate();
+      },
+    }).catch((error) => {
+      if (!this.isOpen || this.isExporting) return;
+      this.error = error instanceof Error ? error.message : String(error);
+      this.exportStatus = '';
+      this.requestUpdate();
+    }).finally(() => {
+      if (!this.isOpen || this.isExporting) return;
+      this.isPreparingExporter = false;
+      if (!this.error) {
+        this.exportStatus = 'MP4 exporter is ready.';
+        this.exportProgress = 1;
+      }
+      this.requestUpdate();
+    });
+  }
+
   private async _exportClip(startSec: number, endSec: number, fileName: string) {
     if (!this.recordedClip) return;
 
     this.isExporting = true;
+    this.isPreparingExporter = false;
     this.error = "";
     this.exportStatus = "Preparing MP4 export...";
     this.exportProgress = 0;
@@ -292,9 +351,9 @@ export class PreviewVideoModal extends ComponentBase {
                   <div class="mt-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
                     <div class="flex items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-300">
                       <span>${this.exportStatus}</span>
-                      ${this.isExporting ? html`<span class="font-semibold">${exportPercent}%</span>` : ''}
+                      ${(this.isExporting || this.isPreparingExporter) ? html`<span class="font-semibold">${exportPercent}%</span>` : ''}
                     </div>
-                    ${this.isExporting ? html`
+                    ${(this.isExporting || this.isPreparingExporter) ? html`
                       <div class="mt-3 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                         <div class="h-full bg-primary transition-all duration-200" style="width: ${exportPercent}%;"></div>
                       </div>
@@ -310,11 +369,19 @@ export class PreviewVideoModal extends ComponentBase {
 
                 <div class="mt-5 flex flex-wrap gap-3">
                   <button
-                    @click=${() => this._exportTrimmedClip()}
+                    @click=${() => this._downloadOriginalWebm()}
                     ?disabled=${this.isExporting}
+                    class="px-4 py-2.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  >
+                    <span class="material-icons-outlined" style="font-size:18px">download</span>
+                    Download Original ${this.recordedClip.fileExtension.toUpperCase()}
+                  </button>
+                  <button
+                    @click=${() => this._exportTrimmedClip()}
+                    ?disabled=${this.isExporting || this.isPreparingExporter}
                     class="px-4 py-2.5 rounded bg-primary text-white font-semibold hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
                   >
-                    ${this.isExporting ? html`<span class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>` : html`<span class="material-icons-outlined" style="font-size:18px">movie</span>`}
+                    ${(this.isExporting || this.isPreparingExporter) ? html`<span class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>` : html`<span class="material-icons-outlined" style="font-size:18px">movie</span>`}
                     ${isFullRange ? 'Export MP4' : 'Export Trimmed MP4'}
                   </button>
                 </div>

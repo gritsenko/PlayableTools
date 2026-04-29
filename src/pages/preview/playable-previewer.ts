@@ -158,6 +158,8 @@ export class PlayablePreviewer extends ComponentBase {
         const data = e.data;
         if (data && data.type === 'RECORDING_COMPLETE' && data.blob) {
           const durationMs = data.durationMs || 0;
+          const width = Number.isFinite(data.width) ? data.width : 0;
+          const height = Number.isFinite(data.height) ? data.height : 0;
           this._suppressIframe = false; // Restore preview
           this.videoStorageService.saveVideo(data.blob, durationMs).then(() => {
             const clip: PreviewRecordingResult = {
@@ -165,8 +167,8 @@ export class PlayablePreviewer extends ComponentBase {
               mimeType: data.blob.type || 'video/webm',
               fileExtension: (data.blob.type || '').includes('mp4') ? 'mp4' : 'webm',
               durationMs,
-              width: 0,
-              height: 0,
+              width,
+              height,
               startedAt: Date.now() - durationMs
             };
             this._openRecordedClip(clip);

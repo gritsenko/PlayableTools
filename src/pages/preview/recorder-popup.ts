@@ -162,7 +162,9 @@ export class RecorderPopupPage extends ComponentBase {
       window.opener.postMessage({
         type: 'RECORDING_COMPLETE',
         blob: clip.blob,
-        durationMs: clip.durationMs
+        durationMs: clip.durationMs,
+        width: clip.width,
+        height: clip.height,
       }, '*');
       window.close();
     } else {
