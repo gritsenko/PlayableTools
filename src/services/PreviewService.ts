@@ -1,7 +1,9 @@
 import { injectable } from "fw";
 import ffmpegCoreUrl from "@ffmpeg/core?url";
 import ffmpegWasmUrl from "@ffmpeg/core/wasm?url";
-import ffmpegClassWorkerUrl from "@ffmpeg/ffmpeg/worker?url";
+import ffmpegWorkerSource from "@ffmpeg/ffmpeg/worker?raw";
+import ffmpegConstSource from "../../node_modules/@ffmpeg/ffmpeg/dist/esm/const.js?raw";
+import ffmpegErrorsSource from "../../node_modules/@ffmpeg/ffmpeg/dist/esm/errors.js?raw";
 import type { FFmpeg as BrowserFFmpeg } from "@ffmpeg/ffmpeg";
 import html2canvas from "html2canvas";
 import pako from "pako";
@@ -1467,7 +1469,7 @@ export class PreviewService {
         }
 
         if (!this._ffmpegClassWorkerUrl) {
-          this._ffmpegClassWorkerUrl = ffmpegClassWorkerUrl;
+          this._ffmpegClassWorkerUrl = this.createFfmpegWorkerBlobUrl();
         }
 
         const ffmpeg = new FFmpeg();
@@ -1600,6 +1602,20 @@ export class PreviewService {
     });
 
     return URL.createObjectURL(new Blob([data], { type: mimeType }));
+  }
+
+  private createFfmpegWorkerBlobUrl(): string {
+    const rewrittenWorkerSource = ffmpegWorkerSource
+      .replace(/import\s+\{\s*CORE_URL,\s*FFMessageType\s*\}\s+from\s+["']\.\/const\.js["'];?\s*/m, '')
+      .replace(/import\s+\{\s*ERROR_UNKNOWN_MESSAGE_TYPE,\s*ERROR_NOT_LOADED,\s*ERROR_IMPORT_FAILURE,\s*\}\s+from\s+["']\.\/errors\.js["'];?\s*/m, '');
+
+    const rewrittenSource = [
+      ffmpegConstSource,
+      ffmpegErrorsSource,
+      rewrittenWorkerSource,
+    ].join('\n');
+
+    return URL.createObjectURL(new Blob([rewrittenSource], { type: 'text/javascript' }));
   }
 
   private buildMp4ExportArgs(inputName: string, outputName: string, startTimeSec: number, durationSec: number): string[] {
