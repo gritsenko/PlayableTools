@@ -1,8 +1,9 @@
-export interface PageMetadata {
+﻿export interface PageMetadata {
   title?: string;
   description?: string;
   canonicalPath?: string;
   robots?: string;
+  noLayout?: boolean;
 }
 
 interface MetadataUpdateContext {

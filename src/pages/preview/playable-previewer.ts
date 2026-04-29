@@ -1,12 +1,14 @@
 import { ComponentBase, customElement, html, inject, state, property } from "fw";
 import type { PropertyValues } from 'lit';
 import { PreviewService } from "../../services/PreviewService";
-import type { PreviewPreset, PreviewRecordingController, PreviewRecordingResult } from "../../services/types";
+import { VideoStorageService } from "../../services/VideoStorageService";
+import type { PreviewPreset, PreviewRecordingResult } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
-import iframeScreenshotCaptureUrl from "./iframe-screenshot-capture.ts?url";
+import { installIframeScreenshotCapture } from "./iframe-screenshot-capture";
 import "./save-creative-modal";
 import "./preview-video-modal";
+import "./recordings-list-modal";
 
 type PreviewDeviceOption = {
   name: string;
@@ -29,6 +31,7 @@ type PreviewIframeWindow = Window & {
 @customElement("playable-previewer")
 export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
+  @inject(VideoStorageService) videoStorageService!: VideoStorageService;
 
   private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games']);
 
@@ -150,6 +153,30 @@ export class PlayablePreviewer extends ComponentBase {
       } catch {
         // ignore malformed messages
       }
+
+      try {
+        const data = e.data;
+        if (data && data.type === 'RECORDING_COMPLETE' && data.blob) {
+          const durationMs = data.durationMs || 0;
+          this._suppressIframe = false; // Restore preview
+          this.videoStorageService.saveVideo(data.blob, durationMs).then(() => {
+            const clip: PreviewRecordingResult = {
+              blob: data.blob,
+              mimeType: data.blob.type || 'video/webm',
+              fileExtension: (data.blob.type || '').includes('mp4') ? 'mp4' : 'webm',
+              durationMs,
+              width: 0,
+              height: 0,
+              startedAt: Date.now() - durationMs
+            };
+            this._openRecordedClip(clip);
+          }).catch(err => {
+            this._showTransientError('Failed to save recorded video: ' + String(err));
+          });
+        }
+      } catch {
+        // ignore
+      }
     };
     window.addEventListener('message', this._onMessageHandler);
 
@@ -186,14 +213,6 @@ export class PlayablePreviewer extends ComponentBase {
     if (this._onMessageHandler) {
       window.removeEventListener('message', this._onMessageHandler);
     }
-    this._clearRecordingTimer();
-    const activeRecording = this._activeRecording;
-    this._activeRecording = undefined;
-    this._isRecording = false;
-    this._isStoppingRecording = false;
-    if (activeRecording) {
-      void activeRecording.cancel();
-    }
   }
 
   protected override updated(_changedProps: PropertyValues): void {
@@ -204,12 +223,7 @@ export class PlayablePreviewer extends ComponentBase {
   private _playableLockHandler?: (e: Event) => void;
   @state() private _locked: boolean = false;
   @state() private _muted: boolean = false;
-  @state() private _isRecording: boolean = false;
-  @state() private _isStoppingRecording: boolean = false;
-  @state() private _recordingElapsedMs: number = 0;
-
-  private _activeRecording?: PreviewRecordingController;
-  private _recordingTimerId?: number;
+  @state() private _suppressIframe: boolean = false;
 
   private _restartPlayable() {
     this._reloadKey++;
@@ -387,26 +401,23 @@ export class PlayablePreviewer extends ComponentBase {
 
 
   private _installScreenshotCaptureHelper(doc: Document, win: PreviewIframeWindow) {
-    if (win.__ptScreenshotInstalled) {
-      return;
-    }
-
-    if (doc.querySelector('script[data-pt-screenshot-helper="true"]')) {
-      return;
-    }
-
-    const script = doc.createElement('script');
-    script.type = 'module';
-    script.src = iframeScreenshotCaptureUrl;
-    script.dataset.ptScreenshotHelper = 'true';
-    script.onerror = () => {
-      console.warn('playable-previewer: failed to load iframe screenshot helper');
-    };
-
-    const target = doc.head || doc.documentElement;
-    target.appendChild(script);
+    installIframeScreenshotCapture(win, doc);
   }
   private renderPlayableIframe() {
+    if (this._suppressIframe) {
+      return html`
+        <div class="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 p-6 text-center">
+          <div>
+            <span class="material-icons-outlined text-4xl mb-2 opacity-50">videocam</span>
+            <p>Recording in progress in a popup window...</p>
+            <button class="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors text-sm" @click=${() => this._suppressIframe = false}>
+              Restore Preview
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     if (this.zipPreviewUrl) {
       // Append reload key as query param so the browser considers it a new URL
       const reloadUrl = this.zipPreviewUrl.split('?')[0] + (this._reloadKey ? `?_r=${this._reloadKey}` : '');
@@ -491,33 +502,6 @@ export class PlayablePreviewer extends ComponentBase {
     }
   }
 
-  private _clearRecordingTimer() {
-    if (this._recordingTimerId !== undefined) {
-      window.clearInterval(this._recordingTimerId);
-      this._recordingTimerId = undefined;
-    }
-  }
-
-  private _startRecordingTimer(startedAt: number) {
-    this._recordingElapsedMs = 0;
-    this._clearRecordingTimer();
-    this._recordingTimerId = window.setInterval(() => {
-      this._recordingElapsedMs = Date.now() - startedAt;
-      this.requestUpdate();
-    }, 250);
-  }
-
-  private _formatDuration(ms: number): string {
-    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  private _getPrimaryCaptureSurface(): HTMLElement | null {
-    return (this as unknown as HTMLElement).querySelector('.playable-capture-surface');
-  }
-
   private _getRecordingBaseName(): string {
     const rawName = (this.fileName || this.previewService.getUploadedFileName() || 'playable-preview')
       .replace(/\.(html?|zip)$/i, '')
@@ -549,70 +533,47 @@ export class PlayablePreviewer extends ComponentBase {
     this._showTransientError('Recorded clip is ready, but the export modal is unavailable.');
   }
 
-  private _watchRecording(recording: PreviewRecordingController) {
-    void recording.result.then((clip) => {
-      if (this._activeRecording !== recording) return;
 
-      this._activeRecording = undefined;
-      this._isRecording = false;
-      this._isStoppingRecording = false;
-      this._recordingElapsedMs = 0;
-      this._clearRecordingTimer();
-      this.requestUpdate();
-      this._openRecordedClip(clip);
-    }).catch((error) => {
-      if (this._activeRecording !== recording) return;
-
-      this._activeRecording = undefined;
-      this._isRecording = false;
-      this._isStoppingRecording = false;
-      this._recordingElapsedMs = 0;
-      this._clearRecordingTimer();
-      this.requestUpdate();
-
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return;
-      }
-
-      this._showTransientError(`Failed to record video: ${error instanceof Error ? error.message : String(error)}`);
-    });
-  }
 
   private async _toggleRecording() {
-    if (this._isStoppingRecording) {
+    let iframeUrl = '';
+    if (this.zipPreviewUrl) {
+      iframeUrl = this.zipPreviewUrl.split('?')[0] + (this._reloadKey ? `?_r=${this._reloadKey}` : '');
+    } else if (this.pageContent) {
+      const blob = new Blob([this.pageContent], { type: 'text/html' });
+      iframeUrl = URL.createObjectURL(blob);
+    }
+
+    if (!iframeUrl) {
+      this._showTransientError('No content available for recording.');
       return;
     }
 
-    if (this._activeRecording) {
-      this._isStoppingRecording = true;
-      this.requestUpdate();
+    const device = this.selectedDevice;
+    const width = (this.isPortrait ? device.width : device.height) || 375;
+    const height = (this.isPortrait ? device.height : device.width) || 667;
+    const popupOuterWidth = width + 420;
+    const popupOuterHeight = Math.max(height + 120, 620);
 
-      try {
-        await this._activeRecording.stop();
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          this._showTransientError(`Failed to stop recording: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-      return;
-    }
+    const popupUrl = `/recorder-popup?url=${encodeURIComponent(iframeUrl)}&width=${width}&height=${height}`;
+    
+    // Suspend the main iframe so we don't have overlapping audio
+    this._suppressIframe = true;
 
-    const captureSurface = this._getPrimaryCaptureSurface();
-    if (!captureSurface) {
-      this._showTransientError('Preview surface not found for recording.');
-      return;
-    }
+    // Popup window options with dimensions to accommodate the device size
+    window.open(
+      popupUrl,
+      'RecorderPopup',
+      `width=${popupOuterWidth},height=${popupOuterHeight},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`,
+    );
+  }
 
-    try {
-      const recording = await this.previewService.startPreviewRecording(captureSurface, 30);
-      this._activeRecording = recording;
-      this._isRecording = true;
-      this._isStoppingRecording = false;
-      this._startRecordingTimer(recording.startedAt);
-      this.requestUpdate();
-      this._watchRecording(recording);
-    } catch (error) {
-      this._showTransientError(`Failed to start recording: ${error instanceof Error ? error.message : String(error)}`);
+  private _openRecordingsList() {
+    const modal = (this as any).querySelector('recordings-list-modal') || document.querySelector('recordings-list-modal');
+    if (modal) {
+      (modal as any).show();
+    } else {
+      this._showTransientError('Recordings list modal is unavailable.');
     }
   }
 
@@ -969,19 +930,24 @@ export class PlayablePreviewer extends ComponentBase {
                 </button>
                 <button 
                   @click=${() => this._toggleRecording()} 
-                  title="${this._isRecording ? 'Stop recording and open trim tools' : 'Record gameplay video'}"
+                  title="${this._suppressIframe ? 'Recording in progress (in new tab)' : 'Record gameplay video'}"
                   ?disabled=${this.loading || (!this.zipPreviewUrl && !this.pageContent)}
-                  class="w-10 h-10 flex items-center justify-center rounded border transition-colors ${this._isRecording ? 'border-red-600 bg-red-600 text-white hover:bg-red-700' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'} ${this.loading || (!this.zipPreviewUrl && !this.pageContent) ? 'opacity-50 cursor-not-allowed' : ''}"
+                  class="w-10 h-10 flex items-center justify-center rounded border transition-colors ${this._suppressIframe ? 'border-red-600 bg-red-600 text-white hover:bg-red-700' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'} ${this.loading || (!this.zipPreviewUrl && !this.pageContent) ? 'opacity-50 cursor-not-allowed' : ''}"
                 >
-                  <span class="material-icons-outlined">${this._isRecording ? 'stop_circle' : 'fiber_manual_record'}</span>
+                  <span class="material-icons-outlined">fiber_manual_record</span>
+                </button>
+                <button 
+                  @click=${() => this._openRecordingsList()} 
+                  title="Previous recordings"
+                  class="w-10 h-10 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-icons-outlined">video_library</span>
                 </button>
               </div>
 
               <div class="flex items-center justify-between gap-3 px-1 text-xs text-slate-500 dark:text-slate-400">
                 <span>Viewport ready for capture</span>
-                ${this._isRecording
-                  ? html`<span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 dark:bg-red-900/20 px-2.5 py-1 font-semibold text-red-600 dark:text-red-300"><span class="material-icons-outlined" style="font-size:14px">fiber_manual_record</span> REC ${this._formatDuration(this._recordingElapsedMs)}</span>`
-                  : html`<span class="text-right">Choose the current tab in the share dialog to record gameplay.</span>`}
+                <span class="text-right">Recording opens in popup</span>
               </div>
             </div>
             
@@ -1040,6 +1006,7 @@ export class PlayablePreviewer extends ComponentBase {
         </div>
         <save-creative-modal id="save-modal"></save-creative-modal>
         <preview-video-modal id="preview-video-modal"></preview-video-modal>
+        <recordings-list-modal id="recordings-list-modal"></recordings-list-modal>
       </div>
     `;
   }

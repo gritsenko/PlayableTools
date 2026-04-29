@@ -564,7 +564,12 @@ export class PreviewService {
       case 'html': return 'text/html';
       case 'htm': return 'text/html';
       case 'js': return 'application/javascript';
+      case 'cjs': return 'application/javascript';
       case 'mjs': return 'application/javascript';
+      case 'ts': return 'text/javascript';
+      case 'tsx': return 'text/javascript';
+      case 'mts': return 'text/javascript';
+      case 'cts': return 'text/javascript';
       case 'css': return 'text/css';
       case 'png': return 'image/png';
       case 'jpg':
@@ -573,12 +578,16 @@ export class PreviewService {
       case 'svg': return 'image/svg+xml';
       case 'webp': return 'image/webp';
       case 'mp3': return 'audio/mpeg';
+      case 'm4a': return 'audio/mp4';
+      case 'aac': return 'audio/aac';
       case 'wav': return 'audio/wav';
       case 'ogg': return 'audio/ogg';
       case 'mp4': return 'video/mp4';
       case 'webm': return 'video/webm';
       case 'json': return 'application/json';
+      case 'map': return 'application/json';
       case 'xml': return 'application/xml';
+      case 'wasm': return 'application/wasm';
       case 'txt': return 'text/plain';
       default: return null;
     }
@@ -1110,73 +1119,98 @@ export class PreviewService {
       throw new Error('Display capture started without a video track.');
     }
 
-    const previewVideo = document.createElement('video');
-    previewVideo.srcObject = displayStream;
-    previewVideo.muted = true;
-    previewVideo.playsInline = true;
-
-    await this.waitForMediaEvent(previewVideo, 'loadedmetadata');
-    await previewVideo.play();
-
-    const outputCanvas = document.createElement('canvas');
-    const outputContext = outputCanvas.getContext('2d');
-    if (!outputContext) {
-      previewVideo.pause();
-      previewVideo.srcObject = null;
-      displayStream.getTracks().forEach(track => track.stop());
-      throw new Error('Unable to create an off-screen canvas for recording.');
+    let cropSuccess = false;
+    if ('CropTarget' in window && 'cropTo' in displayTrack) {
+      try {
+        const target = await (window as any).CropTarget.fromElement(cropElement);
+        await (displayTrack as any).cropTo(target);
+        cropSuccess = true;
+      } catch (e) {
+        console.warn('CropTarget failed, falling back to canvas crop', e);
+      }
     }
 
-    const resizeOutputCanvas = () => {
-      const rect = cropElement.getBoundingClientRect();
-      const viewportWidth = Math.max(window.innerWidth, 1);
-      const viewportHeight = Math.max(window.innerHeight, 1);
-      const targetWidth = Math.max(2, Math.round(rect.width * (previewVideo.videoWidth / viewportWidth)));
-      const targetHeight = Math.max(2, Math.round(rect.height * (previewVideo.videoHeight / viewportHeight)));
-
-      if (outputCanvas.width !== targetWidth || outputCanvas.height !== targetHeight) {
-        outputCanvas.width = targetWidth;
-        outputCanvas.height = targetHeight;
-      }
-    };
-
-    resizeOutputCanvas();
-
+    let previewVideo: HTMLVideoElement | null = null;
+    let outputCanvas: HTMLCanvasElement | null = null;
+    let captureStream: MediaStream | null = null;
     let animationFrameId = 0;
-    const drawFrame = () => {
+
+    if (!cropSuccess) {
+      previewVideo = document.createElement('video');
+      previewVideo.srcObject = displayStream;
+      previewVideo.muted = true;
+      previewVideo.playsInline = true;
+
+      await this.waitForMediaEvent(previewVideo, 'loadedmetadata');
+      await previewVideo.play();
+
+      outputCanvas = document.createElement('canvas');
+      const outputContext = outputCanvas.getContext('2d');
+      if (!outputContext) {
+        previewVideo.pause();
+        previewVideo.srcObject = null;
+        displayStream.getTracks().forEach(track => track.stop());
+        throw new Error('Unable to create an off-screen canvas for recording.');
+      }
+
+      const resizeOutputCanvas = () => {
+        const rect = cropElement.getBoundingClientRect();
+        const viewportWidth = Math.max(window.innerWidth, 1);
+        const scaleX = previewVideo!.videoWidth / viewportWidth;
+        const scaleY = scaleX; // Preserve square pixel aspect ratio
+
+        const targetWidth = Math.max(2, Math.round(rect.width * scaleX));
+        const targetHeight = Math.max(2, Math.round(rect.height * scaleY));
+
+        if (outputCanvas!.width !== targetWidth || outputCanvas!.height !== targetHeight) {
+          outputCanvas!.width = targetWidth;
+          outputCanvas!.height = targetHeight;
+        }
+      };
+
       resizeOutputCanvas();
 
-      const rect = cropElement.getBoundingClientRect();
-      const viewportWidth = Math.max(window.innerWidth, 1);
-      const viewportHeight = Math.max(window.innerHeight, 1);
-      const scaleX = previewVideo.videoWidth / viewportWidth;
-      const scaleY = previewVideo.videoHeight / viewportHeight;
-      const sourceX = Math.max(0, Math.round(rect.left * scaleX));
-      const sourceY = Math.max(0, Math.round(rect.top * scaleY));
-      const sourceWidth = Math.max(1, Math.min(previewVideo.videoWidth - sourceX, Math.round(rect.width * scaleX)));
-      const sourceHeight = Math.max(1, Math.min(previewVideo.videoHeight - sourceY, Math.round(rect.height * scaleY)));
+      const drawFrame = () => {
+        resizeOutputCanvas();
 
-      outputContext.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-      outputContext.drawImage(
-        previewVideo,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        outputCanvas.width,
-        outputCanvas.height,
-      );
+        const rect = cropElement.getBoundingClientRect();
+        const viewportWidth = Math.max(window.innerWidth, 1);
+        const viewportHeight = Math.max(window.innerHeight, 1);
+        
+        const scaleX = previewVideo!.videoWidth / viewportWidth;
 
-      animationFrameId = window.requestAnimationFrame(drawFrame);
-    };
+        // Ensure we handle top banner offsets properly if CropTarget isn't supported
+        const physicalViewportHeight = viewportHeight * scaleX;
+        const estimatedTopBarHeight = Math.max(0, previewVideo!.videoHeight - physicalViewportHeight);
 
-    drawFrame();
+        const sourceX = Math.max(0, Math.round(rect.left * scaleX));
+        const sourceY = Math.max(0, Math.round(rect.top * scaleX) + estimatedTopBarHeight);
 
-    const captureStream = outputCanvas.captureStream(frameRate);
+        const sourceWidth = Math.max(1, Math.min(previewVideo!.videoWidth - sourceX, Math.round(rect.width * scaleX)));
+        const sourceHeight = Math.max(1, Math.min(previewVideo!.videoHeight - sourceY, Math.round(rect.height * scaleX)));
+
+        outputContext!.clearRect(0, 0, outputCanvas!.width, outputCanvas!.height);
+        outputContext!.drawImage(
+          previewVideo!,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          outputCanvas!.width,
+          outputCanvas!.height,
+        );
+
+        animationFrameId = window.requestAnimationFrame(drawFrame);
+      };
+
+      drawFrame();
+      captureStream = outputCanvas!.captureStream(frameRate);
+    }
+
     const mixedStream = new MediaStream([
-      ...captureStream.getVideoTracks(),
+      ...(cropSuccess ? [displayTrack] : captureStream!.getVideoTracks()),
       ...displayStream.getAudioTracks(),
     ]);
     const startedAt = Date.now();
@@ -1195,52 +1229,56 @@ export class PreviewService {
       if (animationFrameId !== 0) {
         window.cancelAnimationFrame(animationFrameId);
       }
-      captureStream.getTracks().forEach(track => track.stop());
-      mixedStream.getTracks().forEach(track => track.stop());
-      displayStream.getTracks().forEach(track => track.stop());
-      previewVideo.pause();
-      previewVideo.srcObject = null;
-    };
-
-    const result = new Promise<PreviewRecordingResult>((resolve, reject) => {
-      recorder.addEventListener('dataavailable', (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
+        if (captureStream) {
+          captureStream.getTracks().forEach(track => track.stop());
         }
-      });
-
-      recorder.addEventListener('error', (event: Event) => {
-        cleanup();
-        const mediaError = event as Event & { error?: DOMException };
-        reject(new Error(mediaError.error?.message || 'Failed to record the playable preview.'));
-      });
-
-      recorder.addEventListener('stop', () => {
-        cleanup();
-
-        if (discarded) {
-          reject(new DOMException('Recording cancelled', 'AbortError'));
-          return;
+        mixedStream.getTracks().forEach(track => track.stop());
+        displayStream.getTracks().forEach(track => track.stop());
+        if (previewVideo) {
+          previewVideo.pause();
+          previewVideo.srcObject = null;
         }
+      };
 
-        const blobType = recorder.mimeType || mimeType || chunks.find(part => part instanceof Blob)?.type || 'video/webm';
-        const blob = new Blob(chunks, { type: blobType });
-        if (blob.size === 0) {
-          reject(new Error('Recording finished without any video data.'));
-          return;
-        }
+      const result = new Promise<PreviewRecordingResult>((resolve, reject) => {
+        recorder.addEventListener('dataavailable', (event: BlobEvent) => {
+          if (event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        });
 
-        resolve({
-          blob,
-          mimeType: blobType,
-          fileExtension: this.getVideoFileExtension(blobType),
-          durationMs: Date.now() - startedAt,
-          width: outputCanvas.width,
-          height: outputCanvas.height,
-          startedAt,
+        recorder.addEventListener('error', (event: Event) => {
+          cleanup();
+          const mediaError = event as Event & { error?: DOMException };
+          reject(new Error(mediaError.error?.message || 'Failed to record the playable preview.'));
+        });
+
+        recorder.addEventListener('stop', () => {
+          cleanup();
+
+          if (discarded) {
+            reject(new DOMException('Recording cancelled', 'AbortError'));
+            return;
+          }
+
+          const blobType = recorder.mimeType || mimeType || chunks.find(part => part instanceof Blob)?.type || 'video/webm';
+          const blob = new Blob(chunks, { type: blobType });
+          if (blob.size === 0) {
+            reject(new Error('Recording finished without any video data.'));
+            return;
+          }
+
+          resolve({
+            blob,
+            mimeType: blobType,
+            fileExtension: this.getVideoFileExtension(blobType),
+            durationMs: Date.now() - startedAt,
+            width: outputCanvas?.width ?? cropElement.clientWidth,
+            height: outputCanvas?.height ?? cropElement.clientHeight,
+            startedAt,
+          });
         });
       });
-    });
 
     const stopInternal = async (discard: boolean): Promise<PreviewRecordingResult> => {
       discarded = discard;
@@ -1349,7 +1387,7 @@ export class PreviewService {
   private async getMp4Exporter(): Promise<LoadedMp4Exporter> {
     if (!this._ffmpegLoadPromise) {
       this._ffmpegLoadPromise = (async () => {
-        const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([
+        const [{ FFmpeg }, { fetchFile }] = await Promise.all([
           import("@ffmpeg/ffmpeg"),
           import("@ffmpeg/util"),
         ]);
@@ -1384,19 +1422,17 @@ export class PreviewService {
         };
 
         if (!this._ffmpegCoreBlobUrl) {
-          this._ffmpegCoreBlobUrl = await toBlobURL(
+          this._ffmpegCoreBlobUrl = await this.createBlobUrlFromFetch(
             ffmpegCoreUrl,
             'text/javascript',
-            true,
             handleRuntimeDownloadProgress,
           );
         }
 
         if (!this._ffmpegWasmBlobUrl) {
-          this._ffmpegWasmBlobUrl = await toBlobURL(
+          this._ffmpegWasmBlobUrl = await this.createBlobUrlFromFetch(
             ffmpegWasmUrl,
             'application/wasm',
-            true,
             handleRuntimeDownloadProgress,
           );
         }
@@ -1452,6 +1488,71 @@ export class PreviewService {
     }
 
     return this._ffmpegLoadPromise;
+  }
+
+  private async createBlobUrlFromFetch(
+    sourceUrl: string,
+    mimeType: string,
+    onProgress?: (event: { url: string | URL; received: number; total: number }) => void,
+  ): Promise<string> {
+    const response = await fetch(sourceUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download ${sourceUrl}: ${response.status} ${response.statusText}`);
+    }
+
+    const contentLength = Number.parseInt(response.headers.get('Content-Length') || '-1', 10);
+    const reader = response.body?.getReader();
+
+    if (!reader) {
+      const fallbackBuffer = await response.arrayBuffer();
+      onProgress?.({
+        url: sourceUrl,
+        received: fallbackBuffer.byteLength,
+        total: fallbackBuffer.byteLength,
+      });
+      return URL.createObjectURL(new Blob([fallbackBuffer], { type: mimeType }));
+    }
+
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      if (!value || value.length === 0) {
+        continue;
+      }
+
+      chunks.push(value);
+      received += value.length;
+      onProgress?.({
+        url: sourceUrl,
+        received,
+        total: contentLength,
+      });
+    }
+
+    if (contentLength > 0 && received !== contentLength) {
+      throw new Error(`Incomplete download for ${sourceUrl}: received ${received} of ${contentLength} bytes.`);
+    }
+
+    const data = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      data.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    onProgress?.({
+      url: sourceUrl,
+      received,
+      total: contentLength > 0 ? contentLength : received,
+    });
+
+    return URL.createObjectURL(new Blob([data], { type: mimeType }));
   }
 
   private buildMp4ExportArgs(inputName: string, outputName: string, startTimeSec: number, durationSec: number): string[] {

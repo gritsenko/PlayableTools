@@ -23,10 +23,9 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
     "paths": {
-      "fw": ["src/fw/index.ts"],
-      "fw/*": ["src/fw/*"]
+      "fw": ["./src/fw/index.ts"],
+      "fw/*": ["./src/fw/*"]
     }
   },
   "include": ["src", "src/cta-sdk.md.d.ts"]

@@ -1,4 +1,4 @@
-import { LitElement, html } from 'lit';
+﻿import { LitElement, html } from 'lit';
 import type { TemplateResult } from 'lit-html';
 import { customElement, property, state } from 'lit/decorators.js';
 import { metadataService, type PageMetadata } from '../services/MetadataService';
@@ -169,7 +169,7 @@ export class RouterOutlet extends LitElement {
                 const normalizedParams = params.map(p => p ? p.replace(/^\//, '') : '').filter(p => p !== '');
                 const instance = new routeInfo.component() as any;
                 instance.routeParams = normalizedParams;
-                return this.renderContentWithLayout(() => html`<div>${instance}</div>`);
+                return this.renderContentWithLayout(() => html`<div>${instance}</div>`, routeInfo?.metadata?.noLayout);
             }
         }
 
@@ -180,8 +180,8 @@ export class RouterOutlet extends LitElement {
         return this.renderContentWithLayout(() => html`<h1>404 Not Found</h1>`);
     }
 
-    renderContentWithLayout(content: () => TemplateResult) {
-        if (!this.defaultLayout)
+    renderContentWithLayout(content: () => TemplateResult, skipLayout: boolean = false) {
+        if (skipLayout || !this.defaultLayout)
             return content();
 
         const layout = new this.defaultLayout() as any;
