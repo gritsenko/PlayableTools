@@ -30,6 +30,7 @@ export class PreviewPage extends ComponentBase {
   routeParams: string[] = [];
   private unsubscribeAuth?: () => void;
   private portfolioLoadRequestId = 0;
+  private urlLoadRequestId = 0;
   isAuthenticated: boolean = false;
   disconnectedCallback() {
     super.disconnectedCallback?.();
@@ -60,6 +61,10 @@ export class PreviewPage extends ComponentBase {
   uploadedFileName: string = "";
   uploadError: string = "";
   isUploading: boolean = false;
+  @state()
+  isLoadingUrl: boolean = false;
+  @state()
+  urlLoadError: string = "";
   @state()
   isLoadingPortfolioPlayable: boolean = false;
   @state()
@@ -140,6 +145,11 @@ export class PreviewPage extends ComponentBase {
       if (serviceFileName) {
         this.uploadedFileName = serviceFileName;
         // portfolioPlayableId is already cleared above
+      }
+
+      const initialUrl = this.getUrlFromQuery();
+      if (initialUrl) {
+        void this.loadPlayableFromUrl(initialUrl, { fromEncodedQuery: true });
       }
     }
     
@@ -274,7 +284,124 @@ export class PreviewPage extends ComponentBase {
   }
 
   private moveToPreviewInputState() {
-    window.history.replaceState({}, "", "/preview#preview");
+    window.history.replaceState({}, "", `${window.location.pathname}#preview`);
+  }
+
+  private getUrlFromQuery(): string | null {
+    const rawQueryValue = this.encodedUrl?.trim();
+    if (!rawQueryValue) {
+      return null;
+    }
+
+    const decodedQueryValue = this.previewService.decodeUrl(rawQueryValue).trim();
+    if (/^https?:\/\//i.test(decodedQueryValue)) {
+      return decodedQueryValue;
+    }
+
+    const plainQueryValue = decodeURIComponent(rawQueryValue).trim();
+    if (/^https?:\/\//i.test(plainQueryValue)) {
+      return plainQueryValue;
+    }
+
+    if (/^https?:\/\//i.test(rawQueryValue)) {
+      return rawQueryValue;
+    }
+
+    return null;
+  }
+
+  private rememberRecentUrl(url: string) {
+    const normalizedUrl = url.trim();
+    if (!normalizedUrl) {
+      return;
+    }
+
+    this.recentUrls = [normalizedUrl, ...this.recentUrls.filter(item => item !== normalizedUrl)].slice(0, 5);
+    localStorage.setItem("preview-recent-urls", JSON.stringify(this.recentUrls));
+  }
+
+  private resetLoadedSourceState() {
+    this.previewService.clearUploadedContent();
+    this.previewService.setUploadedFileName(null);
+    this.previewService.setPortfolioPlayableId(null);
+    this.uploadedFileName = "";
+    this.portfolioPlayableId = null;
+    this.portfolioPlayableData = null;
+    this.portfolioProjectTitle = null;
+    this.portfolioLoadError = "";
+    this.uploadError = "";
+    this.urlLoadError = "";
+    this.isEncoded = false;
+    this.decodedUrl = "";
+  }
+
+  private async loadPlayableFromUrl(rawUrl: string, options?: { fromEncodedQuery?: boolean }) {
+    const nextUrl = rawUrl.trim();
+    if (!nextUrl) {
+      this.urlLoadError = "Paste a direct HTML or ZIP URL to load a playable.";
+      this.requestUpdate();
+      return;
+    }
+
+    const requestId = ++this.urlLoadRequestId;
+    this.isLoadingUrl = true;
+    this.urlLoadError = "";
+    this.uploadError = "";
+    this.uploadedFileName = "";
+    this.portfolioPlayableId = null;
+    this.portfolioPlayableData = null;
+    this.portfolioProjectTitle = null;
+    this.portfolioLoadError = "";
+    this.previewService.setPortfolioPlayableId(null);
+    this.isEncoded = !!options?.fromEncodedQuery;
+    this.decodedUrl = nextUrl;
+    this.urlInput = nextUrl;
+    this.moveToPreviewInputState();
+    this.requestUpdate();
+
+    try {
+      const result = await this.previewService.loadPlayableFromUrl(nextUrl);
+      if (requestId !== this.urlLoadRequestId) {
+        return;
+      }
+
+      this.uploadedFileName = result.fileName;
+      this.previewService.setUploadedFileName(result.fileName);
+      this.rememberRecentUrl(nextUrl);
+    } catch (error) {
+      if (requestId !== this.urlLoadRequestId) {
+        return;
+      }
+
+      this.urlLoadError = error instanceof Error
+        ? error.message
+        : "Failed to load the playable from the provided URL.";
+      this.isEncoded = false;
+      this.decodedUrl = "";
+    } finally {
+      if (requestId === this.urlLoadRequestId) {
+        this.isLoadingUrl = false;
+        this.requestUpdate();
+      }
+    }
+  }
+
+  private handleUrlInput(event: Event) {
+    this.urlInput = (event.target as HTMLInputElement).value;
+  }
+
+  private handleUrlInputKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    void this.loadPlayableFromUrl(this.urlInput);
+  }
+
+  private handleRecentUrlClick(url: string) {
+    this.urlInput = url;
+    void this.loadPlayableFromUrl(url);
   }
 
   async handleFileUpload(event: Event) {
@@ -285,6 +412,7 @@ export class PreviewPage extends ComponentBase {
 
     this.isUploading = true;
     this.uploadError = "";
+    this.urlLoadError = "";
     this.uploadedFileName = "";
     this.portfolioPlayableId = null;
     
@@ -318,13 +446,8 @@ export class PreviewPage extends ComponentBase {
   }
 
   clearUploadedContent() {
-    this.previewService.clearUploadedContent();
-    this.previewService.setUploadedFileName(null);
-    this.uploadedFileName = "";
-    this.portfolioPlayableId = null;
-    this.portfolioPlayableData = null;
-    this.portfolioProjectTitle = null;
-    this.uploadError = "";
+    this.resetLoadedSourceState();
+    this.urlInput = "";
     this.requestUpdate();
   }
 
@@ -478,7 +601,7 @@ export class PreviewPage extends ComponentBase {
   render() {
     const hasUploadedContent = this.previewService.getUploadedFileInfo().hasContent;
     const isFromPortfolio = this.portfolioPlayableId !== null;
-    const hasContent = this.isEncoded || hasUploadedContent || !!this.uploadedFileName;
+    const hasContent = hasUploadedContent || !!this.uploadedFileName;
     const showPortfolioLoadingState = isFromPortfolio && this.isLoadingPortfolioPlayable;
     const showPortfolioErrorState = isFromPortfolio && !!this.portfolioLoadError && !hasContent;
     const showInputSections = !hasContent && !showPortfolioLoadingState && !showPortfolioErrorState;
@@ -502,14 +625,8 @@ export class PreviewPage extends ComponentBase {
                   </button>
                   <button
                     @click=${() => {
-                      // Clear all content and return to input mode
-                      this.previewService.clearUploadedContent();
-                      this.previewService.setUploadedFileName(null);
-                      this.uploadedFileName = "";
-                      this.portfolioPlayableId = null;
-                      this.uploadError = "";
-                      this.isEncoded = false;
-                      this.decodedUrl = "";
+                      this.resetLoadedSourceState();
+                      this.urlInput = "";
                       this.moveToPreviewInputState();
                       this.requestUpdate();
                     }}
@@ -533,16 +650,8 @@ export class PreviewPage extends ComponentBase {
                     : null}
                   <button
                     @click=${() => {
-                      // Clear all content and return to input mode
-                      this.previewService.clearUploadedContent();
-                      this.previewService.setUploadedFileName(null);
-                      this.uploadedFileName = "";
-                      this.portfolioPlayableId = null;
-                      this.portfolioPlayableData = null;
-                      this.portfolioProjectTitle = null;
-                      this.uploadError = "";
-                      this.isEncoded = false;
-                      this.decodedUrl = "";
+                      this.resetLoadedSourceState();
+                      this.urlInput = "";
                       this.moveToPreviewInputState();
                       this.requestUpdate();
                     }}
@@ -669,8 +778,72 @@ export class PreviewPage extends ComponentBase {
               <div class="space-y-8">
                 <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
                   <p class="text-slate-600 dark:text-slate-400 mb-4">
-                    Upload HTML files or ZIP archives to preview playable ads on different devices and orientations.
+                    Upload HTML files or ZIP archives, or paste a direct HTML/ZIP URL, to preview playable ads on different devices and orientations.
                   </p>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span class="material-icons-outlined">link</span>
+                    Load From URL
+                  </h3>
+
+                  <div class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-3 lg:flex-row">
+                      <input
+                        type="url"
+                        .value=${this.urlInput}
+                        @input=${this.handleUrlInput}
+                        @keydown=${this.handleUrlInputKeydown}
+                        placeholder="https://example.com/playable/index.html or https://example.com/playable.zip"
+                        class="flex-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        ?disabled=${this.isLoadingUrl || this.isUploading}
+                      />
+                      <button
+                        @click=${() => this.loadPlayableFromUrl(this.urlInput)}
+                        class="px-5 py-3 rounded bg-primary text-white font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        ?disabled=${this.isLoadingUrl || this.isUploading}
+                      >
+                        ${this.isLoadingUrl ? 'Loading...' : 'Load Playable'}
+                      </button>
+                    </div>
+
+                    ${this.isLoadingUrl ? html`
+                      <div class="flex items-center gap-2 text-primary text-sm">
+                        <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                        <span>Fetching remote playable and preparing preview...</span>
+                      </div>
+                    ` : ''}
+
+                    ${this.urlLoadError ? html`
+                      <div class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded text-sm">
+                        ${this.urlLoadError}
+                      </div>
+                    ` : ''}
+
+                    <div class="text-sm text-slate-500 dark:text-slate-400 space-y-1">
+                      <p>• Supported sources: direct .html, .htm, .zip URLs</p>
+                      <p>• The remote server must allow cross-origin access from the browser</p>
+                      <p>• Once loaded, validation, screenshots, and gameplay recording work through the regular preview flow</p>
+                    </div>
+
+                    ${this.recentUrls.length > 0 ? html`
+                      <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Recent URLs</p>
+                        <div class="flex flex-wrap gap-2">
+                          ${this.recentUrls.map(url => html`
+                            <button
+                              @click=${() => this.handleRecentUrlClick(url)}
+                              class="max-w-full rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-left text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors truncate"
+                              title=${url}
+                            >
+                              ${url}
+                            </button>
+                          `)}
+                        </div>
+                      </div>
+                    ` : ''}
+                  </div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800">

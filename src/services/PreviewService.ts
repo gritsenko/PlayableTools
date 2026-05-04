@@ -35,9 +35,21 @@ type DownloadProgressEvent = {
   total: number;
 };
 
+type RemotePlayableType = 'html' | 'zip';
+
+type PreviewRecordingOptions = {
+  frameRate?: number;
+  targetWidth?: number;
+  targetHeight?: number;
+};
+
 @injectable()
 export class PreviewService {
   private static readonly zipSwAckTimeoutMs = 10000;
+  private static readonly recordingMinVideoBitrate = 900_000;
+  private static readonly recordingMaxVideoBitrate = 5_000_000;
+  private static readonly recordingBitsPerPixelFrame = 0.12;
+  private static readonly recordingMaxOutputDimension = 1280;
   private static readonly recordingMimeTypeCandidates = [
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
@@ -113,6 +125,7 @@ export class PreviewService {
     console.log(`📥 PreviewService: Fetched ${originalContent.length} chars from GitHub`);
     
     // Store original content and URL for preset switching
+    this._originalZipFile = null;
     this._originalGithubContent = originalContent;
     this._validationSourceContent = originalContent;
     
@@ -131,6 +144,57 @@ export class PreviewService {
     
     console.log(`✅ PreviewService: fetchRawContent complete, returning ${processedContent.length} chars`);
     return processedContent;
+  }
+
+  async loadPlayableFromUrl(sourceUrl: string): Promise<{ fileName: string; type: RemotePlayableType }> {
+    const normalizedUrl = this.normalizePlayableSourceUrl(sourceUrl);
+    const preset = this.getCurrentPreset();
+    const maxSizeInMB = preset?.maxFileSizeMB || 10;
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+
+    let response: Response;
+    try {
+      response = await fetch(normalizedUrl, {
+        mode: 'cors',
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'follow',
+      });
+    } catch (error) {
+      throw this.buildRemoteFetchError(normalizedUrl, error);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to load playable: ${response.status} ${response.statusText || 'Request failed'}`.trim());
+    }
+
+    const declaredSize = Number(response.headers.get('content-length') || '0');
+    if (declaredSize > maxSizeInBytes) {
+      throw new Error(`Remote file is larger than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
+    }
+
+    const payload = await response.arrayBuffer();
+    if (payload.byteLength > maxSizeInBytes) {
+      throw new Error(`Remote file is larger than ${maxSizeInMB}MB (${preset?.name || 'current preset'} limit)`);
+    }
+
+    const playableType = this.detectRemotePlayableType(response, normalizedUrl, payload);
+    const fileName = this.getRemotePlayableFileName(response, normalizedUrl, playableType);
+
+    if (playableType === 'zip') {
+      const zipFile = new File([payload], fileName, { type: 'application/zip' });
+      await this.handleZipUpload(zipFile);
+      this.setUploadedFileName(fileName);
+      return { fileName, type: 'zip' };
+    }
+
+    const htmlContent = new TextDecoder('utf-8').decode(payload);
+    if (!this.isValidHtmlContent(htmlContent)) {
+      throw new Error('The remote file was fetched successfully, but it does not contain valid HTML.');
+    }
+
+    await this.loadHtmlContentFromString(htmlContent, fileName);
+    return { fileName, type: 'html' };
   }
 
   // In-memory uploaded HTML content (not persisted). When set, components can preview it.
@@ -201,6 +265,7 @@ export class PreviewService {
     // Treat as a non-ZIP HTML load; clear any existing ZIP session.
     await this.clearZipSession();
     this.setZipPreviewUrl(null);
+    this._originalZipFile = null;
 
     // Store original content for preset switching.
     this._originalUploadedContent = content;
@@ -400,6 +465,7 @@ export class PreviewService {
   async handleFileUpload(file: File): Promise<string> {
     const preset = this.getCurrentPreset();
     await this.clearZipSession();
+    this._originalZipFile = null;
     
     // Validate file type
     if (!this.isValidHtmlFile(file)) {
@@ -454,6 +520,78 @@ export class PreviewService {
     const validExtensions = ['.html', '.htm'];
     const fileName = file.name.toLowerCase();
     return validExtensions.some(ext => fileName.endsWith(ext));
+  }
+
+  private normalizePlayableSourceUrl(sourceUrl: string): string {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(sourceUrl.trim());
+    } catch {
+      throw new Error('Please enter a valid absolute URL starting with http:// or https://');
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('Only direct http:// and https:// URLs are supported.');
+    }
+
+    const githubRawUrl = this.githubToRawUrl(parsedUrl.toString());
+    return githubRawUrl || parsedUrl.toString();
+  }
+
+  private buildRemoteFetchError(sourceUrl: string, error: unknown): Error {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/failed to fetch|load failed|networkerror/i.test(message)) {
+      return new Error(`Failed to load the remote playable. The server may be unavailable or blocking cross-origin access (CORS) for ${sourceUrl}.`);
+    }
+
+    return new Error(`Failed to load the remote playable: ${message}`);
+  }
+
+  private detectRemotePlayableType(response: Response, sourceUrl: string, payload: ArrayBuffer): RemotePlayableType {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    const pathname = new URL(sourceUrl).pathname.toLowerCase();
+    const signature = new Uint8Array(payload.slice(0, 4));
+    const looksLikeZip = signature.length >= 4
+      && signature[0] === 0x50
+      && signature[1] === 0x4b
+      && signature[2] === 0x03
+      && signature[3] === 0x04;
+
+    if (contentType.includes('zip') || pathname.endsWith('.zip') || looksLikeZip) {
+      return 'zip';
+    }
+
+    if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml') || pathname.endsWith('.html') || pathname.endsWith('.htm')) {
+      return 'html';
+    }
+
+    const decodedText = new TextDecoder('utf-8').decode(payload.slice(0, Math.min(payload.byteLength, 4096)));
+    if (this.isValidHtmlContent(decodedText)) {
+      return 'html';
+    }
+
+    throw new Error(`Unsupported remote file type. Expected a direct HTML or ZIP file, got ${contentType || 'an unknown content type'}.`);
+  }
+
+  private getRemotePlayableFileName(response: Response, sourceUrl: string, playableType: RemotePlayableType): string {
+    const disposition = response.headers.get('content-disposition') || '';
+    const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const dispositionFileName = encodedMatch?.[1] ? decodeURIComponent(encodedMatch[1]) : plainMatch?.[1];
+    const urlPathName = new URL(sourceUrl).pathname.split('/').filter(Boolean).pop();
+    const fallbackBaseName = playableType === 'zip' ? 'remote-playable.zip' : 'remote-playable.html';
+    const rawFileName = (dispositionFileName || urlPathName || fallbackBaseName).trim();
+    const sanitizedFileName = rawFileName.replace(/[\\/:*?"<>|]+/g, '-');
+
+    if (playableType === 'zip' && !sanitizedFileName.toLowerCase().endsWith('.zip')) {
+      return `${sanitizedFileName || 'remote-playable'}.zip`;
+    }
+
+    if (playableType === 'html' && !/\.html?$/i.test(sanitizedFileName)) {
+      return `${sanitizedFileName || 'remote-playable'}.html`;
+    }
+
+    return sanitizedFileName || fallbackBaseName;
   }
 
   /**
@@ -1103,13 +1241,15 @@ export class PreviewService {
     return iframeWindow.__ptScreenshot || null;
   }
 
-  async startPreviewRecording(cropElement: HTMLElement, frameRate: number = 30): Promise<PreviewRecordingController> {
+  async startPreviewRecording(cropElement: HTMLElement, options: PreviewRecordingOptions = {}): Promise<PreviewRecordingController> {
     if (!navigator.mediaDevices?.getDisplayMedia) {
       throw new Error('Display capture is not supported in this browser.');
     }
     if (typeof MediaRecorder === 'undefined') {
       throw new Error('MediaRecorder is not available in this browser.');
     }
+
+    const frameRate = options.frameRate ?? 30;
 
     const displayMediaOptions: DisplayMediaStreamOptions & Record<string, unknown> = {
       video: {
@@ -1145,89 +1285,96 @@ export class PreviewService {
     let captureStream: MediaStream | null = null;
     let animationFrameId = 0;
 
-    if (!cropSuccess) {
-      previewVideo = document.createElement('video');
-      previewVideo.srcObject = displayStream;
-      previewVideo.muted = true;
-      previewVideo.playsInline = true;
+    previewVideo = document.createElement('video');
+    previewVideo.srcObject = displayStream;
+    previewVideo.muted = true;
+    previewVideo.playsInline = true;
 
-      await this.waitForMediaEvent(previewVideo, 'loadedmetadata');
-      await previewVideo.play();
+    await this.waitForMediaEvent(previewVideo, 'loadedmetadata');
+    await previewVideo.play();
 
-      outputCanvas = document.createElement('canvas');
-      const outputContext = outputCanvas.getContext('2d');
-      if (!outputContext) {
-        previewVideo.pause();
-        previewVideo.srcObject = null;
-        displayStream.getTracks().forEach(track => track.stop());
-        throw new Error('Unable to create an off-screen canvas for recording.');
+    outputCanvas = document.createElement('canvas');
+    const outputContext = outputCanvas.getContext('2d');
+    if (!outputContext) {
+      previewVideo.pause();
+      previewVideo.srcObject = null;
+      displayStream.getTracks().forEach(track => track.stop());
+      throw new Error('Unable to create an off-screen canvas for recording.');
+    }
+
+    const resizeOutputCanvas = () => {
+      const nextSize = this.getRecordingOutputSize(cropElement, options);
+      if (outputCanvas!.width !== nextSize.width || outputCanvas!.height !== nextSize.height) {
+        outputCanvas!.width = nextSize.width;
+        outputCanvas!.height = nextSize.height;
       }
+    };
 
-      const resizeOutputCanvas = () => {
-        const rect = cropElement.getBoundingClientRect();
-        const viewportWidth = Math.max(window.innerWidth, 1);
-        const scaleX = previewVideo!.videoWidth / viewportWidth;
-        const scaleY = scaleX; // Preserve square pixel aspect ratio
+    resizeOutputCanvas();
 
-        const targetWidth = Math.max(2, Math.round(rect.width * scaleX));
-        const targetHeight = Math.max(2, Math.round(rect.height * scaleY));
-
-        if (outputCanvas!.width !== targetWidth || outputCanvas!.height !== targetHeight) {
-          outputCanvas!.width = targetWidth;
-          outputCanvas!.height = targetHeight;
-        }
-      };
-
+    const drawFrame = () => {
       resizeOutputCanvas();
 
-      const drawFrame = () => {
-        resizeOutputCanvas();
-
-        const rect = cropElement.getBoundingClientRect();
-        const viewportWidth = Math.max(window.innerWidth, 1);
-        const viewportHeight = Math.max(window.innerHeight, 1);
-        
-        const scaleX = previewVideo!.videoWidth / viewportWidth;
-
-        // Ensure we handle top banner offsets properly if CropTarget isn't supported
-        const physicalViewportHeight = viewportHeight * scaleX;
-        const estimatedTopBarHeight = Math.max(0, previewVideo!.videoHeight - physicalViewportHeight);
-
-        const sourceX = Math.max(0, Math.round(rect.left * scaleX));
-        const sourceY = Math.max(0, Math.round(rect.top * scaleX) + estimatedTopBarHeight);
-
-        const sourceWidth = Math.max(1, Math.min(previewVideo!.videoWidth - sourceX, Math.round(rect.width * scaleX)));
-        const sourceHeight = Math.max(1, Math.min(previewVideo!.videoHeight - sourceY, Math.round(rect.height * scaleX)));
-
+      if (cropSuccess) {
         outputContext!.clearRect(0, 0, outputCanvas!.width, outputCanvas!.height);
         outputContext!.drawImage(
           previewVideo!,
-          sourceX,
-          sourceY,
-          sourceWidth,
-          sourceHeight,
+          0,
+          0,
+          previewVideo!.videoWidth,
+          previewVideo!.videoHeight,
           0,
           0,
           outputCanvas!.width,
           outputCanvas!.height,
         );
-
         animationFrameId = window.requestAnimationFrame(drawFrame);
-      };
+        return;
+      }
 
-      drawFrame();
-      captureStream = outputCanvas!.captureStream(frameRate);
-    }
+      const rect = cropElement.getBoundingClientRect();
+      const viewportWidth = Math.max(window.innerWidth, 1);
+      const viewportHeight = Math.max(window.innerHeight, 1);
+      const scaleX = previewVideo!.videoWidth / viewportWidth;
+
+      // Ensure we handle top banner offsets properly if CropTarget isn't supported.
+      const physicalViewportHeight = viewportHeight * scaleX;
+      const estimatedTopBarHeight = Math.max(0, previewVideo!.videoHeight - physicalViewportHeight);
+
+      const sourceX = Math.max(0, Math.round(rect.left * scaleX));
+      const sourceY = Math.max(0, Math.round(rect.top * scaleX) + estimatedTopBarHeight);
+      const sourceWidth = Math.max(1, Math.min(previewVideo!.videoWidth - sourceX, Math.round(rect.width * scaleX)));
+      const sourceHeight = Math.max(1, Math.min(previewVideo!.videoHeight - sourceY, Math.round(rect.height * scaleX)));
+
+      outputContext!.clearRect(0, 0, outputCanvas!.width, outputCanvas!.height);
+      outputContext!.drawImage(
+        previewVideo!,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        outputCanvas!.width,
+        outputCanvas!.height,
+      );
+
+      animationFrameId = window.requestAnimationFrame(drawFrame);
+    };
+
+    drawFrame();
+    captureStream = outputCanvas.captureStream(frameRate);
 
     const mixedStream = new MediaStream([
-      ...(cropSuccess ? [displayTrack] : captureStream!.getVideoTracks()),
+      ...captureStream.getVideoTracks(),
       ...displayStream.getAudioTracks(),
     ]);
     const startedAt = Date.now();
     const mimeType = this.getPreferredRecordingMimeType();
+    const videoBitsPerSecond = this.getRecommendedRecordingBitrate(outputCanvas.width, outputCanvas.height, frameRate);
     const recorder = mimeType
-      ? new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: 8_000_000 })
-      : new MediaRecorder(mixedStream, { videoBitsPerSecond: 8_000_000 });
+      ? new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond, audioBitsPerSecond: 128_000 })
+      : new MediaRecorder(mixedStream, { videoBitsPerSecond, audioBitsPerSecond: 128_000 });
     const chunks: BlobPart[] = [];
     let settled = false;
     let discarded = false;
@@ -1283,8 +1430,8 @@ export class PreviewService {
             mimeType: blobType,
             fileExtension: this.getVideoFileExtension(blobType),
             durationMs: Date.now() - startedAt,
-            width: outputCanvas?.width ?? cropElement.clientWidth,
-            height: outputCanvas?.height ?? cropElement.clientHeight,
+            width: outputCanvas.width,
+            height: outputCanvas.height,
             startedAt,
           });
         });
@@ -1325,6 +1472,33 @@ export class PreviewService {
         }
       },
     };
+  }
+
+  private getRecordingOutputSize(cropElement: HTMLElement, options: PreviewRecordingOptions): { width: number; height: number } {
+    const rect = cropElement.getBoundingClientRect();
+    const requestedWidth = options.targetWidth ?? rect.width;
+    const requestedHeight = options.targetHeight ?? rect.height;
+    const safeWidth = Math.max(2, requestedWidth);
+    const safeHeight = Math.max(2, requestedHeight);
+    const scale = Math.min(1, PreviewService.recordingMaxOutputDimension / Math.max(safeWidth, safeHeight));
+
+    return {
+      width: this.normalizeVideoDimension(safeWidth * scale),
+      height: this.normalizeVideoDimension(safeHeight * scale),
+    };
+  }
+
+  private getRecommendedRecordingBitrate(width: number, height: number, frameRate: number): number {
+    const estimatedBitrate = Math.round(width * height * Math.max(frameRate, 1) * PreviewService.recordingBitsPerPixelFrame);
+    return Math.min(
+      PreviewService.recordingMaxVideoBitrate,
+      Math.max(PreviewService.recordingMinVideoBitrate, estimatedBitrate),
+    );
+  }
+
+  private normalizeVideoDimension(value: number): number {
+    const rounded = Math.max(2, Math.round(value));
+    return rounded % 2 === 0 ? rounded : rounded + 1;
   }
 
   async trimRecordedVideo(

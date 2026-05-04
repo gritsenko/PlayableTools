@@ -137,7 +137,15 @@ export class RecorderPopupPage extends ComponentBase {
       const captureSurface = this.renderRoot.querySelector('.iframe-container') as HTMLElement;
       if (!captureSurface) throw new Error("Could not find .iframe-container");
 
-      const recording = await this.previewService.startPreviewRecording(captureSurface, 30);
+      const device = this.selectedDevice;
+      const targetWidth = (this.isPortrait ? device.width : device.height) || 375;
+      const targetHeight = (this.isPortrait ? device.height : device.width) || 667;
+
+      const recording = await this.previewService.startPreviewRecording(captureSurface, {
+        frameRate: 30,
+        targetWidth,
+        targetHeight,
+      });
       this.activeRecording = recording;
 
       recording.result.then((clip) => {
