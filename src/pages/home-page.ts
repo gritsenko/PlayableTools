@@ -82,7 +82,7 @@ export class HomePage extends ComponentBase {
 
           ${this.renderCard(
             "🖼️ Assets Compression",
-            "PNG optimization tools - Optimize your PNG images and other assets to reduce file size and improve loading times using PngChpocker.",
+            "PNG quantization in the browser - Pick a folder, preview every PNG with size share, then quantize and save the optimized files locally.",
             "/compress-assets",
             "Compress Assets"
           )}
