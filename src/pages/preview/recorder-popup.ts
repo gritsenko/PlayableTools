@@ -11,6 +11,24 @@ type PreviewDeviceOption = {
   disabled?: boolean;
 };
 
+type RecordingQualityId = 'standard' | 'high' | 'best';
+
+type RecordingQualityOption = {
+  id: RecordingQualityId;
+  label: string;
+  description: string;
+  outputScale: number;
+  maxOutputDimension: number;
+};
+
+type RecordingFrameRate = 30 | 60;
+
+type RecordingFrameRateOption = {
+  value: RecordingFrameRate;
+  label: string;
+  description: string;
+};
+
 @customElement("recorder-popup-page")
 @route("/recorder-popup", {
   title: "PlayableTools - Gameplay Recorder",
@@ -23,6 +41,11 @@ export class RecorderPopupPage extends ComponentBase {
   private static readonly VIEWPORT_PADDING = 16;
   private static readonly WINDOW_FRAME_WIDTH = 48;
   private static readonly WINDOW_FRAME_HEIGHT = 112;
+  private static readonly STORAGE_KEYS = {
+    includeCursor: 'preview-recorder-include-cursor',
+    recordingQuality: 'preview-recorder-quality',
+    recordingFrameRate: 'preview-recorder-frame-rate',
+  } as const;
 
   @inject(PreviewService) private previewService!: PreviewService;
 
@@ -33,6 +56,9 @@ export class RecorderPopupPage extends ComponentBase {
 
   @state() private isPortrait: boolean = true;
   @state() private selectedDeviceIdx: number = 2; // Default to iPhone SE 375x667
+  @state() private includeCursor: boolean = true;
+  @state() private selectedRecordingQualityId: RecordingQualityId = 'high';
+  @state() private selectedFrameRate: RecordingFrameRate = 30;
 
   private devices: PreviewDeviceOption[] = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -48,8 +74,60 @@ export class RecorderPopupPage extends ComponentBase {
     { name: 'Generic tablet', width: 768, height: 1024, type: 'tablet' },
   ];
 
+  private recordingQualityOptions: RecordingQualityOption[] = [
+    {
+      id: 'standard',
+      label: 'Standard',
+      description: 'Matches the preview size and keeps file size lower.',
+      outputScale: 1,
+      maxOutputDimension: 1280,
+    },
+    {
+      id: 'high',
+      label: 'High',
+      description: 'Sharper UI and fewer compression artifacts. Recommended default.',
+      outputScale: 1.5,
+      maxOutputDimension: 1600,
+    },
+    {
+      id: 'best',
+      label: 'Best',
+      description: 'Maximum detail with larger files and heavier CPU usage.',
+      outputScale: 2,
+      maxOutputDimension: 1920,
+    },
+  ];
+
+  private recordingFrameRateOptions: RecordingFrameRateOption[] = [
+    {
+      value: 30,
+      label: '30 FPS',
+      description: 'Smaller files and lower CPU load.',
+    },
+    {
+      value: 60,
+      label: '60 FPS',
+      description: 'Smoother motion for gameplay, with larger files and heavier capture load.',
+    },
+  ];
+
   protected override async firstUpdated(changedProperties: import("lit").PropertyValues) {
     super.firstUpdated(changedProperties);
+
+    const storedIncludeCursor = localStorage.getItem(RecorderPopupPage.STORAGE_KEYS.includeCursor);
+    if (storedIncludeCursor !== null) {
+      this.includeCursor = storedIncludeCursor === 'true';
+    }
+
+    const storedRecordingQuality = localStorage.getItem(RecorderPopupPage.STORAGE_KEYS.recordingQuality);
+    if (storedRecordingQuality && this.recordingQualityOptions.some(option => option.id === storedRecordingQuality)) {
+      this.selectedRecordingQualityId = storedRecordingQuality as RecordingQualityId;
+    }
+
+    const storedFrameRate = localStorage.getItem(RecorderPopupPage.STORAGE_KEYS.recordingFrameRate);
+    if (storedFrameRate === '30' || storedFrameRate === '60') {
+      this.selectedFrameRate = Number.parseInt(storedFrameRate, 10) as RecordingFrameRate;
+    }
     
     // Read the URL from query params
     const params = new URLSearchParams(window.location.search);
@@ -78,6 +156,16 @@ export class RecorderPopupPage extends ComponentBase {
     return this.devices[this.selectedDeviceIdx];
   }
 
+  get selectedRecordingQuality() {
+    return this.recordingQualityOptions.find(option => option.id === this.selectedRecordingQualityId)
+      ?? this.recordingQualityOptions[1];
+  }
+
+  get selectedRecordingFrameRateOption() {
+    return this.recordingFrameRateOptions.find(option => option.value === this.selectedFrameRate)
+      ?? this.recordingFrameRateOptions[0];
+  }
+
   private _getDeviceLabel(device: PreviewDeviceOption): string {
     if (device.disabled) return device.name;
     return `${device.name} (${device.width}x${device.height})`;
@@ -92,6 +180,34 @@ export class RecorderPopupPage extends ComponentBase {
   private toggleOrientation() {
     this.isPortrait = !this.isPortrait;
     this.maybeResizeWindow();
+  }
+
+  private handleIncludeCursorChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    this.includeCursor = input.checked;
+    localStorage.setItem(RecorderPopupPage.STORAGE_KEYS.includeCursor, String(this.includeCursor));
+  }
+
+  private handleRecordingQualityChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    const nextValue = select.value as RecordingQualityId;
+    if (!this.recordingQualityOptions.some(option => option.id === nextValue)) {
+      return;
+    }
+
+    this.selectedRecordingQualityId = nextValue;
+    localStorage.setItem(RecorderPopupPage.STORAGE_KEYS.recordingQuality, nextValue);
+  }
+
+  private handleFrameRateChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    const nextValue = Number.parseInt(select.value, 10);
+    if (nextValue !== 30 && nextValue !== 60) {
+      return;
+    }
+
+    this.selectedFrameRate = nextValue;
+    localStorage.setItem(RecorderPopupPage.STORAGE_KEYS.recordingFrameRate, String(nextValue));
   }
 
   private maybeResizeWindow() {
@@ -138,13 +254,17 @@ export class RecorderPopupPage extends ComponentBase {
       if (!captureSurface) throw new Error("Could not find .iframe-container");
 
       const device = this.selectedDevice;
+      const quality = this.selectedRecordingQuality;
       const targetWidth = (this.isPortrait ? device.width : device.height) || 375;
       const targetHeight = (this.isPortrait ? device.height : device.width) || 667;
 
       const recording = await this.previewService.startPreviewRecording(captureSurface, {
-        frameRate: 30,
+        frameRate: this.selectedFrameRate,
         targetWidth,
         targetHeight,
+        includeCursor: this.includeCursor,
+        outputScale: quality.outputScale,
+        maxOutputDimension: quality.maxOutputDimension,
       });
       this.activeRecording = recording;
 
@@ -256,6 +376,12 @@ export class RecorderPopupPage extends ComponentBase {
           flex-direction: column;
           gap: 6px;
         }
+
+        .field-hint {
+          font-size: 0.75rem;
+          line-height: 1.45;
+          color: #64748b;
+        }
         
         label {
           font-size: 0.875rem;
@@ -276,6 +402,42 @@ export class RecorderPopupPage extends ComponentBase {
         select:focus {
           border-color: #3b82f6;
           box-shadow: 0 0 0 1px #3b82f6;
+        }
+
+        .toggle-option {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 12px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+
+        .toggle-option input {
+          margin-top: 2px;
+          width: 16px;
+          height: 16px;
+          accent-color: #2563eb;
+          flex: 0 0 auto;
+        }
+
+        .toggle-option-body {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .toggle-option-title {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #0f172a;
+        }
+
+        .toggle-option-hint {
+          font-size: 0.75rem;
+          line-height: 1.4;
+          color: #64748b;
         }
         
         button {
@@ -376,11 +538,44 @@ export class RecorderPopupPage extends ComponentBase {
                 )}
               </select>
             </div>
+
+            <div class="form-group">
+              <label>Recording Quality</label>
+              <select @change="${this.handleRecordingQualityChange}" ?disabled="${this.isRecording}">
+                ${this.recordingQualityOptions.map(option => html`
+                  <option value="${option.id}" ?selected="${option.id === this.selectedRecordingQualityId}">${option.label}</option>
+                `)}
+              </select>
+              <div class="field-hint">${this.selectedRecordingQuality.description}</div>
+            </div>
+
+            <div class="form-group">
+              <label>Frame Rate</label>
+              <select @change="${this.handleFrameRateChange}" ?disabled="${this.isRecording}">
+                ${this.recordingFrameRateOptions.map(option => html`
+                  <option value="${option.value}" ?selected="${option.value === this.selectedFrameRate}">${option.label}</option>
+                `)}
+              </select>
+              <div class="field-hint">${this.selectedRecordingFrameRateOption.description}</div>
+            </div>
             
             <button class="btn-outline mt-2" @click="${this.toggleOrientation}" ?disabled="${this.isRecording}">
               <span class="material-icons-outlined" style="font-size: 18px">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
               Switch to ${this.isPortrait ? 'Landscape' : 'Portrait'}
             </button>
+
+            <label class="toggle-option">
+              <input
+                type="checkbox"
+                .checked="${this.includeCursor}"
+                @change="${this.handleIncludeCursorChange}"
+                ?disabled="${this.isRecording}"
+              />
+              <span class="toggle-option-body">
+                <span class="toggle-option-title">Record mouse cursor</span>
+                <span class="toggle-option-hint">Turn this off to keep the cursor out of gameplay recordings. Some browsers may still show it if screen-capture constraints are ignored.</span>
+              </span>
+            </label>
             
             <button 
               class="btn-primary ${this.isRecording ? 'recording' : ''}" 

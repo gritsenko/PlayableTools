@@ -24,6 +24,98 @@
   var leaderboardState = Object.create(null);
   var previewLanguage = 'ru';
 
+  function normalizeLanguageValue(value) {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    return value.trim().toLowerCase();
+  }
+
+  function getLocationLanguage() {
+    try {
+      if (!window.location || !window.location.href) {
+        return null;
+      }
+
+      var url = new URL(window.location.href);
+      return normalizeLanguageValue(url.searchParams.get('lang'));
+    } catch (err) {}
+
+    return null;
+  }
+
+  function syncDocumentLanguage() {
+    try {
+      if (document && document.documentElement) {
+        document.documentElement.lang = getActiveLanguage();
+      }
+    } catch (err) {}
+  }
+
+  function defineNavigatorLanguageProperty(target, propertyName, getValue) {
+    if (!target || typeof getValue !== 'function') {
+      return false;
+    }
+
+    try {
+      Object.defineProperty(target, propertyName, {
+        configurable: true,
+        enumerable: true,
+        get: getValue,
+      });
+      return true;
+    } catch (err) {}
+
+    return false;
+  }
+
+  function syncNavigatorLanguage() {
+    try {
+      if (!window.navigator) {
+        return;
+      }
+
+      var navigatorTarget = window.navigator;
+      var navigatorPrototype = Object.getPrototypeOf(window.navigator);
+      var getLanguage = function () {
+        return getActiveLanguage();
+      };
+      var getLanguages = function () {
+        return [getActiveLanguage()];
+      };
+
+      defineNavigatorLanguageProperty(navigatorTarget, 'language', getLanguage)
+        || defineNavigatorLanguageProperty(navigatorPrototype, 'language', getLanguage);
+      defineNavigatorLanguageProperty(navigatorTarget, 'languages', getLanguages)
+        || defineNavigatorLanguageProperty(navigatorPrototype, 'languages', getLanguages);
+      defineNavigatorLanguageProperty(navigatorTarget, 'userLanguage', getLanguage)
+        || defineNavigatorLanguageProperty(navigatorPrototype, 'userLanguage', getLanguage);
+      defineNavigatorLanguageProperty(navigatorTarget, 'browserLanguage', getLanguage)
+        || defineNavigatorLanguageProperty(navigatorPrototype, 'browserLanguage', getLanguage);
+      defineNavigatorLanguageProperty(navigatorTarget, 'systemLanguage', getLanguage)
+        || defineNavigatorLanguageProperty(navigatorPrototype, 'systemLanguage', getLanguage);
+    } catch (err) {}
+  }
+
+  function syncLocationLanguage() {
+    try {
+      if (!window.location || !window.location.href || !window.history || typeof window.history.replaceState !== 'function') {
+        return;
+      }
+
+      var url = new URL(window.location.href);
+      var nextLanguage = getActiveLanguage();
+
+      if (!nextLanguage || url.searchParams.get('lang') === nextLanguage) {
+        return;
+      }
+
+      url.searchParams.set('lang', nextLanguage);
+      window.history.replaceState(window.history.state, '', url.toString());
+    } catch (err) {}
+  }
+
   function getContextLanguage() {
     try {
       var context = window.__PLAYABLETOOLS_PREVIEW_CONTEXT || {};
@@ -38,7 +130,7 @@
       }
     } catch (err) {}
 
-    return null;
+    return getLocationLanguage();
   }
 
   function getActiveLanguage() {
@@ -46,11 +138,13 @@
   }
 
   function setActiveLanguage(nextLanguage) {
-    if (typeof nextLanguage !== 'string' || !nextLanguage.trim()) {
+    var normalizedLanguage = normalizeLanguageValue(nextLanguage);
+
+    if (!normalizedLanguage) {
       return previewLanguage;
     }
 
-    previewLanguage = nextLanguage.trim().toLowerCase();
+    previewLanguage = normalizedLanguage;
 
     try {
       var currentContext = window.__PLAYABLETOOLS_PREVIEW_CONTEXT || {};
@@ -60,6 +154,10 @@
     try {
       window.__PLAYABLETOOLS_PREVIEW_LANGUAGE = previewLanguage;
     } catch (err) {}
+
+    syncDocumentLanguage();
+    syncNavigatorLanguage();
+    syncLocationLanguage();
 
     post('preview.setLanguage', [previewLanguage]);
     return previewLanguage;

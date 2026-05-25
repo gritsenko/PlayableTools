@@ -11,11 +11,62 @@
     let ysdk = null;
     let player = null;
     let isInitialized = false;
+    let initPromise = null;
+
+    function getLangFromUrl() {
+        if (typeof window !== 'undefined' && window.location && window.location.search) {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const lang = params.get('lang');
+                if (lang) return lang;
+            } catch(e) {}
+        }
+        return null;
+    }
+
+    let language = getLangFromUrl() || (typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en');
+    let isPlatformPaused = false;
+    let isGameplayActive = false;
+    let lifecycleEventsBound = false;
+    const pauseListeners = new Set();
+    const resumeListeners = new Set();
 
     // Константы
     const LEADERBOARD_NAME = 'block_chpok_scores';
     const STATS_KEY = 'bestScore';
     const DATA_KEY = 'gameData';
+
+    function normalizeLanguageCode(lang) {
+        if (typeof lang !== 'string') return 'en';
+        return lang.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+    }
+
+    function notifyListeners(listeners) {
+        listeners.forEach(listener => {
+            try {
+                listener();
+            } catch (error) {
+                console.error('[Yandex SDK] Ошибка lifecycle listener:', error);
+            }
+        });
+    }
+
+    function bindLifecycleEvents() {
+        if (!ysdk || lifecycleEventsBound || typeof ysdk.on !== 'function') return;
+
+        ysdk.on('game_api_pause', function() {
+            isPlatformPaused = true;
+            isGameplayActive = false;
+            notifyListeners(pauseListeners);
+        });
+
+        ysdk.on('game_api_resume', function() {
+            isPlatformPaused = false;
+            notifyListeners(resumeListeners);
+        });
+
+        lifecycleEventsBound = true;
+    }
 
     // ============================================
     // Инициализация SDK
@@ -26,28 +77,41 @@
      * Вызывается автоматически при загрузке страницы
      */
     async function initSDK() {
-        if (isInitialized) return;
+        if (isInitialized) return ysdk;
+        if (initPromise) return initPromise;
 
-        try {
-            // Ждем, пока YaGames станет доступен
-            if (typeof YaGames === 'undefined') {
-                console.warn('[Yandex SDK] YaGames не найден. SDK недоступен.');
-                return;
+        initPromise = (async function() {
+            try {
+                if (typeof YaGames === 'undefined') {
+                    console.warn('[Yandex SDK] YaGames не найден. SDK недоступен.');
+                    return null;
+                }
+
+                ysdk = await YaGames.init();
+                language = normalizeLanguageCode(ysdk && ysdk.environment && ysdk.environment.i18n && ysdk.environment.i18n.lang);
+                isInitialized = true;
+                bindLifecycleEvents();
+                console.log('[Yandex SDK] Инициализирован');
+
+                // LoadingAPI.ready() must be called BEFORE the game becomes playable
+                // (требование платформы 1.19). Player/storage init продолжается в фоне.
+                gameReady();
+
+                await initPlayer();
+                await setupSafeStorage();
+
+                return ysdk;
+            } catch (error) {
+                console.error('[Yandex SDK] Ошибка инициализации:', error);
+                return null;
+            } finally {
+                if (!isInitialized) {
+                    initPromise = null;
+                }
             }
+        })();
 
-            ysdk = await YaGames.init();
-            isInitialized = true;
-            console.log('[Yandex SDK] Инициализирован');
-
-            // Получаем данные игрока
-            await initPlayer();
-
-            // Переопределяем localStorage для iOS
-            await setupSafeStorage();
-
-        } catch (error) {
-            console.error('[Yandex SDK] Ошибка инициализации:', error);
-        }
+        return initPromise;
     }
 
     /**
@@ -99,6 +163,66 @@
     function isMethodAvailable(methodName) {
         if (!ysdk) return false;
         return ysdk.isAvailableMethod(methodName);
+    }
+
+    function getLanguage() {
+        return normalizeLanguageCode(language);
+    }
+
+    function getRawLanguage() {
+        return ysdk && ysdk.environment && ysdk.environment.i18n ? ysdk.environment.i18n.lang : language;
+    }
+
+    function whenReady() {
+        return initPromise || Promise.resolve(ysdk);
+    }
+
+    function onPause(listener) {
+        if (typeof listener !== 'function') return function() {};
+        pauseListeners.add(listener);
+        return function() {
+            pauseListeners.delete(listener);
+        };
+    }
+
+    function onResume(listener) {
+        if (typeof listener !== 'function') return function() {};
+        resumeListeners.add(listener);
+        return function() {
+            resumeListeners.delete(listener);
+        };
+    }
+
+    function isPaused() {
+        return isPlatformPaused;
+    }
+
+    function startGameplay() {
+        if (!ysdk || !ysdk.features || !ysdk.features.GameplayAPI || typeof ysdk.features.GameplayAPI.start !== 'function') {
+            return false;
+        }
+
+        if (isGameplayActive) {
+            return true;
+        }
+
+        ysdk.features.GameplayAPI.start();
+        isGameplayActive = true;
+        return true;
+    }
+
+    function stopGameplay() {
+        if (!ysdk || !ysdk.features || !ysdk.features.GameplayAPI || typeof ysdk.features.GameplayAPI.stop !== 'function') {
+            return false;
+        }
+
+        if (!isGameplayActive) {
+            return true;
+        }
+
+        ysdk.features.GameplayAPI.stop();
+        isGameplayActive = false;
+        return true;
     }
 
     // ============================================
@@ -410,6 +534,16 @@
     // ============================================
 
     /**
+     * Сообщает Yandex SDK, что игра загружена и готова (LoadingAPI.ready)
+     */
+    function gameReady() {
+        if (ysdk && ysdk.features && ysdk.features.LoadingAPI && typeof ysdk.features.LoadingAPI.ready === 'function') {
+            ysdk.features.LoadingAPI.ready();
+            console.log('[Yandex SDK] Игра готова (LoadingAPI.ready)');
+        }
+    }
+
+    /**
      * Отправляет событие начала игры
      */
     function dispatchGameStartEvent() {
@@ -436,6 +570,15 @@
         init: initSDK,
         isAvailable: isAvailable,
         isInitialized: function() { return isInitialized; },
+        whenReady: whenReady,
+        getLanguage: getLanguage,
+        getRawLanguage: getRawLanguage,
+        onPause: onPause,
+        onResume: onResume,
+        isPaused: isPaused,
+        startGameplay: startGameplay,
+        stopGameplay: stopGameplay,
+        isMethodAvailable: isMethodAvailable,
 
         // Игрок
         isAuthorized: isPlayerAuthorized,
@@ -469,6 +612,7 @@
         getBannerAdvStatus: getBannerAdvStatus,
 
         // События
+        gameReady: gameReady,
         dispatchGameStartEvent: dispatchGameStartEvent,
         dispatchLevelCompleteEvent: dispatchLevelCompleteEvent,
 

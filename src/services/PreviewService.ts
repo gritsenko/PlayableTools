@@ -41,14 +41,17 @@ type PreviewRecordingOptions = {
   frameRate?: number;
   targetWidth?: number;
   targetHeight?: number;
+  includeCursor?: boolean;
+  outputScale?: number;
+  maxOutputDimension?: number;
 };
 
 @injectable()
 export class PreviewService {
   private static readonly zipSwAckTimeoutMs = 10000;
-  private static readonly recordingMinVideoBitrate = 900_000;
-  private static readonly recordingMaxVideoBitrate = 5_000_000;
-  private static readonly recordingBitsPerPixelFrame = 0.12;
+  private static readonly recordingMinVideoBitrate = 2_000_000;
+  private static readonly recordingMaxVideoBitrate = 14_000_000;
+  private static readonly recordingBitsPerPixelFrame = 0.18;
   private static readonly recordingMaxOutputDimension = 1280;
   private static readonly recordingMimeTypeCandidates = [
     "video/webm;codecs=vp9,opus",
@@ -1399,12 +1402,15 @@ export class PreviewService {
     }
 
     const frameRate = options.frameRate ?? 30;
+    const includeCursor = options.includeCursor ?? true;
+    const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+      frameRate: { ideal: frameRate, max: frameRate },
+      displaySurface: 'browser',
+      cursor: includeCursor ? 'always' : 'never',
+    };
 
     const displayMediaOptions: DisplayMediaStreamOptions & Record<string, unknown> = {
-      video: {
-        frameRate: { ideal: frameRate, max: frameRate },
-        displaySurface: 'browser',
-      },
+      video: videoConstraints,
       audio: true,
       preferCurrentTab: true,
       selfBrowserSurface: 'include',
@@ -1627,9 +1633,11 @@ export class PreviewService {
     const rect = cropElement.getBoundingClientRect();
     const requestedWidth = options.targetWidth ?? rect.width;
     const requestedHeight = options.targetHeight ?? rect.height;
-    const safeWidth = Math.max(2, requestedWidth);
-    const safeHeight = Math.max(2, requestedHeight);
-    const scale = Math.min(1, PreviewService.recordingMaxOutputDimension / Math.max(safeWidth, safeHeight));
+    const outputScale = Math.max(1, options.outputScale ?? 1);
+    const maxOutputDimension = Math.max(2, options.maxOutputDimension ?? PreviewService.recordingMaxOutputDimension);
+    const safeWidth = Math.max(2, requestedWidth * outputScale);
+    const safeHeight = Math.max(2, requestedHeight * outputScale);
+    const scale = Math.min(1, maxOutputDimension / Math.max(safeWidth, safeHeight));
 
     return {
       width: this.normalizeVideoDimension(safeWidth * scale),
@@ -1958,7 +1966,8 @@ export class PreviewService {
       '-map', '0:a?',
       '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p',
       '-c:v', 'libx264',
-      '-preset', 'veryfast',
+      '-preset', 'fast',
+      '-crf', '18',
       '-profile:v', 'main',
       '-pix_fmt', 'yuv420p',
       '-c:a', 'aac',

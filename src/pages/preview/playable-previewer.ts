@@ -769,6 +769,7 @@ export class PlayablePreviewer extends ComponentBase {
 
     try {
       await this.previewService.reloadContentWithCurrentLanguage(languageCode);
+      this._restartPlayable();
 
       this.presetSuccessMessage = `✅ Language: ${selectedLanguage.label}`;
       setTimeout(() => {

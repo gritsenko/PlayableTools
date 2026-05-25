@@ -1,10 +1,24 @@
+// Блокируем выделение текста, контекстное меню и drag-and-drop изображений
+// (требования платформы 1.6.1.8 / 1.6.2.7).
+(function suppressNativeInteractionGestures() {
+    const stop = function(event) {
+        event.preventDefault();
+    };
+    window.addEventListener('contextmenu', stop, { passive: false });
+    window.addEventListener('selectstart', stop, { passive: false });
+    window.addEventListener('dragstart', stop, { passive: false });
+    document.addEventListener('gesturestart', stop, { passive: false });
+})();
+
 // --- AUDIO MANAGER (Web Audio API) ---
 class AudioManager {
     constructor() {
         this.audioContext = null;
         this.buffers = {};
         this.isInitialized = false;
-        // ОПТИМИЗАЦИЯ: рекомендация - объединить mp3 в Audio Sprite для уменьшения HTTP-запросов
+        this.soundsEnabled = true;
+        this.hasStartedSession = false;
+        this.assetCacheName = 'block-chpok-audio-v1';
         this.soundConfigs = {
             pick: { file: 'pick.mp3', volume: 0.4 },
             click: { file: 'click.mp3', volume: 0.3 },
@@ -14,13 +28,49 @@ class AudioManager {
         };
     }
 
+    async ensureAudioContext() {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+
+        return this.audioContext;
+    }
+
+    async fetchAudioArrayBuffer(fileName, cacheName) {
+        const assetUrl = new URL(fileName, window.location.href).href;
+
+        if ('caches' in window) {
+            const cache = await caches.open(cacheName);
+            let response = await cache.match(assetUrl);
+
+            if (!response) {
+                response = await fetch(assetUrl, { cache: 'force-cache' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                cache.put(assetUrl, response.clone()).catch(() => {});
+            }
+
+            return response.arrayBuffer();
+        }
+
+        const response = await fetch(assetUrl, { cache: 'force-cache' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.arrayBuffer();
+    }
+
     async init() {
-        if (this.isInitialized) return;
+        if (this.isInitialized || !this.soundsEnabled) return;
 
         try {
-            if (!this.audioContext) {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
+            await this.ensureAudioContext();
 
             const loadPromises = Object.entries(this.soundConfigs).map(([key, config]) => {
                 return this.loadSound(key, config.file);
@@ -35,15 +85,72 @@ class AudioManager {
 
     async loadSound(name, fileName) {
         try {
-            const response = await fetch(fileName);
-            const arrayBuffer = await response.arrayBuffer();
+            const arrayBuffer = await this.fetchAudioArrayBuffer(fileName, this.assetCacheName);
             this.buffers[name] = await this.audioContext.decodeAudioData(arrayBuffer);
         } catch (e) {
             console.warn(`Failed to load sound ${name}:`, e);
         }
     }
 
+    async beginGameSession() {
+        this.hasStartedSession = true;
+
+        if (!this.soundsEnabled) {
+            return;
+        }
+
+        try {
+            await this.ensureAudioContext();
+        } catch (e) {
+            console.warn('Audio context startup failed:', e);
+        }
+
+        this.init().catch(() => {});
+    }
+
+    async suspend() {
+        if (!this.audioContext || this.audioContext.state !== 'running') {
+            return;
+        }
+
+        try {
+            await this.audioContext.suspend();
+        } catch (e) {
+            console.warn('Failed to suspend audio context:', e);
+        }
+    }
+
+    async resume() {
+        if (!this.soundsEnabled || !this.hasStartedSession) {
+            return;
+        }
+
+        try {
+            await this.ensureAudioContext();
+            this.init().catch(() => {});
+        } catch (e) {
+            console.warn('Failed to resume audio context:', e);
+        }
+    }
+
+    setSoundEnabled(enabled) {
+        this.soundsEnabled = enabled;
+
+        if (!enabled) {
+            this.suspend().catch(() => {});
+            return;
+        }
+
+        if (this.hasStartedSession) {
+            this.resume().catch(() => {});
+        }
+    }
+
     play(soundName) {
+        if (!this.soundsEnabled) {
+            return;
+        }
+
         if (!this.isInitialized) {
             this.init().catch(() => {});
             return;
@@ -53,7 +160,7 @@ class AudioManager {
 
         try {
             if (this.audioContext && this.audioContext.state === 'suspended') {
-                this.audioContext.resume();
+                this.audioContext.resume().catch(() => {});
             }
 
             const buffer = this.buffers[soundName];
@@ -76,8 +183,19 @@ class AudioManager {
 const audioManager = new AudioManager();
 
 // --- HAPTIC FEEDBACK SYSTEM ---
+const canUseMatchMedia = typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+const isCoarsePointerDevice = canUseMatchMedia && window.matchMedia('(pointer: coarse)').matches;
+const prefersReducedMotion = canUseMatchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reportedHardwareConcurrency = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+    ? navigator.hardwareConcurrency
+    : 8;
+const reportedDeviceMemory = typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number'
+    ? navigator.deviceMemory
+    : 8;
 const supportsHaptics = typeof window !== 'undefined'
-    && (window.matchMedia('(pointer: coarse)').matches || /iPhone|iPad|iPod/.test(navigator.userAgent));
+    && (isCoarsePointerDevice || /iPhone|iPad|iPod/.test(navigator.userAgent));
+const isLowPerfParticleMode = prefersReducedMotion
+    || (isCoarsePointerDevice && (reportedHardwareConcurrency <= 6 || reportedDeviceMemory <= 4));
 
 const hapticFallbackState = {
     labelEl: null,
@@ -205,37 +323,107 @@ class ParticleSystem {
     constructor() {
         this.canvas = document.getElementById('particles-canvas');
         this.ctx = null;
+        this.gameContainer = document.querySelector('.game-container');
         this.particles = [];
         this.landingParticles = [];
+        this.animationFrameId = 0;
+        this.lastFrameTime = 0;
+        this.config = {
+            particleCountScale: isLowPerfParticleMode ? 0.35 : (isCoarsePointerDevice ? 0.5 : 1),
+            landingParticleCount: isLowPerfParticleMode ? 1 : 2,
+            shadowBlur: isLowPerfParticleMode ? 0 : (isCoarsePointerDevice ? 3 : 6),
+            maxParticles: isLowPerfParticleMode ? 56 : (isCoarsePointerDevice ? 84 : 144),
+            maxLandingParticles: isLowPerfParticleMode ? 12 : (isCoarsePointerDevice ? 18 : 30)
+        };
         
-        if (this.canvas) {
-            this.ctx = this.canvas.getContext('2d');
+        if (this.canvas && this.gameContainer) {
+            this.ctx = this.canvas.getContext('2d', {
+                alpha: true
+            });
             this.resizeCanvas();
-            this.animate();
+            this.setCanvasVisibility(false);
             
             window.addEventListener('resize', () => this.resizeCanvas());
         }
     }
     
     resizeCanvas() {
-        if (!this.canvas) return;
+        if (!this.canvas || !this.gameContainer) return;
         
         // Размеры подстраиваются под весь игровой контейнер
-        const gameContainer = document.querySelector('.game-container');
-        const containerRect = gameContainer.getBoundingClientRect();
+        const containerRect = this.gameContainer.getBoundingClientRect();
+        const width = Math.max(1, Math.round(containerRect.width));
+        const height = Math.max(1, Math.round(containerRect.height));
         
         // Устанавливаем размеры canvas
-        this.canvas.width = containerRect.width;
-        this.canvas.height = containerRect.height;
+        this.canvas.width = width;
+        this.canvas.height = height;
         
         // Позиционируем canvas внутри game-container
         this.canvas.style.position = 'absolute';
         this.canvas.style.top = '0';
         this.canvas.style.left = '0';
     }
+
+    getRelativeCanvasPoint(x, y) {
+        if (!this.canvas || !this.gameContainer) return null;
+
+        const containerRect = this.gameContainer.getBoundingClientRect();
+        const relX = x - containerRect.left;
+        const relY = y - containerRect.top;
+
+        if (relX < 0 || relX > this.canvas.width || relY < 0 || relY > this.canvas.height) {
+            return null;
+        }
+
+        return { x: relX, y: relY };
+    }
+
+    trimParticleBuffer(list, maxCount) {
+        const overflow = list.length - maxCount;
+
+        if (overflow > 0) {
+            list.splice(0, overflow);
+        }
+    }
+
+    hasActiveParticles() {
+        return this.particles.length > 0 || this.landingParticles.length > 0;
+    }
+
+    setCanvasVisibility(isVisible) {
+        if (!this.canvas) return;
+
+        this.canvas.style.display = isVisible ? 'block' : 'none';
+        this.canvas.style.visibility = isVisible ? 'visible' : 'hidden';
+        this.canvas.style.opacity = isVisible ? '1' : '0';
+    }
+
+    clearCanvas() {
+        if (!this.ctx) return;
+
+        const ctx = this.ctx;
+        ctx.globalCompositeOperation = 'copy';
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    ensureAnimation() {
+        if (!this.ctx || this.animationFrameId) return;
+
+        this.setCanvasVisibility(true);
+        this.lastFrameTime = 0;
+        this.animationFrameId = requestAnimationFrame(timestamp => this.animate(timestamp));
+    }
     
     createParticles(x, y, colorStr, particleSize = 14, count = 7, particleType = 'explosion') {
         if (!this.ctx) return;
+
+        const origin = this.getRelativeCanvasPoint(x, y);
+        if (!origin) return;
         
         let color;
         if (particleType === 'tray') {
@@ -247,7 +435,7 @@ class ParticleSystem {
         }
         
         // Адаптируем количество частиц под мобильные устройства
-        const particleCount = window.innerWidth <= 768 ? Math.floor(count * 0.6) : count;
+        const particleCount = Math.max(1, Math.round(count * this.config.particleCountScale));
         
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
@@ -255,17 +443,6 @@ class ParticleSystem {
             const tx = Math.cos(angle) * distance;
             const ty = Math.sin(angle) * distance;
             const rot = Math.random() * 360;
-            
-            // Преобразуем глобальные координаты в координаты canvas
-            const gameContainer = document.querySelector('.game-container');
-            const containerRect = gameContainer.getBoundingClientRect();
-            const relX = x - containerRect.left;
-            const relY = y - containerRect.top;
-            
-            // Если частица находится за пределами canvas, не добавляем её
-            if (relX < 0 || relX > this.canvas.width || relY < 0 || relY > this.canvas.height) {
-                continue;
-            }
             
             // Настройки для частиц в трее
             let adjustedSize = particleSize;
@@ -281,8 +458,8 @@ class ParticleSystem {
             }
             
             this.particles.push({
-                x: relX,
-                y: relY,
+                x: origin.x,
+                y: origin.y,
                 color: color,
                 size: adjustedSize,
                 tx: adjustedTx,
@@ -293,10 +470,16 @@ class ParticleSystem {
                 type: particleType
             });
         }
+
+        this.trimParticleBuffer(this.particles, this.config.maxParticles);
+        this.ensureAnimation();
     }
     
     createLandingParticles(x, y, colorStr, particleType = 'landing') {
         if (!this.ctx) return;
+
+        const origin = this.getRelativeCanvasPoint(x, y);
+        if (!origin) return;
         
         let color;
         if (particleType === 'tray') {
@@ -308,26 +491,15 @@ class ParticleSystem {
         }
         
         // Уменьшенное количество частиц приземления
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < this.config.landingParticleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const distance = Math.random() * 40 + 10;
             const tx = Math.cos(angle) * distance;
             const ty = Math.sin(angle) * distance;
             
-            // Преобразуем глобальные координаты в координаты canvas
-            const gameContainer = document.querySelector('.game-container');
-            const containerRect = gameContainer.getBoundingClientRect();
-            const relX = x - containerRect.left;
-            const relY = y - containerRect.top;
-            
-            // Если частица находится за пределами canvas, не добавляем её
-            if (relX < 0 || relX > this.canvas.width || relY < 0 || relY > this.canvas.height) {
-                continue;
-            }
-            
             // Настройки для частиц в трее
             let adjustedSize = 12;
-            let adjustedOpacity = 0.3;
+            let adjustedOpacity = 0.6;
             let adjustedLife = 0.6;
             let adjustedTx = tx;
             let adjustedTy = ty;
@@ -341,8 +513,8 @@ class ParticleSystem {
             }
             
             this.landingParticles.push({
-                x: relX,
-                y: relY,
+                x: origin.x,
+                y: origin.y,
                 color: color,
                 size: adjustedSize,
                 opacity: adjustedOpacity,
@@ -353,99 +525,144 @@ class ParticleSystem {
                 type: particleType
             });
         }
+
+        this.trimParticleBuffer(this.landingParticles, this.config.maxLandingParticles);
+        this.ensureAnimation();
     }
     
-    update() {
-        // Обновляем обычные частицы
-        this.particles = this.particles.filter(particle => {
-            particle.life -= 1/60; // приблизительно 60fps
-            return particle.life > 0;
-        });
-        
-        // Обновляем частицы приземления
-        this.landingParticles = this.landingParticles.filter(particle => {
-            particle.life -= 1/60; // приблизительно 60fps
-            return particle.life > 0;
-        });
+    updateParticles(list, deltaSeconds) {
+        let writeIndex = 0;
+
+        for (let readIndex = 0; readIndex < list.length; readIndex++) {
+            const particle = list[readIndex];
+            particle.life -= deltaSeconds;
+
+            if (particle.life > 0) {
+                list[writeIndex] = particle;
+                writeIndex += 1;
+            }
+        }
+
+        list.length = writeIndex;
+    }
+
+    update(deltaSeconds) {
+        this.updateParticles(this.particles, deltaSeconds);
+        this.updateParticles(this.landingParticles, deltaSeconds);
     }
     
     render() {
         if (!this.ctx) return;
+        const ctx = this.ctx;
         
         // Очищаем область для перерисовки
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.clearCanvas();
+
+        if (!this.hasActiveParticles()) {
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            this.setCanvasVisibility(false);
+            return;
+        }
         
         // Рисуем обычные частицы
-        this.particles.forEach(particle => {
-            const progress = 1 - (particle.life / particle.startLife);
+        for (let i = 0; i < this.particles.length; i++) {
+            const particle = this.particles[i];
+            const lifeRatio = particle.life / particle.startLife;
+            const progress = 1 - lifeRatio;
             const currentSize = particle.size * (1 - progress);
-            const currentOpacity = Math.min(1, particle.life / particle.startLife);
-            
-            this.ctx.save();
+            const currentOpacity = Math.min(1, lifeRatio);
             
             // Для частиц в трее устанавливаем пониженную прозрачность
             let effectiveOpacity = currentOpacity;
             if (particle.type === 'tray') {
                 effectiveOpacity *= 0.5; // 0.5 прозрачнее
             }
-            
-            this.ctx.globalAlpha = effectiveOpacity;
-            this.ctx.fillStyle = particle.color;
-            this.ctx.shadowColor = particle.color;
-            
-            // Для частиц в трее уменьшаем размытие тени
-            if (particle.type === 'tray') {
-                this.ctx.shadowBlur = 3;
-            } else {
-                this.ctx.shadowBlur = 6;
+
+            if (currentSize <= 0.35 || effectiveOpacity <= 0.01) {
+                continue;
             }
             
-            this.ctx.beginPath();
-            this.ctx.arc(
+            ctx.globalAlpha = effectiveOpacity;
+            ctx.fillStyle = particle.color;
+            
+            // Для частиц в трее уменьшаем размытие тени
+            if (this.config.shadowBlur > 0) {
+                ctx.shadowColor = particle.color;
+                if (particle.type === 'tray') {
+                    ctx.shadowBlur = Math.max(1, this.config.shadowBlur * 0.5);
+                } else {
+                    ctx.shadowBlur = this.config.shadowBlur;
+                }
+            } else {
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.beginPath();
+            ctx.arc(
                 particle.x + particle.tx * progress,
                 particle.y + particle.ty * progress,
                 currentSize / 2,
                 0,
                 Math.PI * 2
             );
-            this.ctx.fill();
-            this.ctx.restore();
-        });
+            ctx.fill();
+        }
+
+        ctx.shadowBlur = 0;
         
         // Рисуем частицы приземления
-        this.landingParticles.forEach(particle => {
-            const progress = 1 - (particle.life / particle.startLife);
+        for (let i = 0; i < this.landingParticles.length; i++) {
+            const particle = this.landingParticles[i];
+            const lifeRatio = particle.life / particle.startLife;
+            const progress = 1 - lifeRatio;
             const scale = 0.5 + progress * 1.5; // увеличивается от 0.5 до 2.0
             const currentSize = particle.size * scale;
             const currentOpacity = particle.opacity * (1 - progress);
             
-            this.ctx.save();
-            
             // Для частиц в трее устанавливаем пониженную прозрачность
             let effectiveOpacity = currentOpacity;
             if (particle.type === 'tray') {
                 effectiveOpacity *= 0.5; // 0.5 прозрачнее
             }
+
+            if (currentSize <= 0.35 || effectiveOpacity <= 0.01) {
+                continue;
+            }
             
-            this.ctx.globalAlpha = effectiveOpacity;
-            this.ctx.fillStyle = particle.color;
-            this.ctx.beginPath();
-            this.ctx.arc(
+            ctx.globalAlpha = effectiveOpacity;
+            ctx.fillStyle = particle.color;
+            ctx.beginPath();
+            ctx.arc(
                 particle.x + particle.tx * progress,
                 particle.y + particle.ty * progress,
                 currentSize / 2,
                 0,
                 Math.PI * 2
             );
-            this.ctx.fill();
-            this.ctx.restore();
-        });
+            ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
     }
     
-    animate() {
-        this.update();
+    animate(timestamp) {
+        const deltaSeconds = this.lastFrameTime
+            ? Math.min(0.05, (timestamp - this.lastFrameTime) / 1000)
+            : 1 / 60;
+
+        this.lastFrameTime = timestamp;
+        this.update(deltaSeconds);
         this.render();
-        requestAnimationFrame(() => this.animate());
+
+        if (!this.hasActiveParticles()) {
+            this.animationFrameId = 0;
+            this.lastFrameTime = 0;
+            this.setCanvasVisibility(false);
+            return;
+        }
+
+        this.animationFrameId = requestAnimationFrame(nextTimestamp => this.animate(nextTimestamp));
     }
 }
 
@@ -462,6 +679,68 @@ if (document.readyState === 'complete') {
 // --- НАСТРОЙКИ И ДАННЫЕ ---
 const BOARD_SIZE = 8;
 const BEST_SCORE_KEY = 'block-chpok-best-score';
+const SOUND_ENABLED_KEY = 'block-chpok-sound-enabled';
+const LEGACY_MUSIC_ENABLED_KEY = 'block-chpok-music-enabled';
+const DEBUG_LANGUAGE_KEY = 'block-chpok-debug-language';
+const DEFAULT_LANGUAGE = 'en';
+const LOGO_BY_LANGUAGE = {
+    en: 'logo.png',
+    ru: 'logo_ru.png'
+};
+const I18N = {
+    en: {
+        numberLocale: 'en-US',
+        documentTitle: 'Block Chpok',
+        ogDescription: 'A playful block puzzle game',
+        play: 'Play',
+        gameOverTitle: 'Game Over!',
+        scoreLabel: 'Score:',
+        scoreLabelShort: 'SCORE:',
+        crystalsLabel: 'BEST SCORE:',
+        bestLabel: 'Best:',
+        restart: 'Play Again',
+        settingsTitle: 'Settings',
+        openSettings: 'Open settings',
+        closeSettings: 'Close settings',
+        soundLabel: 'Sounds',
+        soundOn: 'On',
+        soundOff: 'Off',
+        comboLabel: 'Combo',
+        splashLogoAlt: 'Block Chpok',
+        headerLogoAlt: 'Block Chpok Logo',
+        secondChanceTitle: 'No moves!',
+        secondChanceText: 'Watch an ad to get a new set of shapes?',
+        secondChanceAdBtn: 'Watch Ad',
+        secondChanceSkipBtn: 'No thanks',
+        praiseLines: ['Good!', 'Great!', 'Super!', 'Excellent!', 'Amazing!', 'Incredible!', 'Unbelievable!', 'Godlike!']
+    },
+    ru: {
+        numberLocale: 'ru-RU',
+        documentTitle: 'Block Chpok',
+        ogDescription: 'Увлекательная головоломка с блоками',
+        play: 'Играть',
+        gameOverTitle: 'Игра окончена!',
+        scoreLabel: 'Счет:',
+        scoreLabelShort: 'СЧЁТ:',
+        crystalsLabel: 'ЛУЧШИЙ СЧЁТ:',
+        bestLabel: 'Рекорд:',
+        restart: 'Играть снова',
+        settingsTitle: 'Настройки',
+        openSettings: 'Открыть настройки',
+        closeSettings: 'Закрыть настройки',
+        soundLabel: 'Звуки',
+        soundOn: 'Вкл',
+        soundOff: 'Выкл',
+        comboLabel: 'Комбо',
+        splashLogoAlt: 'Block Chpok',
+        headerLogoAlt: 'Логотип Block Chpok',
+        secondChanceTitle: 'Нет ходов!',
+        secondChanceText: 'Посмотреть рекламу и получить новые фигуры?',
+        secondChanceAdBtn: 'Посмотреть',
+        secondChanceSkipBtn: 'Нет, спасибо',
+        praiseLines: ['Хорошо!', 'Отлично!', 'Супер!', 'Превосходно!', 'Потрясающе!', 'Невероятно!', 'Феноменально!', 'Легендарно!']
+    }
+};
 const COLORS = {
     orange: 'var(--color-orange)',
     blue: 'var(--color-blue)',
@@ -542,9 +821,40 @@ let displayedScore = 0;
 let scoreAnimationToken = 0;
 let refillTimeoutIds = [];
 let gameOverTimeoutId = null;
+let gameOverRevealTimeoutId = null;
 let isRefillingTray = false;
 let lastPlacementCoords = null;
 let comboStreak = 0;
+const isLocalhost = typeof window !== 'undefined'
+    && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+
+function readDebugLanguageOverride() {
+    if (!isLocalhost) return null;
+    try {
+        const raw = window.localStorage.getItem(DEBUG_LANGUAGE_KEY);
+        return (raw && Object.prototype.hasOwnProperty.call(I18N, raw)) ? raw : null;
+    } catch {
+        return null;
+    }
+}
+
+let currentLanguage = readDebugLanguageOverride()
+    || ((window.YandexSDK && typeof window.YandexSDK.getLanguage === 'function')
+        ? window.YandexSDK.getLanguage()
+        : (typeof navigator !== 'undefined' ? navigator.language : DEFAULT_LANGUAGE));
+let isSoundEnabled = readStoredBoolean(SOUND_ENABLED_KEY, readStoredBoolean(LEGACY_MUSIC_ENABLED_KEY, true));
+let hasGameStarted = false;
+let isGameOverSequenceActive = false;
+let isGameplayPausedBySdk = false;
+let isGameplayMarkedActive = false;
+let hasBoundYandexLifecycle = false;
+let yandexLifecycleInitPromise = null;
+let hasUsedSecondChance = false;
+let pendingRewardShapes = null;
+const SCORE_ANIMATION_DURATION_MS = isLowPerfParticleMode ? 520 : 1000;
+const SCORE_POPUP_LIFETIME_MS = isLowPerfParticleMode ? 650 : 1000;
+const PRAISE_POPUP_LIFETIME_MS = isLowPerfParticleMode ? 800 : 1200;
+const GAME_OVER_REVEAL_DELAY_MS = isLowPerfParticleMode ? 600 : 850;
 
 const gameContainer = document.querySelector('.game-container');
 const boardEl = document.getElementById('board');
@@ -554,11 +864,243 @@ const traySlots = [
     document.getElementById('slot-2')
 ];
 const scoreEl = document.getElementById('score');
+const mainScoreEl = document.getElementById('main-score');
 const bestScoreEl = document.getElementById('best-score');
+const crystalCountEl = document.getElementById('crystal-count');
+const scoreLabelEl = document.getElementById('score-label');
+const crystalsLabelEl = document.getElementById('crystals-label');
 const comboDisplay = document.getElementById('combo-display');
 const gameOverScreen = document.getElementById('game-over');
+const gameOverTitleEl = document.getElementById('game-over-title');
+const gameOverScoreLabelEl = document.getElementById('game-over-score-label');
 const gameOverScoreEl = document.getElementById('game-over-score');
+const gameOverBestLabelEl = document.getElementById('game-over-best-label');
 const gameOverBestEl = document.getElementById('game-over-best');
+const restartBtn = document.getElementById('restart-btn');
+
+const secondChanceModal = document.getElementById('second-chance-modal');
+const secondChanceTitleEl = document.getElementById('second-chance-title');
+const secondChanceTextEl = document.getElementById('second-chance-text');
+const secondChanceShapesEl = document.getElementById('second-chance-shapes');
+const secondChanceAdBtn = document.getElementById('second-chance-ad-btn');
+const secondChanceSkipBtn = document.getElementById('second-chance-skip-btn');
+
+const characterStateLayers = (() => {
+    const map = {};
+    document.querySelectorAll('.header-branch-banner-state').forEach(el => {
+        const key = el.dataset.characterState;
+        if (key) map[key] = el;
+    });
+    return map;
+})();
+let characterStateRevertTimeoutId = null;
+let currentCharacterState = 'base';
+let pendingShakeAnimationFrameId = 0;
+let pendingComboAnimationFrameId = 0;
+const CHARACTER_STATE_HOLD_MS = 500;
+
+function setCharacterState(state) {
+    if (!characterStateLayers[state]) state = 'base';
+    if (characterStateRevertTimeoutId !== null) {
+        clearTimeout(characterStateRevertTimeoutId);
+        characterStateRevertTimeoutId = null;
+    }
+    if (currentCharacterState === state) {
+        if (state === 'fire' || state === 'sad') {
+            characterStateRevertTimeoutId = setTimeout(() => {
+                characterStateRevertTimeoutId = null;
+                setCharacterState('base');
+            }, CHARACTER_STATE_HOLD_MS);
+        }
+        return;
+    }
+    Object.entries(characterStateLayers).forEach(([key, el]) => {
+        if (key === state) el.classList.add('active');
+        else el.classList.remove('active');
+    });
+    currentCharacterState = state;
+    if (state === 'fire' || state === 'sad') {
+        characterStateRevertTimeoutId = setTimeout(() => {
+            characterStateRevertTimeoutId = null;
+            setCharacterState('base');
+        }, CHARACTER_STATE_HOLD_MS);
+    }
+}
+
+function hideComboDisplay() {
+    if (!comboDisplay) return;
+
+    if (pendingComboAnimationFrameId !== 0) {
+        cancelAnimationFrame(pendingComboAnimationFrameId);
+        pendingComboAnimationFrameId = 0;
+    }
+
+    comboDisplay.classList.remove('combo-visible', 'combo-pop');
+    comboDisplay.classList.add('fade-out');
+}
+
+function showComboDisplay(text) {
+    if (!comboDisplay) return;
+
+    comboDisplay.textContent = text;
+    comboDisplay.classList.remove('fade-out', 'combo-pop');
+    comboDisplay.classList.add('combo-visible');
+
+    if (pendingComboAnimationFrameId !== 0) {
+        cancelAnimationFrame(pendingComboAnimationFrameId);
+    }
+
+    pendingComboAnimationFrameId = requestAnimationFrame(() => {
+        pendingComboAnimationFrameId = requestAnimationFrame(() => {
+            comboDisplay.classList.add('combo-pop');
+            pendingComboAnimationFrameId = 0;
+        });
+    });
+}
+
+const splashPlayBtn = document.getElementById('splash-play-btn');
+const splashOverlay = document.getElementById('splash-overlay');
+const splashLogoEl = document.getElementById('splash-logo');
+const headerLogoEl = document.getElementById('header-logo');
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsTitleEl = document.getElementById('settings-title');
+const settingsCloseBtn = document.getElementById('settings-close-btn');
+const musicToggle = document.getElementById('music-toggle');
+const musicToggleLabelEl = document.getElementById('music-toggle-label');
+const musicToggleStatusEl = document.getElementById('music-toggle-status');
+const ogTitleMeta = document.querySelector('meta[property="og:title"]');
+const ogDescriptionMeta = document.querySelector('meta[property="og:description"]');
+const localizedLogoEls = [splashLogoEl, headerLogoEl];
+
+if (document.body) {
+    document.body.classList.toggle('low-perf-effects', isLowPerfParticleMode);
+}
+
+audioManager.setSoundEnabled(isSoundEnabled);
+
+function updateSplashPlayButtonPosition() {
+    if (!splashPlayBtn || !boardEl) return;
+
+    const boardRect = boardEl.getBoundingClientRect();
+    if (boardRect.width <= 0 || boardRect.height <= 0) return;
+
+    splashPlayBtn.style.left = `${boardRect.left + boardRect.width / 2}px`;
+    splashPlayBtn.style.top = `${boardRect.top + boardRect.height / 2}px`;
+}
+
+function normalizeLanguage(lang) {
+    if (typeof lang !== 'string') return DEFAULT_LANGUAGE;
+    return lang.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+
+function getMessages() {
+    return I18N[currentLanguage] || I18N[DEFAULT_LANGUAGE];
+}
+
+function formatNumber(value) {
+    const locale = getMessages().numberLocale;
+    return Number.isFinite(value) ? value.toLocaleString(locale) : '0';
+}
+
+function readStoredBoolean(key, fallbackValue) {
+    try {
+        const rawValue = window.localStorage.getItem(key);
+        if (rawValue === null) return fallbackValue;
+        return rawValue !== '0' && rawValue !== 'false';
+    } catch {
+        return fallbackValue;
+    }
+}
+
+function writeStoredBoolean(key, value) {
+    try {
+        window.localStorage.setItem(key, value ? '1' : '0');
+    } catch {
+        // ignore storage errors
+    }
+}
+
+function applyLocalizedLogos(language) {
+    const preferredLogo = LOGO_BY_LANGUAGE[language] || LOGO_BY_LANGUAGE[DEFAULT_LANGUAGE];
+    const fallbackLogo = LOGO_BY_LANGUAGE[DEFAULT_LANGUAGE];
+
+    localizedLogoEls.forEach(img => {
+        if (!img) return;
+
+        img.onerror = preferredLogo !== fallbackLogo ? () => {
+            img.onerror = null;
+            img.src = fallbackLogo;
+        } : null;
+
+        if (img.getAttribute('src') !== preferredLogo) {
+            img.src = preferredLogo;
+        }
+    });
+}
+
+function syncSoundToggleUI() {
+    const messages = getMessages();
+
+    if (musicToggle) {
+        musicToggle.checked = isSoundEnabled;
+    }
+
+    if (musicToggleStatusEl) {
+        musicToggleStatusEl.textContent = isSoundEnabled ? messages.soundOn : messages.soundOff;
+    }
+}
+
+function refreshVisibleScoreText() {
+    scoreEl.textContent = formatNumber(score);
+    if (mainScoreEl) mainScoreEl.textContent = formatNumber(displayedScore);
+    gameOverScoreEl.textContent = formatNumber(score);
+    updateBestScoreDisplay();
+}
+
+function applyTranslations(language) {
+    currentLanguage = normalizeLanguage(language);
+    const messages = getMessages();
+
+    document.documentElement.lang = currentLanguage;
+    document.title = messages.documentTitle;
+
+    if (ogTitleMeta) {
+        ogTitleMeta.setAttribute('content', messages.documentTitle);
+    }
+
+    if (ogDescriptionMeta) {
+        ogDescriptionMeta.setAttribute('content', messages.ogDescription);
+    }
+
+    splashPlayBtn.textContent = messages.play;
+    gameOverTitleEl.textContent = messages.gameOverTitle;
+    gameOverScoreLabelEl.textContent = messages.scoreLabel;
+    gameOverBestLabelEl.textContent = messages.bestLabel;
+    if (scoreLabelEl) scoreLabelEl.textContent = messages.scoreLabelShort;
+    if (crystalsLabelEl) crystalsLabelEl.textContent = messages.crystalsLabel;
+    restartBtn.textContent = messages.restart;
+    settingsTitleEl.textContent = messages.settingsTitle;
+    musicToggleLabelEl.textContent = messages.soundLabel;
+    settingsBtn.setAttribute('aria-label', messages.openSettings);
+    settingsCloseBtn.setAttribute('aria-label', messages.closeSettings);
+    if (splashLogoEl) splashLogoEl.alt = messages.splashLogoAlt;
+    if (headerLogoEl) headerLogoEl.alt = messages.headerLogoAlt;
+    
+    if (secondChanceTitleEl) secondChanceTitleEl.textContent = messages.secondChanceTitle;
+    if (secondChanceTextEl) secondChanceTextEl.textContent = messages.secondChanceText;
+    if (secondChanceAdBtn) secondChanceAdBtn.textContent = messages.secondChanceAdBtn;
+    if (secondChanceSkipBtn) secondChanceSkipBtn.textContent = messages.secondChanceSkipBtn;
+
+    applyLocalizedLogos(currentLanguage);
+    syncSoundToggleUI();
+
+    if (comboStreak >= 2) {
+        comboDisplay.textContent = `${messages.comboLabel} x${comboStreak}`;
+    }
+
+    refreshVisibleScoreText();
+}
 
 function playSound(soundName) {
     audioManager.play(soundName);
@@ -572,6 +1114,7 @@ let dragStartPointerX = 0;
 let dragStartPointerY = 0;
 let dragAnchorX = 0;
 let dragAnchorY = 0;
+let dragPointerType = 'mouse';
 let cellSize = 0;
 let lastKnownCellSize = 0;
 let gapSize = 3;
@@ -584,6 +1127,29 @@ const DRAG_POPUP_LIFT_Y = 58;
 
 // ОПТИМИЗАЦИЯ: переиспользуем объект координат и уменьшаем давление на GC
 const currentCoords = { r: -1, c: -1 };
+
+function canInteractWithGameplay() {
+    return shouldGameplayBeActive();
+}
+
+function waitForGameplayResume() {
+    if (!isGameplayPausedBySdk) {
+        return Promise.resolve();
+    }
+
+    return new Promise(resolve => {
+        const check = () => {
+            if (!isGameplayPausedBySdk) {
+                resolve();
+                return;
+            }
+
+            setTimeout(check, 50);
+        };
+
+        check();
+    });
+}
 
 function cloneShape(shape) {
     if (!shape) return null;
@@ -603,6 +1169,166 @@ function clearPendingGameOver() {
     if (gameOverTimeoutId !== null) {
         clearTimeout(gameOverTimeoutId);
         gameOverTimeoutId = null;
+    }
+
+    if (gameOverRevealTimeoutId !== null) {
+        clearTimeout(gameOverRevealTimeoutId);
+        gameOverRevealTimeoutId = null;
+    }
+
+    isGameOverSequenceActive = false;
+}
+
+function shouldGameplayBeActive() {
+    return !settingsModal.classList.contains('show')
+        && !gameOverScreen.classList.contains('show')
+        && !secondChanceModal.classList.contains('show')
+        && !isGameOverSequenceActive
+        && !isGameplayPausedBySdk;
+}
+
+function syncGameplayState() {
+    const shouldBeActive = shouldGameplayBeActive();
+
+    if (!window.YandexSDK || !window.YandexSDK.isAvailable || !window.YandexSDK.isAvailable()) {
+        isGameplayMarkedActive = false;
+        return;
+    }
+
+    if (shouldBeActive === isGameplayMarkedActive) {
+        return;
+    }
+
+    isGameplayMarkedActive = shouldBeActive;
+
+    if (shouldBeActive) {
+        window.YandexSDK.startGameplay();
+    } else {
+        window.YandexSDK.stopGameplay();
+    }
+}
+
+function handleYandexPause() {
+    isGameplayPausedBySdk = true;
+
+    if (isDragging) {
+        cancelDrag();
+    }
+
+    audioManager.suspend().catch(() => {});
+    syncGameplayState();
+}
+
+function handleYandexResume() {
+    isGameplayPausedBySdk = false;
+
+    if (hasGameStarted) {
+        audioManager.resume().catch(() => {});
+    }
+
+    syncGameplayState();
+}
+
+async function initializeYandexLifecycle() {
+    if (hasBoundYandexLifecycle) {
+        syncGameplayState();
+        return;
+    }
+
+    if (yandexLifecycleInitPromise) {
+        return yandexLifecycleInitPromise;
+    }
+
+    if (!window.YandexSDK || typeof window.YandexSDK.init !== 'function') {
+        return;
+    }
+
+    yandexLifecycleInitPromise = (async () => {
+        try {
+            await window.YandexSDK.init();
+            hasBoundYandexLifecycle = true;
+
+            if (typeof window.YandexSDK.onPause === 'function') {
+                window.YandexSDK.onPause(handleYandexPause);
+            }
+
+            if (typeof window.YandexSDK.onResume === 'function') {
+                window.YandexSDK.onResume(handleYandexResume);
+            }
+
+            if (typeof window.YandexSDK.isPaused === 'function' && window.YandexSDK.isPaused()) {
+                handleYandexPause();
+            } else {
+                syncGameplayState();
+            }
+        } catch (error) {
+            console.warn('Failed to initialize Yandex lifecycle:', error);
+        } finally {
+            yandexLifecycleInitPromise = null;
+        }
+    })();
+
+    return yandexLifecycleInitPromise;
+}
+
+function setSoundPreference(enabled) {
+    isSoundEnabled = enabled;
+    writeStoredBoolean(SOUND_ENABLED_KEY, enabled);
+    syncSoundToggleUI();
+    audioManager.setSoundEnabled(enabled);
+}
+
+function openSettingsModal() {
+    settingsModal.classList.add('show');
+    settingsModal.setAttribute('aria-hidden', 'false');
+    syncSoundToggleUI();
+    syncGameplayState();
+}
+
+function closeSettingsModal() {
+    settingsModal.classList.remove('show');
+    settingsModal.setAttribute('aria-hidden', 'true');
+    syncGameplayState();
+}
+
+async function initializeLanguage() {
+    const debugOverride = readDebugLanguageOverride();
+    if (debugOverride) {
+        applyTranslations(debugOverride);
+        return;
+    }
+
+    let initialLang = typeof navigator !== 'undefined' ? navigator.language : DEFAULT_LANGUAGE;
+    if (window.YandexSDK && typeof window.YandexSDK.getLanguage === 'function') {
+        initialLang = window.YandexSDK.getLanguage();
+    }
+    applyTranslations(initialLang);
+
+    if (!window.YandexSDK || typeof window.YandexSDK.init !== 'function') {
+        return;
+    }
+
+    const applyYandexLanguage = async () => {
+        await window.YandexSDK.init();
+        if (window.YandexSDK.isAvailable() && typeof window.YandexSDK.getLanguage === 'function') {
+            applyTranslations(window.YandexSDK.getLanguage());
+            return true;
+        }
+        return false;
+    };
+
+    try {
+        const applied = await applyYandexLanguage();
+        if (!applied) {
+            setTimeout(() => {
+                applyYandexLanguage().catch(() => {});
+            }, 1000);
+            setTimeout(() => {
+                applyYandexLanguage().catch(() => {});
+            }, 2500);
+        }
+    } catch (error) {
+        console.warn('Failed to resolve Yandex language:', error);
     }
 }
 
@@ -629,13 +1355,20 @@ function saveBestScore(nextBestScore) {
     // Синхронизируем с Yandex SDK
     if (window.YandexSDK && window.YandexSDK.isAvailable()) {
         window.YandexSDK.saveBestScore(bestScore);
-        window.YandexSDK.setLeaderboardScore(bestScore);
+        if (!window.YandexSDK.isMethodAvailable || window.YandexSDK.isMethodAvailable('leaderboards.setScore')) {
+            window.YandexSDK.setLeaderboardScore(bestScore);
+        }
     }
 }
 
 function updateBestScoreDisplay() {
-    const formattedBestScore = bestScore.toLocaleString('en-US');
-    bestScoreEl.textContent = formattedBestScore;
+    const formattedBestScore = formatNumber(Math.max(bestScore, score));
+    if (bestScoreEl) {
+        bestScoreEl.textContent = formattedBestScore;
+    }
+    if (crystalCountEl) {
+        crystalCountEl.textContent = formattedBestScore;
+    }
     gameOverBestEl.textContent = formattedBestScore;
 }
 
@@ -647,9 +1380,20 @@ function isThreeByThreeSquare(shape) {
 }
 
 function triggerCameraShake() {
+    if (!gameContainer) return;
+
     gameContainer.classList.remove('shake');
-    void gameContainer.offsetWidth;
-    gameContainer.classList.add('shake');
+
+    if (pendingShakeAnimationFrameId !== 0) {
+        cancelAnimationFrame(pendingShakeAnimationFrameId);
+    }
+
+    pendingShakeAnimationFrameId = requestAnimationFrame(() => {
+        pendingShakeAnimationFrameId = requestAnimationFrame(() => {
+            gameContainer.classList.add('shake');
+            pendingShakeAnimationFrameId = 0;
+        });
+    });
 }
 
 function finalizeBestScore() {
@@ -660,17 +1404,106 @@ function finalizeBestScore() {
     }
 }
 
-function showGameOver() {
-    finalizeBestScore();
-    gameOverScoreEl.textContent = score.toLocaleString('en-US');
-    haptic.error();
+function revealGameOverScreen() {
     gameOverScreen.classList.add('show');
+    isGameOverSequenceActive = false;
+    syncGameplayState();
 
-    // Отправляем события в Яндекс и показываем рекламу
     if (window.YandexSDK && window.YandexSDK.isAvailable()) {
         window.YandexSDK.dispatchLevelCompleteEvent(1);
-        window.YandexSDK.showFullscreenAdv();
     }
+}
+
+function generateRewardShapes() {
+    const newShapes = [];
+    newShapes.push({ matrix: [[1]], color: COLORS.yellow }); // Одиночный квадратик
+    
+    const possibleShapes = getAllPossibleShapes();
+    for (let i = 0; i < 2; i++) {
+        if (possibleShapes.length > i) {
+            newShapes.push(cloneShape(SHAPES_DATA[possibleShapes[i]]));
+        } else {
+            newShapes.push(cloneShape(SHAPES_DATA[Math.floor(Math.random() * SHAPES_DATA.length)]));
+        }
+    }
+    
+    // Перемешиваем чтобы квадратик не всегда был первым
+    newShapes.sort(() => Math.random() - 0.5);
+    return newShapes;
+}
+
+function renderRewardShapes(shapes) {
+    if (!secondChanceShapesEl) return;
+    secondChanceShapesEl.innerHTML = '';
+    
+    shapes.forEach(piece => {
+        const slot = document.createElement('div');
+        slot.className = 'reward-shape-slot';
+        
+        const rows = piece.matrix.length;
+        const cols = piece.matrix[0].length;
+        const gap = 2;
+
+        const trayCellSize = 16; // Фиксированный размер ячейки для предпросмотра
+
+        const container = document.createElement('div');
+        container.innerHTML = createShapeHTML(piece, false);
+        const shapeEl = container.firstElementChild;
+
+        const w = cols * trayCellSize + (cols - 1) * gap;
+        const h = rows * trayCellSize + (rows - 1) * gap;
+
+        shapeEl.style.width = `${w}px`;
+        shapeEl.style.height = `${h}px`;
+        shapeEl.style.transform = 'none';
+
+        slot.appendChild(shapeEl);
+        secondChanceShapesEl.appendChild(slot);
+    });
+}
+
+function revealSecondChanceScreen() {
+    secondChanceModal.classList.add('show');
+    isGameOverSequenceActive = false;
+    syncGameplayState();
+}
+
+function showSecondChance() {
+    if (isGameOverSequenceActive || secondChanceModal.classList.contains('show')) {
+        return;
+    }
+
+    isGameOverSequenceActive = true;
+    haptic.error();
+    setCharacterState('sad');
+    gameContainer.classList.add('game-over-transition');
+    syncGameplayState();
+
+    gameOverRevealTimeoutId = setTimeout(async () => {
+        await waitForGameplayResume();
+        revealSecondChanceScreen();
+        gameOverRevealTimeoutId = null;
+    }, GAME_OVER_REVEAL_DELAY_MS);
+}
+
+function showGameOver() {
+    if (isGameOverSequenceActive || gameOverScreen.classList.contains('show')) {
+        return;
+    }
+
+    isGameOverSequenceActive = true;
+    finalizeBestScore();
+    gameOverScoreEl.textContent = formatNumber(score);
+    haptic.error();
+    setCharacterState('sad');
+    gameContainer.classList.add('game-over-transition');
+    syncGameplayState();
+
+    gameOverRevealTimeoutId = setTimeout(async () => {
+        await waitForGameplayResume();
+        revealGameOverScreen();
+        gameOverRevealTimeoutId = null;
+    }, GAME_OVER_REVEAL_DELAY_MS);
 }
 
 function getBlockClass(colorStr) {
@@ -703,11 +1536,18 @@ function getCurrentCellSize() {
 function initGame() {
     clearPendingRefill();
     clearPendingGameOver();
+    if (pendingShakeAnimationFrameId !== 0) {
+        cancelAnimationFrame(pendingShakeAnimationFrameId);
+        pendingShakeAnimationFrameId = 0;
+    }
     if (dragElement) {
         dragElement.remove();
         dragElement = null;
     }
     gameContainer.classList.remove('shake');
+    gameContainer.classList.remove('game-over-transition');
+    setCharacterState('base');
+    closeSettingsModal();
     board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     trayPieces = [null, null, null];
     score = 0;
@@ -715,14 +1555,18 @@ function initGame() {
     isAnimating = false;
     isDragging = false;
     dragPieceIndex = -1;
+    dragPointerType = 'mouse';
     comboStreak = 0;
+    hasUsedSecondChance = false;
     updateScore();
     gameOverScreen.classList.remove('show');
-    comboDisplay.style.animation = 'none';
-    comboDisplay.classList.add('fade-out');
+    secondChanceModal.classList.remove('show');
+    isGameOverSequenceActive = false;
+    hideComboDisplay();
     boardEl.innerHTML = '';
     renderBoard();
     fillTray();
+    syncGameplayState();
 }
 
 function renderBoard() {
@@ -751,7 +1595,8 @@ function renderBoard() {
             if (!logicalStateMatch || !domStateMatch) {
                 cell.innerHTML = '';
                 if (targetColor) {
-                    cell.appendChild(createBlockElement(targetColor));
+                    const block = createBlockElement(targetColor);
+                    cell.appendChild(block);
                 }
                 cell.dataset.color = targetColor || '';
             }
@@ -941,7 +1786,9 @@ function fillTray() {
         isRefillingTray = true;
         renderTray(true);
 
-        const refillStartTimeoutId = setTimeout(() => {
+        const refillStartTimeoutId = setTimeout(async () => {
+            await waitForGameplayResume();
+
             // Получаем все фигуры, которые можно разместить на текущей доске, в порядке убывания сложности
             const possibleShapeIndices = getAllPossibleShapes();
             
@@ -1062,7 +1909,9 @@ function fillTray() {
                 // Если смогли подобрать подходящие фигуры, используем их, иначе берем случайную
                 const randomShape = selectedShapes[i] || cloneShape(SHAPES_DATA[Math.floor(Math.random() * SHAPES_DATA.length)]);
                 
-                const slotFillTimeoutId = setTimeout(() => {
+                const slotFillTimeoutId = setTimeout(async () => {
+                    await waitForGameplayResume();
+
                     trayPieces[i] = randomShape;
                     renderTray(false, new Set([i]));
 
@@ -1101,6 +1950,7 @@ function renderTray(forceEmpty = false, popIndexes = null) {
         if (piece) {
             const rows = piece.matrix.length;
             const cols = piece.matrix[0].length;
+            const longestSide = Math.max(rows, cols);
             const gap = 3;
 
             const slotW = slot.clientWidth || 100;
@@ -1116,7 +1966,8 @@ function renderTray(forceEmpty = false, popIndexes = null) {
             const maxCellH = (maxH - gap * (rows - 1)) / rows;
 
             let trayCellSize = Math.min(maxCellW, maxCellH);
-            trayCellSize = Math.min(Math.max(trayCellSize, 20), 38);
+            const minTrayCellSize = longestSide >= 5 ? 12 : longestSide >= 4 ? 16 : 20;
+            trayCellSize = Math.min(Math.max(trayCellSize, minTrayCellSize), 38);
 
             const container = document.createElement('div');
             const shouldPop = popIndexes instanceof Set ? popIndexes.has(i) : false;
@@ -1126,9 +1977,9 @@ function renderTray(forceEmpty = false, popIndexes = null) {
             const w = cols * trayCellSize + (cols - 1) * gap;
             const h = rows * trayCellSize + (rows - 1) * gap;
 
+            shapeEl.classList.add('tray-shape');
             shapeEl.style.width = `${w}px`;
             shapeEl.style.height = `${h}px`;
-            shapeEl.style.transform = 'none';
 
             slot.appendChild(shapeEl);
             slot.onpointerdown = e => startDrag(e, i);
@@ -1137,16 +1988,19 @@ function renderTray(forceEmpty = false, popIndexes = null) {
 }
 
 function startDrag(e, index) {
-    if (!trayPieces[index] || isDragging || isAnimating) return;
+    if (!trayPieces[index] || isDragging || isAnimating || !canInteractWithGameplay()) return;
 
     e.preventDefault();
 
     const piece = trayPieces[index];
     cellSize = getCurrentCellSize();
+    dragPointerType = e.pointerType === 'touch' ? 'touch' : 'mouse';
 
     haptic.track(e.clientX, e.clientY);
     playSound('pick');
     haptic({ x: e.clientX, y: e.clientY });
+
+    setCharacterState('wait');
 
     isDragging = true;
     dragPieceIndex = index;
@@ -1202,8 +2056,10 @@ function onDragMove(e) {
 
     haptic.track(e.clientX, e.clientY);
 
-    const dx = (e.clientX - dragStartPointerX) * DRAG_GAIN_X;
-    const dy = (e.clientY - dragStartPointerY) * DRAG_GAIN_Y;
+    const gainX = dragPointerType === 'touch' ? DRAG_GAIN_X : 1;
+    const gainY = dragPointerType === 'touch' ? DRAG_GAIN_Y : 1;
+    const dx = (e.clientX - dragStartPointerX) * gainX;
+    const dy = (e.clientY - dragStartPointerY) * gainY;
     const virtualX = dragAnchorX + dx;
     const virtualY = dragAnchorY + dy;
 
@@ -1364,6 +2220,7 @@ async function endDrag(e) {
     clearPreview();
     isDragging = false;
     dragPieceIndex = -1;
+    dragPointerType = 'mouse';
 
     if (coords && canPlace(piece, coords.r, coords.c)) {
         const blocksPlaced = placeShape(piece, coords.r, coords.c);
@@ -1393,6 +2250,9 @@ async function endDrag(e) {
 
         traySlots[savedDragPieceIndex].innerHTML = '';
         await checkLines(blocksPlaced);
+        if (currentCharacterState === 'wait') {
+            setCharacterState('base');
+        }
         renderTray();
         fillTray();
     } else {
@@ -1401,6 +2261,9 @@ async function endDrag(e) {
             traySlots[savedDragPieceIndex].firstElementChild.style.opacity = '1';
         }
         traySlots[savedDragPieceIndex].style.opacity = '1';
+        if (currentCharacterState === 'wait') {
+            setCharacterState('base');
+        }
     }
 
     haptic.release();
@@ -1430,9 +2293,14 @@ function cancelDrag() {
     clearPreview();
     isDragging = false;
     dragPieceIndex = -1;
+    dragPointerType = 'mouse';
 
     if (savedDragPieceIndex >= 0 && traySlots[savedDragPieceIndex]?.firstElementChild) {
         traySlots[savedDragPieceIndex].firstElementChild.style.opacity = '1';
+    }
+
+    if (currentCharacterState === 'wait') {
+        setCharacterState('base');
     }
 
     haptic.release();
@@ -1440,6 +2308,7 @@ function cancelDrag() {
 
 function refreshLayoutMetrics() {
     cellSize = getCurrentCellSize();
+    updateSplashPlayButtonPosition();
 }
 
 function canPlace(shape, startR, startC) {
@@ -1534,6 +2403,7 @@ async function checkLines(blocksPlaced) {
         isAnimating = true;
 
         try {
+            setCharacterState('fire');
             renderBoard();
 
             const linePoints = totalLines * 100;
@@ -1549,7 +2419,7 @@ async function checkLines(blocksPlaced) {
                 const cell = document.getElementById(`cell-${centerR}-${centerC}`);
                 if (cell) {
                     const rect = cell.getBoundingClientRect();
-                    const praiseLines = ['Good!', 'Great!', 'Super!', 'Excellent!', 'Amazing!', 'Incredible!', 'Unbelievable!', 'Godlike!'];
+                    const praiseLines = getMessages().praiseLines;
                     const praise = praiseLines[Math.min(totalLines - 1, praiseLines.length - 1)];
                     createPraisePopup(praise);
 
@@ -1561,14 +2431,9 @@ async function checkLines(blocksPlaced) {
 
             const cellsToClear = new Set();
             if (comboStreak >= 2) {
-                comboDisplay.textContent = `Combo x${comboStreak}`;
-                comboDisplay.classList.remove('fade-out');
-                comboDisplay.style.animation = 'none';
-                void comboDisplay.offsetWidth;
-                comboDisplay.style.animation = 'popCombo 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+                showComboDisplay(`${getMessages().comboLabel} x${comboStreak}`);
             } else {
-                comboDisplay.style.animation = 'none';
-                comboDisplay.classList.add('fade-out');
+                hideComboDisplay();
             }
 
             playSound('line');
@@ -1594,6 +2459,7 @@ async function checkLines(blocksPlaced) {
                 });
             }
 
+            await waitForGameplayResume();
             await new Promise(resolve => setTimeout(resolve, 120));
 
             // Последовательное исчезновение: от ближайших к последней установке к дальним
@@ -1611,6 +2477,7 @@ async function checkLines(blocksPlaced) {
                     }
                 }
 
+                await waitForGameplayResume();
                 await new Promise(resolve => setTimeout(resolve, 45));
 
                 board[r][c] = null;
@@ -1622,10 +2489,10 @@ async function checkLines(blocksPlaced) {
                 }
             }
 
+            await waitForGameplayResume();
             await new Promise(resolve => setTimeout(resolve, 150));
 
-            comboDisplay.style.animation = 'none';
-            comboDisplay.classList.add('fade-out');
+            hideComboDisplay();
 
             renderBoard();
         } finally {
@@ -1644,7 +2511,7 @@ function createScorePopup(x, y, text) {
     p.style.left = `${x}px`;
     p.style.top = `${y}px`;
     document.body.appendChild(p);
-    setTimeout(() => p.remove(), 1000);
+    setTimeout(() => p.remove(), SCORE_POPUP_LIFETIME_MS);
 }
 
 function createPraisePopup(text) {
@@ -1654,7 +2521,7 @@ function createPraisePopup(text) {
     p.style.left = `${window.innerWidth / 2}px`;
     p.style.top = `${window.innerHeight / 2}px`;
     document.body.appendChild(p);
-    setTimeout(() => p.remove(), 1200);
+    setTimeout(() => p.remove(), PRAISE_POPUP_LIFETIME_MS);
 }
 
 function createParticles(x, y, colorStr, particleSize = 14, count = 7, particleType = 'explosion') {
@@ -1668,14 +2535,19 @@ function createLandingParticles(x, y, colorStr, particleType = 'landing') {
 }
 
 function updateScore() {
-    scoreEl.textContent = score.toLocaleString('en-US');
+    scoreEl.textContent = formatNumber(score);
 
-    const mainScoreEl = document.getElementById('main-score');
-    const duration = 1000;
+    const duration = SCORE_ANIMATION_DURATION_MS;
     const startVal = displayedScore;
     const endVal = score;
     const startTime = performance.now();
     const currentAnimationToken = ++scoreAnimationToken;
+
+    if (startVal === endVal) {
+        displayedScore = endVal;
+        mainScoreEl.textContent = formatNumber(displayedScore);
+        return;
+    }
 
     function animate(now) {
         if (currentAnimationToken !== scoreAnimationToken) {
@@ -1685,20 +2557,28 @@ function updateScore() {
         const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const ease = progress * (2 - progress);
-        displayedScore = Math.floor(startVal + (endVal - startVal) * ease);
-        mainScoreEl.textContent = displayedScore.toLocaleString('en-US');
+        const nextDisplayedScore = Math.floor(startVal + (endVal - startVal) * ease);
+
+        if (nextDisplayedScore !== displayedScore) {
+            displayedScore = nextDisplayedScore;
+            mainScoreEl.textContent = formatNumber(displayedScore);
+        }
 
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
             displayedScore = endVal;
-            mainScoreEl.textContent = displayedScore.toLocaleString('en-US');
+            mainScoreEl.textContent = formatNumber(displayedScore);
         }
     }
     requestAnimationFrame(animate);
 }
 
 function checkGameOver() {
+    if (isGameOverSequenceActive || gameOverScreen.classList.contains('show') || secondChanceModal.classList.contains('show')) {
+        return;
+    }
+
     clearPendingGameOver();
 
     for (let i = 0; i < 3; i++) {
@@ -1714,16 +2594,26 @@ function checkGameOver() {
         }
     }
 
-    gameOverTimeoutId = setTimeout(() => {
-        showGameOver();
+    gameOverTimeoutId = setTimeout(async () => {
+        await waitForGameplayResume();
+        
+        if (!hasUsedSecondChance && window.YandexSDK && window.YandexSDK.isAvailable()) {
+            pendingRewardShapes = generateRewardShapes();
+            renderRewardShapes(pendingRewardShapes);
+            showSecondChance();
+        } else {
+            showGameOver();
+        }
+        
         gameOverTimeoutId = null;
     }, 500);
 }
 
+applyTranslations(currentLanguage);
 loadBestScore();
-
-const splashPlayBtn = document.getElementById('splash-play-btn');
-const splashOverlay = document.getElementById('splash-overlay');
+syncSoundToggleUI();
+void initializeLanguage();
+void initializeYandexLifecycle();
 
 async function syncBestScoreWithYandex() {
     if (window.YandexSDK && window.YandexSDK.isAvailable()) {
@@ -1739,7 +2629,9 @@ async function syncBestScoreWithYandex() {
                 updateBestScoreDisplay();
             } else if (currentLocal > (yaScore || 0)) {
                 window.YandexSDK.saveBestScore(currentLocal);
-                window.YandexSDK.setLeaderboardScore(currentLocal);
+                if (!window.YandexSDK.isMethodAvailable || window.YandexSDK.isMethodAvailable('leaderboards.setScore')) {
+                    window.YandexSDK.setLeaderboardScore(currentLocal);
+                }
             }
         } catch (e) {
             console.warn('Error syncing Yandex score:', e);
@@ -1747,20 +2639,32 @@ async function syncBestScoreWithYandex() {
     }
 }
 
+function handleGlobalKeydown(event) {
+    if (event.key === 'Escape' && settingsModal.classList.contains('show')) {
+        closeSettingsModal();
+    }
+}
+
 function startGame() {
     splashOverlay.classList.add('hidden');
-    audioManager.init();
+    closeSettingsModal();
+    hasGameStarted = true;
+    audioManager.beginGameSession().catch(() => {});
     haptic.confirm();
     initGame();
+    syncGameplayState();
+    void initializeYandexLifecycle();
 
     if (window.YandexSDK) {
         if (window.YandexSDK.isAvailable()) {
             window.YandexSDK.dispatchGameStartEvent();
+            syncGameplayState();
         } else {
             // Ждем инициализации
             setTimeout(() => {
                 if (window.YandexSDK.isAvailable()) {
                     window.YandexSDK.dispatchGameStartEvent();
+                    syncGameplayState();
                 }
             }, 1000);
         }
@@ -1772,7 +2676,95 @@ function startGame() {
     }
 }
 
-splashPlayBtn.addEventListener('click', startGame);
+// Start game on tap anywhere in the splash overlay
+splashOverlay.addEventListener('pointerdown', (e) => {
+    if (!hasGameStarted) {
+        startGame();
+    }
+});
+
+restartBtn.addEventListener('click', startGame);
+
+if (secondChanceAdBtn) {
+    secondChanceAdBtn.addEventListener('click', () => {
+        if (!window.YandexSDK || !window.YandexSDK.isAvailable()) {
+            // Фолбэк, если SDK вдруг недоступен
+            window.open('https://gritsenko.biz', '_blank');
+            applySecondChanceReward();
+            return;
+        }
+
+        window.YandexSDK.showRewardedVideo({
+            onOpen: () => {
+                audioManager.suspend().catch(() => {});
+                syncGameplayState();
+            },
+            onRewarded: () => {
+                applySecondChanceReward();
+            },
+            onClose: () => {
+                if (!isGameplayPausedBySdk) {
+                    audioManager.resume().catch(() => {});
+                }
+                
+                // Если награда не получена, показываем game over
+                if (!hasUsedSecondChance) {
+                    pendingRewardShapes = null;
+                    secondChanceModal.classList.remove('show');
+                    finalizeBestScore();
+                    gameOverScoreEl.textContent = formatNumber(score);
+                    revealGameOverScreen();
+                } else {
+                    syncGameplayState();
+                }
+            },
+            onError: () => {
+                if (!isGameplayPausedBySdk) {
+                    audioManager.resume().catch(() => {});
+                }
+                pendingRewardShapes = null;
+                secondChanceModal.classList.remove('show');
+                finalizeBestScore();
+                gameOverScoreEl.textContent = formatNumber(score);
+                revealGameOverScreen();
+            }
+        });
+    });
+}
+
+if (secondChanceSkipBtn) {
+    secondChanceSkipBtn.addEventListener('click', () => {
+        pendingRewardShapes = null;
+        secondChanceModal.classList.remove('show');
+        finalizeBestScore();
+        gameOverScoreEl.textContent = formatNumber(score);
+        revealGameOverScreen();
+    });
+}
+
+function applySecondChanceReward() {
+    hasUsedSecondChance = true;
+    secondChanceModal.classList.remove('show');
+    isGameOverSequenceActive = false;
+    gameContainer.classList.remove('game-over-transition');
+    
+    if (pendingRewardShapes) {
+        for (let i = 0; i < 3; i++) {
+            trayPieces[i] = pendingRewardShapes[i];
+        }
+    }
+    pendingRewardShapes = null;
+    
+    renderTray();
+    syncGameplayState();
+}
+
+settingsBtn.addEventListener('click', openSettingsModal);
+settingsCloseBtn.addEventListener('click', closeSettingsModal);
+musicToggle.addEventListener('change', event => {
+    setSoundPreference(Boolean(event.target.checked));
+});
+document.addEventListener('keydown', handleGlobalKeydown);
 
 document.addEventListener('pointermove', function (e) {
     if (isDragging) e.preventDefault();
@@ -1780,5 +2772,43 @@ document.addEventListener('pointermove', function (e) {
 
 window.addEventListener('resize', refreshLayoutMetrics);
 window.addEventListener('orientationchange', refreshLayoutMetrics);
+window.addEventListener('load', refreshLayoutMetrics);
+requestAnimationFrame(refreshLayoutMetrics);
+
+const debugGameOverBtn = document.getElementById('debug-gameover-btn');
+if (debugGameOverBtn && isLocalhost) {
+    debugGameOverBtn.style.display = 'block';
+    debugGameOverBtn.addEventListener('click', () => {
+        if (!hasUsedSecondChance) {
+            pendingRewardShapes = generateRewardShapes();
+            renderRewardShapes(pendingRewardShapes);
+            showSecondChance();
+        } else {
+            showGameOver();
+        }
+    });
+}
+
+const debugLangBtn = document.getElementById('debug-lang-btn');
+if (debugLangBtn && isLocalhost) {
+    const SUPPORTED_LANGUAGES = Object.keys(I18N);
+    const updateDebugLangLabel = () => {
+        debugLangBtn.textContent = `Lang: ${currentLanguage.toUpperCase()}`;
+    };
+    debugLangBtn.style.display = 'block';
+    updateDebugLangLabel();
+    debugLangBtn.addEventListener('click', () => {
+        const currentIndex = SUPPORTED_LANGUAGES.indexOf(currentLanguage);
+        const nextLang = SUPPORTED_LANGUAGES[(currentIndex + 1) % SUPPORTED_LANGUAGES.length];
+        applyTranslations(nextLang);
+        try {
+            window.localStorage.setItem(DEBUG_LANGUAGE_KEY, currentLanguage);
+        } catch {
+            // ignore storage errors
+        }
+        updateDebugLangLabel();
+    });
+}
 
 window.initGame = initGame;
+window.startGame = startGame;
