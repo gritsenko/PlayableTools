@@ -22,6 +22,58 @@
   var listenerMap = Object.create(null);
   var purchaseCounter = 0;
   var leaderboardState = Object.create(null);
+  var previewLanguage = 'ru';
+
+  function getContextLanguage() {
+    try {
+      var context = window.__PLAYABLETOOLS_PREVIEW_CONTEXT || {};
+      if (typeof context.language === 'string' && context.language.trim()) {
+        return context.language.trim().toLowerCase();
+      }
+    } catch (err) {}
+
+    try {
+      if (typeof window.__PLAYABLETOOLS_PREVIEW_LANGUAGE === 'string' && window.__PLAYABLETOOLS_PREVIEW_LANGUAGE.trim()) {
+        return window.__PLAYABLETOOLS_PREVIEW_LANGUAGE.trim().toLowerCase();
+      }
+    } catch (err) {}
+
+    return null;
+  }
+
+  function getActiveLanguage() {
+    return getContextLanguage() || previewLanguage;
+  }
+
+  function setActiveLanguage(nextLanguage) {
+    if (typeof nextLanguage !== 'string' || !nextLanguage.trim()) {
+      return previewLanguage;
+    }
+
+    previewLanguage = nextLanguage.trim().toLowerCase();
+
+    try {
+      var currentContext = window.__PLAYABLETOOLS_PREVIEW_CONTEXT || {};
+      window.__PLAYABLETOOLS_PREVIEW_CONTEXT = Object.assign({}, currentContext, { language: previewLanguage });
+    } catch (err) {}
+
+    try {
+      window.__PLAYABLETOOLS_PREVIEW_LANGUAGE = previewLanguage;
+    } catch (err) {}
+
+    post('preview.setLanguage', [previewLanguage]);
+    return previewLanguage;
+  }
+
+  function defineLanguageProperty(target, propertyName) {
+    Object.defineProperty(target, propertyName, {
+      configurable: true,
+      enumerable: true,
+      get: function () {
+        return getActiveLanguage();
+      }
+    });
+  }
 
   function elapsed() {
     if (startTime === null) startTime = Date.now();
@@ -116,6 +168,8 @@
   function currencyImage() {
     return transparentPng();
   }
+
+  setActiveLanguage(getContextLanguage() || previewLanguage);
 
   var products = [
     {
@@ -342,6 +396,35 @@
     };
   }
 
+  function createEnvironmentApi() {
+    var i18n = {
+      getLang: function () {
+        return getActiveLanguage();
+      },
+      t: function (key) {
+        return String(key);
+      }
+    };
+    var browser = {};
+    var app = {};
+    var environment = {
+      i18n: i18n,
+      browser: browser,
+      app: app,
+    };
+
+    defineLanguageProperty(i18n, 'lang');
+    defineLanguageProperty(i18n, 'language');
+    defineLanguageProperty(browser, 'lang');
+    defineLanguageProperty(browser, 'language');
+    defineLanguageProperty(app, 'lang');
+    defineLanguageProperty(app, 'language');
+    defineLanguageProperty(environment, 'lang');
+    defineLanguageProperty(environment, 'language');
+
+    return environment;
+  }
+
   var player = createPlayerApi();
 
   var features = {
@@ -540,6 +623,7 @@
   };
 
   var safeStorage = createSafeStorageApi();
+  var environment = createEnvironmentApi();
 
   var auth = {
     openAuthDialog: function () {
@@ -569,6 +653,7 @@
     leaderboards: leaderboards,
     player: player,
     auth: auth,
+    environment: environment,
     on: function (eventName, listener) {
       return addListener(eventName, listener);
     },
@@ -610,6 +695,10 @@
       post('getLeaderboards', []);
       return Promise.resolve(leaderboards);
     },
+    getEnvironment: function () {
+      post('getEnvironment', [getActiveLanguage()]);
+      return Promise.resolve(environment);
+    },
     getPlayer: function () {
       post('getPlayer', []);
       return Promise.resolve(player);
@@ -623,6 +712,12 @@
   window.YaGames = {
     __previewShimInstalled: true,
     init: function (options) {
+      if (options && typeof options.lang === 'string') {
+        setActiveLanguage(options.lang);
+      } else if (options && typeof options.language === 'string') {
+        setActiveLanguage(options.language);
+      }
+
       post('YaGames.init', [options || {}]);
       return new Promise(function (resolve) {
         setTimeout(function () {
@@ -661,12 +756,16 @@
     purchase: function (id) {
       return payments.purchase({ id: id || 'gold500' });
     },
+    setLanguage: function (language) {
+      return setActiveLanguage(language);
+    },
     setAuthorized: function (value) {
       playerAuthorized = !!value;
       post('preview.setAuthorized', [playerAuthorized]);
     },
     dumpState: function () {
       return {
+        previewLanguage: getActiveLanguage(),
         purchases: purchases.slice(),
         leaderboardState: leaderboardState,
         bannerVisible: bannerVisible,

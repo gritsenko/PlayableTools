@@ -2,7 +2,7 @@ import { ComponentBase, customElement, html, inject, state, property } from "fw"
 import type { PropertyValues } from 'lit';
 import { PreviewService } from "../../services/PreviewService";
 import { VideoStorageService } from "../../services/VideoStorageService";
-import type { PreviewPreset, PreviewRecordingResult } from "../../services/types";
+import type { PreviewLanguageOption, PreviewPreset, PreviewRecordingResult } from "../../services/types";
 import type { ValidationResult } from "../../services/PreviewServiceValidators";
 import "../../assets/pako_inflate.min.js";
 import { installIframeScreenshotCapture } from "./iframe-screenshot-capture";
@@ -42,11 +42,14 @@ export class PlayablePreviewer extends ComponentBase {
   error: string = "";
   private uploadedContentUnsubscribe?: () => void;
   private presetUnsubscribe?: () => void;
+  private previewLanguageUnsubscribe?: () => void;
   private validationUnsubscribe?: () => void;
   private zipPreviewUnsubscribe?: () => void;
   @state() private currentPreset: PreviewPreset | null = null;
+  @state() private currentLanguage: string | null = null;
   @state() private availablePresets: PreviewPreset[] = [];
   @state() private isPresetSwitching: boolean = false;
+  @state() private isLanguageMenuOpen: boolean = false;
   @state() private presetSuccessMessage: string = "";
   @state() private validationResults: ValidationResult | null = null;
   @state() private zipPreviewUrl: string | null = null;
@@ -56,6 +59,8 @@ export class PlayablePreviewer extends ComponentBase {
   private _sdkEventStart: number | null = null;
   private _iframeLoadStart: number | null = null;
   private _onMessageHandler?: (e: MessageEvent) => void;
+  private _onDocumentMouseDown?: (e: MouseEvent) => void;
+  private _onDocumentKeyDown?: (e: KeyboardEvent) => void;
 
   devices: PreviewDeviceOption[] = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -82,6 +87,7 @@ export class PlayablePreviewer extends ComponentBase {
     
     this.availablePresets = this.previewService.getAvailablePresets();
     this.currentPreset = this.previewService.getCurrentPreset();
+    this.currentLanguage = this.previewService.getCurrentPresetLanguage();
     
     this.uploadedContentUnsubscribe = this.previewService.onUploadedContentChange((content) => {
       console.log(`📁 playable-previewer: onUploadedContentChange fired, content length: ${content?.length || 0}`);
@@ -109,6 +115,15 @@ export class PlayablePreviewer extends ComponentBase {
     
     this.presetUnsubscribe = this.previewService.onPresetChange((preset) => {
       this.currentPreset = preset;
+      this.isLanguageMenuOpen = false;
+      this.requestUpdate();
+    });
+
+    this.previewLanguageUnsubscribe = this.previewService.onPreviewLanguageChange((language) => {
+      this.currentLanguage = language;
+      if (!this._supportsLanguageSwitching()) {
+        this.isLanguageMenuOpen = false;
+      }
       this.requestUpdate();
     });
     
@@ -182,6 +197,27 @@ export class PlayablePreviewer extends ComponentBase {
     };
     window.addEventListener('message', this._onMessageHandler);
 
+    this._onDocumentMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-preview-language-switcher]')) {
+        return;
+      }
+
+      if (this.isLanguageMenuOpen) {
+        this.isLanguageMenuOpen = false;
+        this.requestUpdate();
+      }
+    };
+    document.addEventListener('mousedown', this._onDocumentMouseDown);
+
+    this._onDocumentKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.isLanguageMenuOpen) {
+        this.isLanguageMenuOpen = false;
+        this.requestUpdate();
+      }
+    };
+    document.addEventListener('keydown', this._onDocumentKeyDown);
+
     // Listen for playable-screen-lock events so external emitters (service or page) can update UI
     this._playableLockHandler = (e: Event) => {
       try {
@@ -203,6 +239,9 @@ export class PlayablePreviewer extends ComponentBase {
     if (this.presetUnsubscribe) {
       this.presetUnsubscribe();
     }
+    if (this.previewLanguageUnsubscribe) {
+      this.previewLanguageUnsubscribe();
+    }
     if (this.validationUnsubscribe) {
       this.validationUnsubscribe();
     }
@@ -214,6 +253,12 @@ export class PlayablePreviewer extends ComponentBase {
     }
     if (this._onMessageHandler) {
       window.removeEventListener('message', this._onMessageHandler);
+    }
+    if (this._onDocumentMouseDown) {
+      document.removeEventListener('mousedown', this._onDocumentMouseDown);
+    }
+    if (this._onDocumentKeyDown) {
+      document.removeEventListener('keydown', this._onDocumentKeyDown);
     }
   }
 
@@ -673,6 +718,72 @@ export class PlayablePreviewer extends ComponentBase {
     }
   }
 
+  private _supportsLanguageSwitching(): boolean {
+    return !!this.currentPreset?.supportsLanguageSwitching
+      && (this.currentPreset.availableLanguages?.length || 0) > 1;
+  }
+
+  private _getAvailableLanguages(): PreviewLanguageOption[] {
+    return this.previewService.getAvailableLanguagesForPreset(this.currentPreset);
+  }
+
+  private _getCurrentLanguageOption(): PreviewLanguageOption | null {
+    const currentLanguage = this.currentLanguage;
+    if (!currentLanguage) {
+      return null;
+    }
+
+    return this._getAvailableLanguages().find(language => language.code === currentLanguage) || null;
+  }
+
+  private _toggleLanguageMenu(e: Event) {
+    e.stopPropagation();
+    if (!this._supportsLanguageSwitching() || this.isPresetSwitching) {
+      return;
+    }
+
+    this.isLanguageMenuOpen = !this.isLanguageMenuOpen;
+    this.requestUpdate();
+  }
+
+  private async _handleLanguageSelection(languageCode: string) {
+    if (!this._supportsLanguageSwitching()) {
+      return;
+    }
+
+    const selectedLanguage = this._getAvailableLanguages().find(language => language.code === languageCode);
+    if (!selectedLanguage) {
+      return;
+    }
+
+    if (this.currentLanguage === languageCode) {
+      this.isLanguageMenuOpen = false;
+      this.requestUpdate();
+      return;
+    }
+
+    this.isPresetSwitching = true;
+    this.isLanguageMenuOpen = false;
+    this.error = "";
+    this.requestUpdate();
+
+    try {
+      await this.previewService.reloadContentWithCurrentLanguage(languageCode);
+
+      this.presetSuccessMessage = `✅ Language: ${selectedLanguage.label}`;
+      setTimeout(() => {
+        this.presetSuccessMessage = "";
+        this.requestUpdate();
+      }, 3000);
+    } catch (error) {
+      console.error(`❌ Failed to switch preview language:`, error);
+      this.error = `Failed to switch language: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      this.isPresetSwitching = false;
+      this.requestUpdate();
+    }
+  }
+
   async handleSaveToLibrary() {
     try {
       const iframe = this._getIframeEl();
@@ -710,6 +821,8 @@ export class PlayablePreviewer extends ComponentBase {
     const device = this.selectedDevice;
     const width = (this.isPortrait ? device.width : device.height) || 375;
     const height = (this.isPortrait ? device.height : device.width) || 667;
+    const availableLanguages = this._getAvailableLanguages();
+    const currentLanguageOption = this._getCurrentLanguageOption();
 
     // Layout: wide simulators (tablet / landscape phone) do not fit nicely side-by-side with validation panel.
     // In those cases, stack the preview below the page content (single column) even on large screens.
@@ -769,11 +882,44 @@ export class PlayablePreviewer extends ComponentBase {
                   ` : ''}
                 </div>
 
+                ${this._supportsLanguageSwitching() ? html`
+                  <div class="relative" data-preview-language-switcher>
+                    <button
+                      type="button"
+                      @click=${this._toggleLanguageMenu}
+                      class="inline-flex items-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                      title="Preview language"
+                      ?disabled=${this.isPresetSwitching}
+                    >
+                      <span class="material-icons-outlined" style="font-size:18px">translate</span>
+                      <span>${currentLanguageOption?.label || 'Language'}</span>
+                      <span class="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">${currentLanguageOption?.code || ''}</span>
+                      <span class="material-icons-outlined text-slate-400 dark:text-slate-500" style="font-size:18px">expand_more</span>
+                    </button>
+
+                    ${this.isLanguageMenuOpen ? html`
+                      <div class="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                        ${availableLanguages.map(language => html`
+                          <button
+                            type="button"
+                            @click=${() => this._handleLanguageSelection(language.code)}
+                            class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors ${language.code === this.currentLanguage ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'}"
+                          >
+                            <span>${language.label}</span>
+                            <span class="text-xs uppercase tracking-wide ${language.code === this.currentLanguage ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}">${language.code}</span>
+                          </button>
+                        `)}
+                      </div>
+                    ` : ''}
+                  </div>
+                ` : ''}
+
                 ${this.currentPreset ? html`
                   <div class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <span>
                       Max size: ${this.currentPreset.maxFileSizeMB}MB
                       ${this.currentPreset.injectScripts.length > 0 ? html`• Scripts: ${this.currentPreset.injectScripts.length}` : ''}
+                      ${currentLanguageOption ? html`• Language: ${currentLanguageOption.code.toUpperCase()}` : ''}
                     </span>
                     ${this.presetSuccessMessage ? html`
                       <span class="text-green-500 font-medium animate-fade-in-out">

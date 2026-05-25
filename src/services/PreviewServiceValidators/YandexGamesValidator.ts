@@ -1,4 +1,4 @@
-import type { Validator, ValidationResult, ValidationCategory, ValidationCheck } from './types';
+import type { Validator, ValidationContext, ValidationResult, ValidationCategory, ValidationCheck } from './types';
 
 function hasMatch(content: string, pattern: RegExp): boolean {
   return pattern.test(content);
@@ -13,8 +13,65 @@ function createCheck(name: string, passed: boolean, details?: string, isWarning?
   };
 }
 
+function extractConfigPlayableLanguages(content: string): string[] | null {
+  const marker = /\/\* FILE: ([^\n]+) \*\//g;
+  const sections: Array<{ path: string; body: string }> = [];
+  let currentPath: string | null = null;
+  let currentBodyStart = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = marker.exec(content)) !== null) {
+    if (currentPath !== null) {
+      sections.push({
+        path: currentPath,
+        body: content.slice(currentBodyStart, match.index).trim(),
+      });
+    }
+
+    currentPath = match[1].trim();
+    currentBodyStart = marker.lastIndex;
+  }
+
+  if (currentPath !== null) {
+    sections.push({
+      path: currentPath,
+      body: content.slice(currentBodyStart).trim(),
+    });
+  }
+
+  if (sections.length === 0) {
+    try {
+      const parsed = JSON.parse(content) as { playable_languages?: unknown };
+      if (Array.isArray(parsed.playable_languages)) {
+        return parsed.playable_languages.filter((value): value is string => typeof value === 'string').map(value => value.trim()).filter(Boolean);
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  for (const section of sections) {
+    if (!section.path.toLowerCase().endsWith('config.json')) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(section.body) as { playable_languages?: unknown };
+      if (Array.isArray(parsed.playable_languages)) {
+        return parsed.playable_languages.filter((value): value is string => typeof value === 'string').map(value => value.trim()).filter(Boolean);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 export class YandexGamesValidator implements Validator {
-  validate(content: string, fileSize: number): ValidationResult {
+  validate(content: string, fileSize: number, context?: ValidationContext): ValidationResult {
     const hasSdkScriptReference = hasMatch(
       content,
       /(?:<script[^>]+src\s*=\s*['"](?:\/sdk\.js|https:\/\/sdk\.games\.s3\.yandex\.net\/sdk\.js)['"]|sdk\.games\.s3\.yandex\.net\/sdk\.js|\/sdk\.js)/i,
@@ -46,6 +103,11 @@ export class YandexGamesValidator implements Validator {
     const usesLeaderboardGetPlayerEntry = hasMatch(content, /\bleaderboards\s*\.\s*getPlayerEntry\s*\(/);
     const hasSetScoreAvailabilityCheck = hasMatch(content, /\bisAvailableMethod\s*\(\s*['"]leaderboards\.setScore['"]/);
     const hasGetPlayerEntryAvailabilityCheck = hasMatch(content, /\bisAvailableMethod\s*\(\s*['"]leaderboards\.getPlayerEntry['"]/);
+    const activeLanguage = context?.language?.trim().toLowerCase() || null;
+    const playableLanguages = extractConfigPlayableLanguages(content);
+    const normalizedPlayableLanguages = playableLanguages?.map(language => language.toLowerCase()) || null;
+    const hasPlayableLanguageList = !!normalizedPlayableLanguages && normalizedPlayableLanguages.length > 0;
+    const selectedLanguageIsDeclared = !activeLanguage || !hasPlayableLanguageList || normalizedPlayableLanguages.includes(activeLanguage);
 
     const categories: ValidationCategory[] = [
       {
@@ -74,6 +136,39 @@ export class YandexGamesValidator implements Validator {
             fileSize <= 100 * 1024 * 1024,
             `Current file size: ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Yandex limit is 100MB unpacked.`,
             fileSize <= 100 * 1024 * 1024,
+          ),
+        ],
+      },
+      {
+        name: 'Language & Localization',
+        checks: [
+          createCheck(
+            'Preview language selected',
+            !!activeLanguage,
+            activeLanguage
+              ? `Current preview language: ${activeLanguage}.`
+              : 'No preview language is active for the current preset.',
+            !activeLanguage,
+          ),
+          createCheck(
+            'config.json playable_languages detected',
+            hasPlayableLanguageList,
+            hasPlayableLanguageList
+              ? `Declared languages: ${playableLanguages!.join(', ')}.`
+              : 'config.json with playable_languages was not found in the validation source. ZIP-based checks are more reliable when config.json is present.',
+            !hasPlayableLanguageList,
+          ),
+          createCheck(
+            'Selected preview language is declared in playable_languages',
+            selectedLanguageIsDeclared,
+            !activeLanguage
+              ? 'No active preview language to verify.'
+              : !hasPlayableLanguageList
+                ? 'Skipped because config.json/playable_languages was not found.'
+                : selectedLanguageIsDeclared
+                  ? `Selected preview language "${activeLanguage}" is declared in config.json.`
+                  : `Selected preview language "${activeLanguage}" is not listed in playable_languages (${playableLanguages!.join(', ')}).`,
+            !!activeLanguage && hasPlayableLanguageList && !selectedLanguageIsDeclared,
           ),
         ],
       },

@@ -14,8 +14,13 @@ export interface ValidationResult {
   categories: ValidationCategory[];
 }
 
+export interface ValidationContext {
+  presetId?: string | null;
+  language?: string | null;
+}
+
 export interface Validator {
-  validate(content: string, fileSize: number): ValidationResult;
+  validate(content: string, fileSize: number, context?: ValidationContext): ValidationResult;
 }
 
 export interface ValidatorFactory {

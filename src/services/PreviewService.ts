@@ -9,7 +9,7 @@ import html2canvas from "html2canvas";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig, PreviewRecordingController, PreviewRecordingResult } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
-import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, type ValidationResult } from "./PreviewServiceValidators";
+import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, type ValidationContext, type ValidationResult } from "./PreviewServiceValidators";
 
 type ZipAssetPayload = {
   path: string;
@@ -219,6 +219,8 @@ export class PreviewService {
   // Preview preset configuration
   private _currentPreset: PreviewPreset | null = null;
   private _presetListeners = new Set<(preset: PreviewPreset | null) => void>();
+  private _selectedLanguagesByPreset = new Map<string, string>();
+  private _previewLanguageListeners = new Set<(language: string | null, preset: PreviewPreset | null) => void>();
   private _presetsConfig: PreviewPresetsConfig = previewPresetsConfig as PreviewPresetsConfig;
 
   // Validation results
@@ -347,7 +349,9 @@ export class PreviewService {
     console.log(`🔄 PreviewService: Changing preset from "${previousPreset}" to "${preset?.name || 'none'}"`);
     
     this._currentPreset = preset;
+    this.ensurePresetLanguageSelection(preset);
     for (const cb of Array.from(this._presetListeners)) cb(preset);
+    this.notifyPreviewLanguageChange();
     
     console.log(`✅ PreviewService: Preset change completed, notified ${this._presetListeners.size} listeners`);
   }
@@ -365,6 +369,109 @@ export class PreviewService {
   onPresetChange(cb: (preset: PreviewPreset | null) => void): () => void {
     this._presetListeners.add(cb);
     return () => this._presetListeners.delete(cb);
+  }
+
+  getAvailableLanguagesForPreset(preset: PreviewPreset | null = this.getCurrentPreset()): NonNullable<PreviewPreset['availableLanguages']> {
+    if (!preset?.supportsLanguageSwitching || !preset.availableLanguages?.length) {
+      return [];
+    }
+
+    return preset.availableLanguages;
+  }
+
+  getCurrentPresetLanguage(): string | null {
+    return this.getPresetLanguage(this.getCurrentPreset());
+  }
+
+  getPresetLanguage(preset: PreviewPreset | null): string | null {
+    if (!preset?.supportsLanguageSwitching) {
+      return null;
+    }
+
+    return this.ensurePresetLanguageSelection(preset);
+  }
+
+  setCurrentPresetLanguage(languageCode: string | null): void {
+    const preset = this.getCurrentPreset();
+    if (!preset?.supportsLanguageSwitching) {
+      return;
+    }
+
+    const availableLanguages = this.getAvailableLanguagesForPreset(preset);
+    if (availableLanguages.length === 0) {
+      this._selectedLanguagesByPreset.delete(preset.id);
+      this.notifyPreviewLanguageChange();
+      return;
+    }
+
+    if (languageCode && availableLanguages.some(language => language.code === languageCode)) {
+      this._selectedLanguagesByPreset.set(preset.id, languageCode);
+    } else {
+      const fallbackLanguage = this.resolvePresetDefaultLanguage(preset);
+      if (fallbackLanguage) {
+        this._selectedLanguagesByPreset.set(preset.id, fallbackLanguage);
+      } else {
+        this._selectedLanguagesByPreset.delete(preset.id);
+      }
+    }
+
+    this.notifyPreviewLanguageChange();
+  }
+
+  onPreviewLanguageChange(cb: (language: string | null, preset: PreviewPreset | null) => void): () => void {
+    this._previewLanguageListeners.add(cb);
+    return () => this._previewLanguageListeners.delete(cb);
+  }
+
+  private notifyPreviewLanguageChange(): void {
+    const preset = this.getCurrentPreset();
+    const language = this.getPresetLanguage(preset);
+    for (const cb of Array.from(this._previewLanguageListeners)) cb(language, preset);
+  }
+
+  private ensurePresetLanguageSelection(preset: PreviewPreset | null): string | null {
+    if (!preset?.supportsLanguageSwitching) {
+      return null;
+    }
+
+    const nextLanguage = this.resolvePresetLanguage(
+      preset,
+      this._selectedLanguagesByPreset.get(preset.id) || null,
+    );
+
+    if (nextLanguage) {
+      this._selectedLanguagesByPreset.set(preset.id, nextLanguage);
+      return nextLanguage;
+    }
+
+    this._selectedLanguagesByPreset.delete(preset.id);
+    return null;
+  }
+
+  private resolvePresetLanguage(preset: PreviewPreset, languageCode: string | null): string | null {
+    const availableLanguages = this.getAvailableLanguagesForPreset(preset);
+    if (availableLanguages.length === 0) {
+      return null;
+    }
+
+    if (languageCode && availableLanguages.some(language => language.code === languageCode)) {
+      return languageCode;
+    }
+
+    return this.resolvePresetDefaultLanguage(preset);
+  }
+
+  private resolvePresetDefaultLanguage(preset: PreviewPreset): string | null {
+    const availableLanguages = this.getAvailableLanguagesForPreset(preset);
+    if (availableLanguages.length === 0) {
+      return null;
+    }
+
+    if (preset.defaultLanguage && availableLanguages.some(language => language.code === preset.defaultLanguage)) {
+      return preset.defaultLanguage;
+    }
+
+    return availableLanguages[0]?.code || null;
   }
 
   /**
@@ -388,6 +495,12 @@ export class PreviewService {
         console.log(`  🔄 Replacing ${matches.length} occurrences of "${find}" with "${replace}"`);
         processedContent = processedContent.replace(regex, replace);
       }
+    }
+
+    const previewContextScript = this.buildPreviewContextScript(activePreset);
+    if (previewContextScript) {
+      console.log(`  🌐 Injecting preview context for preset ${activePreset.id}`);
+      processedContent = this.injectScript(processedContent, previewContextScript, 'beforeHeadEnd');
     }
 
     // Inject scripts
@@ -415,6 +528,37 @@ export class PreviewService {
 
     console.log(`✅ PreviewService: Processing complete, ${processedContent.length} chars`);
     return processedContent;
+  }
+
+  async reloadContentWithCurrentLanguage(languageCode: string): Promise<void> {
+    this.setCurrentPresetLanguage(languageCode);
+    const preset = this.getCurrentPreset();
+    if (!preset) {
+      return;
+    }
+
+    await this.reloadContentWithPreset(preset);
+  }
+
+  private buildPreviewContextScript(preset: PreviewPreset | null): string | null {
+    if (!preset) {
+      return null;
+    }
+
+    const language = this.getPresetLanguage(preset);
+    const previewContext = {
+      presetId: preset.id,
+      language,
+    };
+    const serializedContext = JSON.stringify(previewContext).replace(/</g, '\\u003c');
+
+    return `(() => {
+  const nextContext = ${serializedContext};
+  const currentContext = window.__PLAYABLETOOLS_PREVIEW_CONTEXT || {};
+  const mergedContext = { ...currentContext, ...nextContext };
+  window.__PLAYABLETOOLS_PREVIEW_CONTEXT = mergedContext;
+  window.__PLAYABLETOOLS_PREVIEW_LANGUAGE = mergedContext.language || null;
+})();`;
   }
 
   /**
@@ -815,11 +959,12 @@ export class PreviewService {
     console.log(`🔄 Reloading content with preset: ${preset.name}`);
     
     this.setCurrentPreset(preset);
+    const validationSizeBytes = this._lastUploadedSizeBytes ??  new Blob([this._originalUploadedContent || this._originalGithubContent || this._uploadedContent || '']).size;
 
     if (this._zipSessionId && this._zipEntryPath && this._originalUploadedContent) {
       console.log(`📦 Updating ZIP session content with ${preset.name} preset`);
       const processedContent = await this.processContentWithPreset(this._originalUploadedContent, preset);
-      await this.runValidation(processedContent, new Blob([processedContent]).size);
+      await this.runValidation(processedContent, validationSizeBytes);
       this.setUploadedContent(processedContent);
       await this.updateZipEntryHtmlAsset(this._zipSessionId, this._zipEntryPath, processedContent);
       return;
@@ -829,7 +974,7 @@ export class PreviewService {
     if (this._originalUploadedContent) {
       console.log(`📁 Reprocessing uploaded content with ${preset.name} preset`);
       const processedContent = await this.processContentWithPreset(this._originalUploadedContent, preset);
-      await this.runValidation(processedContent, new Blob([processedContent]).size);
+      await this.runValidation(processedContent, validationSizeBytes);
       this.setUploadedContent(processedContent);
       return;
     }
@@ -838,7 +983,7 @@ export class PreviewService {
     if (this._originalGithubContent) {
       console.log(`🔗 Reprocessing GitHub content with ${preset.name} preset`);
       const processedContent = await this.processContentWithPreset(this._originalGithubContent, preset);
-      await this.runValidation(processedContent, new Blob([processedContent]).size);
+      await this.runValidation(processedContent, validationSizeBytes);
       this.setUploadedContent(processedContent);
       return;
     }
@@ -1028,10 +1173,14 @@ export class PreviewService {
       console.log(`🔍 PreviewService: Running validation on ${fileSize} bytes`);
       const preset = this.getCurrentPreset();
       const results: ValidationResult = { categories: [] };
+      const validationContext: ValidationContext = {
+        presetId: preset?.id || null,
+        language: this.getPresetLanguage(preset),
+      };
 
       // Always run general validation
       const generalValidator = new GeneralValidator();
-      const generalResults = generalValidator.validate(content, fileSize);
+      const generalResults = generalValidator.validate(content, fileSize, validationContext);
       results.categories.push(...generalResults.categories);
       console.log(`✅ PreviewService: General validation complete, ${generalResults.categories.length} categories`);
 
@@ -1041,21 +1190,21 @@ export class PreviewService {
         switch (preset.id) {
           case 'preview-cta': {
             const ctaSdkValidator = new CtaSdkValidator();
-            const ctaSdkResults = ctaSdkValidator.validate(this._originalUploadedContent || content, fileSize);
+            const ctaSdkResults = ctaSdkValidator.validate(this._originalUploadedContent || content, fileSize, validationContext);
             results.categories.push(...ctaSdkResults.categories);
             console.log(`✅ PreviewService: CTA SDK validation complete`);
             break;
           }
           case 'facebook': {
             const facebookValidator = new FacebookValidator();
-            const facebookResults = facebookValidator.validate(content, fileSize);
+            const facebookResults = facebookValidator.validate(content, fileSize, validationContext);
             results.categories.push(...facebookResults.categories);
             console.log(`✅ PreviewService: Facebook validation complete`);
             break;
           }
           case 'mraid': {
             const mraidValidator = new MraidValidator();
-            const mraidResults = mraidValidator.validate(content, fileSize);
+            const mraidResults = mraidValidator.validate(content, fileSize, validationContext);
             results.categories.push(...mraidResults.categories);
             console.log(`✅ PreviewService: MRAID validation complete`);
             break;
@@ -1063,7 +1212,7 @@ export class PreviewService {
           case 'yandex-games': {
             const yandexGamesValidator = new YandexGamesValidator();
             const yandexSourceContent = this._validationSourceContent || this._originalUploadedContent || this._originalGithubContent || content;
-            const yandexResults = yandexGamesValidator.validate(yandexSourceContent, fileSize);
+            const yandexResults = yandexGamesValidator.validate(yandexSourceContent, fileSize, validationContext);
             results.categories.push(...yandexResults.categories);
             console.log(`✅ PreviewService: Yandex Games validation complete`);
             break;

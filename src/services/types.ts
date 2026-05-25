@@ -52,6 +52,11 @@ export interface PreviewScript {
   position: 'beforeHeadEnd' | 'afterBodyStart' | 'beforeBodyEnd';
 }
 
+export interface PreviewLanguageOption {
+  code: string;
+  label: string;
+}
+
 export interface PreviewPreset {
   id: string;
   name: string;
@@ -59,6 +64,9 @@ export interface PreviewPreset {
   maxFileSizeMB: number;
   injectScripts: PreviewScript[];
   replaceTokens: Record<string, string>;
+  supportsLanguageSwitching?: boolean;
+  availableLanguages?: PreviewLanguageOption[];
+  defaultLanguage?: string;
 }
 
 export interface PreviewPresetsConfig {

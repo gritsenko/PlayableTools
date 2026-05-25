@@ -1,7 +1,7 @@
 import type { Validator, ValidationResult, ValidationCategory } from './types';
 
 export class CtaSdkValidator implements Validator {
-  validate(content: string, _fileSize: number): ValidationResult {
+  validate(content: string, _fileSize: number, _context?: unknown): ValidationResult {
     const source = content;
     const sdkMethods: Array<{ label: string; patterns: RegExp[] }> = [
       { label: 'CTA.onClick', patterns: [/(?:window\.|document\.)?CTA\??(?:\.|\?\.)?\.?\[?['"]?onClick/] },

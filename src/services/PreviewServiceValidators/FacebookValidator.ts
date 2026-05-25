@@ -1,7 +1,7 @@
 import type { Validator, ValidationResult, ValidationCategory } from './types';
 
 export class FacebookValidator implements Validator {
-  validate(content: string, fileSize: number): ValidationResult {
+  validate(content: string, fileSize: number, _context?: unknown): ValidationResult {
     const categories: ValidationCategory[] = [
       {
         name: 'Facebook',
