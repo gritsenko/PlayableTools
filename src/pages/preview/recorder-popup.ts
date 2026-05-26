@@ -52,13 +52,28 @@ export class RecorderPopupPage extends ComponentBase {
   @state() private playableUrl: string = "";
   @state() private isRecording: boolean = false;
   @state() private isStoppingRecording: boolean = false;
+  @state() private recordingElapsedMs: number = 0;
   private activeRecording?: PreviewRecordingController;
+  private recordingStartedAt?: number;
+  private recordingTimerId?: number;
 
   @state() private isPortrait: boolean = true;
   @state() private selectedDeviceIdx: number = 2; // Default to iPhone SE 375x667
   @state() private includeCursor: boolean = true;
   @state() private selectedRecordingQualityId: RecordingQualityId = 'high';
   @state() private selectedFrameRate: RecordingFrameRate = 30;
+
+  private static readonly HIDE_CURSOR_STYLE_ID = '__pt_hide_cursor_style';
+  private touchIndicatorEl?: HTMLDivElement;
+  private iframeTracking?: {
+    iframe: HTMLIFrameElement;
+    doc: Document;
+    onMove: (e: MouseEvent) => void;
+    onDown: (e: MouseEvent) => void;
+    onUp: (e: MouseEvent) => void;
+    onLeave: (e: MouseEvent) => void;
+    onEnter: (e: MouseEvent) => void;
+  };
 
   private devices: PreviewDeviceOption[] = [
     { name: 'iPhone 14 Pro Max', width: 430, height: 932, type: 'phone' },
@@ -166,6 +181,148 @@ export class RecorderPopupPage extends ComponentBase {
       ?? this.recordingFrameRateOptions[0];
   }
 
+  override disconnectedCallback(): void {
+    this.stopRecordingTimer(true);
+    this.detachIframeTracking();
+    this.touchIndicatorEl?.remove();
+    this.touchIndicatorEl = undefined;
+    super.disconnectedCallback();
+  }
+
+  private handleIframeLoad = (e: Event) => {
+    const iframe = e.currentTarget as HTMLIFrameElement;
+    this.attachIframeTracking(iframe);
+  };
+
+  private attachIframeTracking(iframe: HTMLIFrameElement) {
+    this.detachIframeTracking();
+    let doc: Document | null = null;
+    try {
+      doc = iframe.contentDocument;
+    } catch {
+      doc = null;
+    }
+    if (!doc) {
+      console.warn('[RecorderPopup] iframe is cross-origin — touch indicator and cursor hiding are unavailable.');
+      return;
+    }
+
+    const onMove = (event: MouseEvent) => this.moveTouchIndicator(iframe, event.clientX, event.clientY);
+    const onDown = (event: MouseEvent) => {
+      this.moveTouchIndicator(iframe, event.clientX, event.clientY);
+      this.setTouchIndicatorPressed(true);
+    };
+    const onUp = (event: MouseEvent) => {
+      this.moveTouchIndicator(iframe, event.clientX, event.clientY);
+      this.setTouchIndicatorPressed(false);
+    };
+    const onLeave = () => this.hideTouchIndicator();
+    const onEnter = (event: MouseEvent) => this.moveTouchIndicator(iframe, event.clientX, event.clientY);
+
+    doc.addEventListener('mousemove', onMove);
+    doc.addEventListener('mousedown', onDown);
+    doc.addEventListener('mouseup', onUp);
+    doc.addEventListener('mouseleave', onLeave);
+    doc.addEventListener('mouseenter', onEnter);
+
+    this.iframeTracking = { iframe, doc, onMove, onDown, onUp, onLeave, onEnter };
+    this.applyCursorMode();
+  }
+
+  private detachIframeTracking() {
+    const tracking = this.iframeTracking;
+    if (!tracking) return;
+    try {
+      tracking.doc.removeEventListener('mousemove', tracking.onMove);
+      tracking.doc.removeEventListener('mousedown', tracking.onDown);
+      tracking.doc.removeEventListener('mouseup', tracking.onUp);
+      tracking.doc.removeEventListener('mouseleave', tracking.onLeave);
+      tracking.doc.removeEventListener('mouseenter', tracking.onEnter);
+      tracking.doc.getElementById(RecorderPopupPage.HIDE_CURSOR_STYLE_ID)?.remove();
+    } catch {}
+    this.iframeTracking = undefined;
+    this.hideTouchIndicator();
+  }
+
+  private applyCursorMode() {
+    const tracking = this.iframeTracking;
+    if (!tracking) {
+      this.hideTouchIndicator();
+      return;
+    }
+    const { doc } = tracking;
+    let style = doc.getElementById(RecorderPopupPage.HIDE_CURSOR_STYLE_ID) as HTMLStyleElement | null;
+    if (this.includeCursor) {
+      style?.remove();
+      this.hideTouchIndicator();
+      return;
+    }
+    if (!style) {
+      style = doc.createElement('style');
+      style.id = RecorderPopupPage.HIDE_CURSOR_STYLE_ID;
+      style.textContent = 'html, body, *, *::before, *::after { cursor: none !important; }';
+      doc.head?.appendChild(style);
+    }
+  }
+
+  private ensureTouchIndicatorEl(): HTMLDivElement {
+    if (this.touchIndicatorEl && this.touchIndicatorEl.isConnected) {
+      return this.touchIndicatorEl;
+    }
+    const el = document.createElement('div');
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = [
+      'position: fixed',
+      'left: 0',
+      'top: 0',
+      'width: 36px',
+      'height: 36px',
+      'border-radius: 50%',
+      'background: radial-gradient(circle, rgba(120,120,120,0.45) 0%, rgba(120,120,120,0.18) 60%, transparent 100%)',
+      'border: 1px solid rgba(60,60,60,0.55)',
+      'transform: translate(-50%, -50%)',
+      'pointer-events: none',
+      'z-index: 2147483647',
+      'display: none',
+      'transition: width 80ms ease, height 80ms ease, background 80ms ease',
+    ].join('; ');
+    document.body.appendChild(el);
+    this.touchIndicatorEl = el;
+    return el;
+  }
+
+  private moveTouchIndicator(iframe: HTMLIFrameElement, iframeX: number, iframeY: number) {
+    if (this.includeCursor) {
+      this.hideTouchIndicator();
+      return;
+    }
+    const rect = iframe.getBoundingClientRect();
+    const el = this.ensureTouchIndicatorEl();
+    el.style.display = 'block';
+    el.style.left = `${rect.left + iframeX}px`;
+    el.style.top = `${rect.top + iframeY}px`;
+  }
+
+  private setTouchIndicatorPressed(pressed: boolean) {
+    if (!this.touchIndicatorEl || this.touchIndicatorEl.style.display === 'none') return;
+    const el = this.touchIndicatorEl;
+    if (pressed) {
+      el.style.width = '28px';
+      el.style.height = '28px';
+      el.style.background = 'radial-gradient(circle, rgba(40,40,40,0.7) 0%, rgba(40,40,40,0.3) 60%, transparent 100%)';
+    } else {
+      el.style.width = '36px';
+      el.style.height = '36px';
+      el.style.background = 'radial-gradient(circle, rgba(120,120,120,0.45) 0%, rgba(120,120,120,0.18) 60%, transparent 100%)';
+    }
+  }
+
+  private hideTouchIndicator() {
+    if (this.touchIndicatorEl) {
+      this.touchIndicatorEl.style.display = 'none';
+    }
+  }
+
   private _getDeviceLabel(device: PreviewDeviceOption): string {
     if (device.disabled) return device.name;
     return `${device.name} (${device.width}x${device.height})`;
@@ -186,6 +343,7 @@ export class RecorderPopupPage extends ComponentBase {
     const input = e.target as HTMLInputElement;
     this.includeCursor = input.checked;
     localStorage.setItem(RecorderPopupPage.STORAGE_KEYS.includeCursor, String(this.includeCursor));
+    this.applyCursorMode();
   }
 
   private handleRecordingQualityChange(e: Event) {
@@ -230,11 +388,59 @@ export class RecorderPopupPage extends ComponentBase {
     }
   }
 
+  private startRecordingTimer(startedAt: number) {
+    this.stopRecordingTimer(true);
+    this.recordingStartedAt = startedAt;
+    this.updateRecordingElapsed();
+    this.recordingTimerId = window.setInterval(() => {
+      this.updateRecordingElapsed();
+    }, 250);
+  }
+
+  private freezeRecordingTimer() {
+    this.updateRecordingElapsed();
+    this.stopRecordingTimer(false);
+  }
+
+  private stopRecordingTimer(resetElapsed: boolean) {
+    if (this.recordingTimerId !== undefined) {
+      window.clearInterval(this.recordingTimerId);
+      this.recordingTimerId = undefined;
+    }
+
+    this.recordingStartedAt = undefined;
+    if (resetElapsed) {
+      this.recordingElapsedMs = 0;
+    }
+  }
+
+  private updateRecordingElapsed() {
+    if (this.recordingStartedAt === undefined) {
+      return;
+    }
+
+    this.recordingElapsedMs = Math.max(0, Date.now() - this.recordingStartedAt);
+  }
+
+  private formatRecordingElapsed(ms: number): string {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
   private async toggleRecording() {
     if (this.isStoppingRecording) return;
 
     if (this.activeRecording) {
       this.isStoppingRecording = true;
+      this.freezeRecordingTimer();
       try {
         await this.activeRecording.stop();
       } catch (error) {
@@ -244,6 +450,7 @@ export class RecorderPopupPage extends ComponentBase {
     }
 
     try {
+      this.stopRecordingTimer(true);
       this.isRecording = true;
       this.isStoppingRecording = false;
       this.requestUpdate();
@@ -267,20 +474,26 @@ export class RecorderPopupPage extends ComponentBase {
         maxOutputDimension: quality.maxOutputDimension,
       });
       this.activeRecording = recording;
+      this.startRecordingTimer(recording.startedAt);
 
       recording.result.then((clip) => {
         this.finishRecording(clip);
       }).catch(() => {
+        this.stopRecordingTimer(true);
         this.isRecording = false;
         this.activeRecording = undefined;
+        this.isStoppingRecording = false;
       });
     } catch (e) {
+      this.stopRecordingTimer(true);
       this.isRecording = false;
+      this.isStoppingRecording = false;
       alert("Failed to start recording: " + (e as Error).message);
     }
   }
 
   private finishRecording(clip: PreviewRecordingResult) {
+    this.freezeRecordingTimer();
     this.isRecording = false;
     this.activeRecording = undefined;
     this.isStoppingRecording = false;
@@ -304,6 +517,7 @@ export class RecorderPopupPage extends ComponentBase {
     const device = this.selectedDevice;
     const width = Math.max(300, (this.isPortrait ? device.width : device.height) || 375);
     const height = Math.max(300, (this.isPortrait ? device.height : device.width) || 667);
+    const recordingElapsedLabel = this.formatRecordingElapsed(this.recordingElapsedMs);
 
     return html`
       <style>
@@ -311,7 +525,7 @@ export class RecorderPopupPage extends ComponentBase {
           margin: 0;
           min-height: 100%;
           background: #f1f5f9;
-          overflow: hidden;
+          overflow: auto;
         }
 
         body {
@@ -353,9 +567,9 @@ export class RecorderPopupPage extends ComponentBase {
         .controls-panel {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 10px;
           background: #ffffff;
-          padding: 24px;
+          padding: 16px;
           border-radius: 12px;
           width: ${RecorderPopupPage.CONTROLS_PANEL_WIDTH}px;
           box-sizing: border-box;
@@ -365,33 +579,81 @@ export class RecorderPopupPage extends ComponentBase {
         }
 
         h2 {
-          margin: 0 0 8px 0;
-          font-size: 1.125rem;
+          margin: 0 0 2px 0;
+          font-size: 1rem;
           font-weight: 600;
           color: #0f172a;
         }
-        
+
         .form-group {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 4px;
         }
 
-        .field-hint {
-          font-size: 0.75rem;
-          line-height: 1.45;
-          color: #64748b;
-        }
-        
         label {
-          font-size: 0.875rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.8125rem;
           font-weight: 500;
           color: #64748b;
         }
 
+        .info-tip {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 14px;
+          height: 14px;
+          font-size: 10px;
+          font-weight: 700;
+          font-style: italic;
+          color: #94a3b8;
+          background: #f1f5f9;
+          border: 1px solid #cbd5e1;
+          border-radius: 999px;
+          cursor: help;
+          flex-shrink: 0;
+          user-select: none;
+        }
+        .info-tip::before {
+          content: 'i';
+        }
+        .info-tip::after {
+          content: attr(data-tip);
+          position: absolute;
+          bottom: calc(100% + 6px);
+          right: -4px;
+          background: #0f172a;
+          color: #f1f5f9;
+          padding: 8px 10px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 400;
+          font-style: normal;
+          line-height: 1.45;
+          white-space: normal;
+          width: max-content;
+          max-width: 240px;
+          text-align: left;
+          pointer-events: none;
+          opacity: 0;
+          transform: translateY(2px);
+          transition: opacity 0.12s ease, transform 0.12s ease;
+          z-index: 100;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+        }
+        .info-tip:hover::after,
+        .info-tip:focus-visible::after {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
         select {
           width: 100%;
-          padding: 10px 12px;
+          padding: 8px 10px;
           border: 1px solid #cbd5e1;
           border-radius: 6px;
           background: #fff;
@@ -406,38 +668,24 @@ export class RecorderPopupPage extends ComponentBase {
 
         .toggle-option {
           display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          padding: 12px;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          background: #f8fafc;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 2px;
         }
 
         .toggle-option input {
-          margin-top: 2px;
           width: 16px;
           height: 16px;
           accent-color: #2563eb;
           flex: 0 0 auto;
-        }
-
-        .toggle-option-body {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
+          margin: 0;
         }
 
         .toggle-option-title {
-          font-size: 0.875rem;
-          font-weight: 600;
+          font-size: 0.8125rem;
+          font-weight: 500;
           color: #0f172a;
-        }
-
-        .toggle-option-hint {
-          font-size: 0.75rem;
-          line-height: 1.4;
-          color: #64748b;
+          flex: 1 1 auto;
         }
         
         button {
@@ -469,9 +717,9 @@ export class RecorderPopupPage extends ComponentBase {
           background: #3b82f6;
           border: 1px solid transparent;
           color: white;
-          padding: 12px 20px;
-          font-size: 1rem;
-          margin-top: 16px;
+          padding: 10px 16px;
+          font-size: 0.9375rem;
+          margin-top: 6px;
         }
         .btn-primary:hover:not(:disabled) {
           background: #2563eb;
@@ -492,6 +740,62 @@ export class RecorderPopupPage extends ComponentBase {
           cursor: not-allowed;
         }
 
+        .recording-status {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 4px;
+          padding: 10px 12px;
+          border: 1px solid #fecaca;
+          border-radius: 10px;
+          background: #fff1f2;
+          color: #b91c1c;
+        }
+
+        .recording-status-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.8125rem;
+          font-weight: 600;
+        }
+
+        .recording-status-label::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: currentColor;
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35);
+          animation: recordDotPulse 1.6s infinite;
+        }
+
+        .recording-status.is-saving .recording-status-label::before {
+          animation: none;
+          background: #fb7185;
+        }
+
+        .recording-status-time {
+          font-size: 0.875rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .recording-idle-hint {
+          color: #64748b;
+          font-size: 13px;
+          text-align: center;
+          margin-top: 4px;
+        }
+
+        @keyframes recordDotPulse {
+          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+          70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
         .record-overlay {
           pointer-events: none;
           position: absolute;
@@ -501,10 +805,6 @@ export class RecorderPopupPage extends ComponentBase {
         }
 
         @media (max-width: ${width + RecorderPopupPage.CONTROLS_PANEL_WIDTH + RecorderPopupPage.LAYOUT_GAP + 48}px) {
-          html, body {
-            overflow: auto;
-          }
-
           .popup-page {
             place-items: start;
           }
@@ -522,7 +822,7 @@ export class RecorderPopupPage extends ComponentBase {
       <div class="popup-page">
         <div class="popup-layout">
           <div class="iframe-container" style="width: ${width}px; height: ${height}px;">
-            ${this.playableUrl ? html`<iframe src="${this.playableUrl}"></iframe>` : html`<div style="color: white; padding: 20px; text-align: center;">No URL provided</div>`}
+            ${this.playableUrl ? html`<iframe src="${this.playableUrl}" @load="${this.handleIframeLoad}"></iframe>` : html`<div style="color: white; padding: 20px; text-align: center;">No URL provided</div>`}
           </div>
 
           <div class="controls-panel">
@@ -540,25 +840,23 @@ export class RecorderPopupPage extends ComponentBase {
             </div>
 
             <div class="form-group">
-              <label>Recording Quality</label>
+              <label>Recording Quality <span class="info-tip" tabindex="0" data-tip="${this.selectedRecordingQuality.description}"></span></label>
               <select @change="${this.handleRecordingQualityChange}" ?disabled="${this.isRecording}">
                 ${this.recordingQualityOptions.map(option => html`
                   <option value="${option.id}" ?selected="${option.id === this.selectedRecordingQualityId}">${option.label}</option>
                 `)}
               </select>
-              <div class="field-hint">${this.selectedRecordingQuality.description}</div>
             </div>
 
             <div class="form-group">
-              <label>Frame Rate</label>
+              <label>Frame Rate <span class="info-tip" tabindex="0" data-tip="${this.selectedRecordingFrameRateOption.description}"></span></label>
               <select @change="${this.handleFrameRateChange}" ?disabled="${this.isRecording}">
                 ${this.recordingFrameRateOptions.map(option => html`
                   <option value="${option.value}" ?selected="${option.value === this.selectedFrameRate}">${option.label}</option>
                 `)}
               </select>
-              <div class="field-hint">${this.selectedRecordingFrameRateOption.description}</div>
             </div>
-            
+
             <button class="btn-outline mt-2" @click="${this.toggleOrientation}" ?disabled="${this.isRecording}">
               <span class="material-icons-outlined" style="font-size: 18px">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
               Switch to ${this.isPortrait ? 'Landscape' : 'Portrait'}
@@ -571,10 +869,8 @@ export class RecorderPopupPage extends ComponentBase {
                 @change="${this.handleIncludeCursorChange}"
                 ?disabled="${this.isRecording}"
               />
-              <span class="toggle-option-body">
-                <span class="toggle-option-title">Record mouse cursor</span>
-                <span class="toggle-option-hint">Turn this off to keep the cursor out of gameplay recordings. Some browsers may still show it if screen-capture constraints are ignored.</span>
-              </span>
+              <span class="toggle-option-title">Record mouse cursor</span>
+              <span class="info-tip" tabindex="0" data-tip="Turn off to try keeping the cursor out of recordings. Chromium only honors this for tab capture — pick &quot;This Tab&quot; in the share dialog. Check the DevTools console after starting a recording to confirm the constraint was applied."></span>
             </label>
             
             <button 
@@ -587,8 +883,13 @@ export class RecorderPopupPage extends ComponentBase {
             </button>
 
             ${this.isRecording 
-              ? html`<div style="color: #ef4444; font-size: 13px; text-align: center; margin-top: 4px; font-weight: 500;">Recording active...</div>` 
-              : html`<div style="color: #64748b; font-size: 13px; text-align: center; margin-top: 4px;">Choose current tab in share dialog</div>`
+              ? html`
+                  <div class="recording-status ${this.isStoppingRecording ? 'is-saving' : ''}">
+                    <span class="recording-status-label">${this.isStoppingRecording ? 'Saving clip' : 'Recording active'}</span>
+                    <span class="recording-status-time">${recordingElapsedLabel}</span>
+                  </div>
+                `
+              : html`<div class="recording-idle-hint">Choose current tab in share dialog</div>`
             }
           </div>
         </div>

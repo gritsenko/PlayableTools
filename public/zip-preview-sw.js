@@ -109,16 +109,23 @@ self.addEventListener("message", (event) => {
             respond(false, 'Invalid ZIP_SESSION_REGISTER payload');
             return;
           }
+          const t0 = (self.performance && self.performance.now) ? self.performance.now() : Date.now();
           const assetMap = new Map();
+          let totalBytes = 0;
           for (const asset of assets) {
             if (!asset || !asset.path || !asset.buffer) continue;
+            totalBytes += asset.buffer.byteLength || 0;
             assetMap.set(normalizePath(asset.path), {
               mime: asset.mime || "application/octet-stream",
               buffer: asset.buffer,
             });
           }
           sessionStore.set(sessionId, assetMap);
+          const t1 = (self.performance && self.performance.now) ? self.performance.now() : Date.now();
+          console.debug(`[ZIP Preview SW] REGISTER ${sessionId}: ${assetMap.size} assets, ${(totalBytes / 1024 / 1024).toFixed(2)} MiB, in-memory map ready in ${Math.round(t1 - t0)}ms; persisting to Cache Storage…`);
           await persistSessionAssets(sessionId, assetMap);
+          const t2 = (self.performance && self.performance.now) ? self.performance.now() : Date.now();
+          console.debug(`[ZIP Preview SW] REGISTER ${sessionId}: Cache Storage persist done in ${Math.round(t2 - t1)}ms (total ${Math.round(t2 - t0)}ms)`);
           break;
         }
         case "ZIP_SESSION_UPDATE_ENTRY": {

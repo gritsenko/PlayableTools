@@ -48,7 +48,7 @@ type PreviewRecordingOptions = {
 
 @injectable()
 export class PreviewService {
-  private static readonly zipSwAckTimeoutMs = 10000;
+  private static readonly zipSwAckTimeoutMs = 60000;
   private static readonly recordingMinVideoBitrate = 2_000_000;
   private static readonly recordingMaxVideoBitrate = 14_000_000;
   private static readonly recordingBitsPerPixelFrame = 0.18;
@@ -1132,12 +1132,23 @@ export class PreviewService {
   }
 
   private async registerZipSessionAssets(sessionId: string, assets: ZipAssetPayload[]): Promise<void> {
+    const totalBytes = assets.reduce((sum, asset) => sum + (asset.buffer?.byteLength ?? 0), 0);
+    console.debug(
+      `[PreviewService] Registering ZIP session ${sessionId}: ${assets.length} assets, ${(totalBytes / 1024 / 1024).toFixed(2)} MiB total (timeout ${PreviewService.zipSwAckTimeoutMs}ms)`,
+    );
+    const startedAt = performance.now();
     const transferables = assets.map(asset => asset.buffer);
-    await this.postMessageToZipSw({
-      type: 'ZIP_SESSION_REGISTER',
-      sessionId,
-      assets
-    }, transferables, true);
+    try {
+      await this.postMessageToZipSw({
+        type: 'ZIP_SESSION_REGISTER',
+        sessionId,
+        assets
+      }, transferables, true);
+      console.debug(`[PreviewService] ZIP session ${sessionId} registered in ${Math.round(performance.now() - startedAt)}ms`);
+    } catch (err) {
+      console.error(`[PreviewService] ZIP session ${sessionId} registration failed after ${Math.round(performance.now() - startedAt)}ms`, err);
+      throw err;
+    }
   }
 
   private async updateZipEntryHtmlAsset(sessionId: string, entryPath: string, html: string): Promise<void> {
@@ -1393,6 +1404,42 @@ export class PreviewService {
     return iframeWindow.__ptScreenshot || null;
   }
 
+  private logCaptureDiagnostics(track: MediaStreamTrack, requested: { requestedCursor: string; includeCursor: boolean }): void {
+    try {
+      const supported = navigator.mediaDevices.getSupportedConstraints?.() ?? {};
+      const settings = track.getSettings();
+      const constraints = track.getConstraints();
+      const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : undefined;
+      const trackSettingsAny = settings as Record<string, unknown>;
+      const trackConstraintsAny = constraints as Record<string, unknown>;
+      const cursorSupportedByUA = (supported as Record<string, unknown>).cursor === true;
+
+      console.groupCollapsed(
+        `[PreviewRecording] capture diagnostics — requested cursor=${requested.requestedCursor} (includeCursor=${requested.includeCursor})`,
+      );
+      console.log('UA supports "cursor" constraint:', cursorSupportedByUA);
+      console.log('Applied displaySurface:', trackSettingsAny.displaySurface);
+      console.log('Applied cursor:', trackSettingsAny.cursor ?? '(not reported)');
+      console.log('Applied frameRate:', trackSettingsAny.frameRate);
+      console.log('Applied logicalSurface:', trackSettingsAny.logicalSurface);
+      console.log('track.getSettings():', settings);
+      console.log('track.getConstraints():', constraints);
+      console.log('track.getCapabilities():', capabilities);
+      console.log('MediaDevices.getSupportedConstraints():', supported);
+
+      const requestedCursor = requested.requestedCursor;
+      const appliedCursor = trackSettingsAny.cursor ?? trackConstraintsAny.cursor;
+      if (requestedCursor === 'never' && appliedCursor !== 'never') {
+        console.warn(
+          `[PreviewRecording] cursor constraint "never" was requested but UA reports "${appliedCursor ?? 'unknown'}". The cursor will likely appear in the recording.`,
+        );
+      }
+      console.groupEnd();
+    } catch (err) {
+      console.warn('[PreviewRecording] failed to log capture diagnostics', err);
+    }
+  }
+
   async startPreviewRecording(cropElement: HTMLElement, options: PreviewRecordingOptions = {}): Promise<PreviewRecordingController> {
     if (!navigator.mediaDevices?.getDisplayMedia) {
       throw new Error('Display capture is not supported in this browser.');
@@ -1423,6 +1470,8 @@ export class PreviewService {
       displayStream.getTracks().forEach(track => track.stop());
       throw new Error('Display capture started without a video track.');
     }
+
+    this.logCaptureDiagnostics(displayTrack, { requestedCursor: videoConstraints.cursor as string, includeCursor });
 
     let cropSuccess = false;
     if ('CropTarget' in window && 'cropTo' in displayTrack) {
