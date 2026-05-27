@@ -13,6 +13,7 @@ import { PortfolioService, type PlayableAdData } from "../../services/PortfolioS
 import { AuthenticationService } from "../../services/AuthenticationService";
 import { PlayablePublishService } from "../../services/PlayablePublishService";
 import { ApiClient } from "../../services/ApiClient";
+import "./recordings-list-section";
 import QRCode from "qrcode";
 
 @customElement("preview-page")
@@ -890,6 +891,8 @@ export class PreviewPage extends ComponentBase {
                   </div>
                 </div>
               </div>
+
+              <recordings-list-section></recordings-list-section>
               </div>
             `
           : null}

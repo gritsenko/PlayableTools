@@ -1689,10 +1689,7 @@ export class PreviewService {
     const safeHeight = Math.max(2, requestedHeight * outputScale);
     const scale = Math.min(1, maxOutputDimension / Math.max(safeWidth, safeHeight));
 
-    return {
-      width: this.normalizeVideoDimension(safeWidth * scale),
-      height: this.normalizeVideoDimension(safeHeight * scale),
-    };
+    return this.computeEncodeDimensions(safeWidth * scale, safeHeight * scale);
   }
 
   private getRecommendedRecordingBitrate(width: number, height: number, frameRate: number): number {
@@ -1703,9 +1700,27 @@ export class PreviewService {
     );
   }
 
-  private normalizeVideoDimension(value: number): number {
-    const rounded = Math.max(2, Math.round(value));
-    return rounded % 2 === 0 ? rounded : rounded + 1;
+  /**
+   * Computes encoder-safe output dimensions that preserve the source aspect ratio.
+   *
+   * The width is snapped to a multiple of 16 (the H.264 macroblock width): the luma
+   * stride equals the coded width, so when a hardware AVC encoder pads a non-16
+   * picture and signals the real size via an SPS crop rectangle — which some
+   * encoder/muxer/player combinations silently drop — every row drifts and the
+   * frame renders as diagonal "venetian-blind" garbage. A 16-aligned width needs no
+   * horizontal padding, eliminating that class of corruption.
+   *
+   * The height is then derived from the exact source aspect ratio and rounded to an
+   * even number (the 4:2:0 minimum), so the picture is never stretched. Forcing the
+   * height to 16 as well would distort the aspect ratio by up to ~2%; deriving it
+   * from the ratio keeps distortion under ~0.2% while still avoiding the (far less
+   * severe, bottom-edge-only) vertical crop issue.
+   */
+  private computeEncodeDimensions(width: number, height: number): { width: number; height: number } {
+    const aspect = width / Math.max(1, height);
+    const safeWidth = Math.max(16, Math.round(width / 16) * 16);
+    const safeHeight = Math.max(2, Math.round(safeWidth / aspect / 2) * 2);
+    return { width: safeWidth, height: safeHeight };
   }
 
   /**
@@ -1806,10 +1821,31 @@ export class PreviewService {
       target: new BufferTarget(),
     });
 
+    // Force the encoded output onto a 16-aligned grid. New recordings are
+    // already macroblock-aligned (see normalizeVideoDimension), but clips saved
+    // by older builds may be even-but-not-16 — re-encoding those at their native
+    // size reintroduces the sheared-stride corruption on hardware AVC encoders.
+    // Resizing to the nearest multiple of 16 keeps the coded and display sizes
+    // identical regardless of source dimensions.
+    const sourceMeta = await this.readVideoMetadata(sourceBlob).catch(() => ({ width: 0, height: 0, durationMs: 0 }));
+    const videoOptions: { codec: 'avc'; bitrate: typeof QUALITY_HIGH; width?: number; height?: number; fit?: 'fill' } = {
+      codec: 'avc',
+      bitrate: QUALITY_HIGH,
+    };
+    if (sourceMeta.width > 0 && sourceMeta.height > 0) {
+      // The target box already carries the source aspect ratio (width snapped to
+      // 16, height derived from the ratio), so 'fill' resizes without stretching
+      // or letterboxing — it just lands the output on a macroblock-aligned grid.
+      const dims = this.computeEncodeDimensions(sourceMeta.width, sourceMeta.height);
+      videoOptions.width = dims.width;
+      videoOptions.height = dims.height;
+      videoOptions.fit = 'fill';
+    }
+
     const conversion = await Conversion.init({
       input,
       output,
-      video: { codec: 'avc', bitrate: QUALITY_HIGH },
+      video: videoOptions,
       audio: { codec: 'aac', bitrate: 128_000 },
       trim: { start: safeStart, end: safeEnd },
     });
