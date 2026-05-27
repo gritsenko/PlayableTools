@@ -69,6 +69,12 @@ The app now uses clean URLs such as `/publish` and `/base64` instead of hash rou
 - ZIP file support with virtual URLs for accurate testing
 - GitHub integration for easy portfolio management
 
+### 🎥 **Gameplay Recorder & MP4 Export**
+- Record a playable running in the preview popup and trim the clip in-browser
+- Fast, hardware-accelerated MP4 export via WebCodecs (no large downloads)
+- Automatic fallback to FFmpeg.wasm on browsers without native H.264/AAC encoding
+- See `docs/PREVIEW_RECORDING_MP4_EXPORT.md` for the full pipeline
+
 ### 📂 **Portfolio Management**
 - GitHub repository integration
 - Organize and showcase your playable ad portfolio
@@ -81,6 +87,7 @@ The app now uses clean URLs such as `/publish` and `/base64` instead of hash rou
 - **CSS Framework**: Pico CSS 2.x with custom theme
 - **PWA**: Vite PWA plugin with service worker
 - **Dependencies**: JSZip, Pako, Marked, D3.js
+- **Media Encoding**: mediabunny (WebCodecs MP4 export) with FFmpeg.wasm fallback
 - **Routing**: Custom clean-URL router with route metadata support
 - **SEO Build**: Static prerender step for public landing pages plus `sitemap.xml`, `robots.txt`, and `404.html` fallback generation
 

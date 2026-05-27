@@ -69,6 +69,7 @@ export class PreviewService {
   private _ffmpegClassWorkerUrl: string | null = null;
   private _ffmpegRecentLogs: string[] = [];
   private _ffmpegExpectedDurationSec: number | null = null;
+  private _fastMp4ExportSupported: boolean | null = null;
 
   // Example: fetch playable ad data, generate shareable links, etc.
   getShareableLink(adId: string, size: string, orientation: string): string {
@@ -1707,7 +1708,154 @@ export class PreviewService {
     return rounded % 2 === 0 ? rounded : rounded + 1;
   }
 
+  /**
+   * Trims the recorded clip and exports it as MP4.
+   *
+   * Prefers a fully client-side WebCodecs pipeline (via mediabunny) when the
+   * browser can natively encode H.264 + AAC: it demuxes the source WebM and
+   * re-encodes with hardware acceleration, which is dramatically faster than
+   * the software FFmpeg encoder and avoids the ~31 MB FFmpeg core download.
+   * Falls back to FFmpeg.wasm when WebCodecs encoding is unavailable (e.g.
+   * Firefox) or if the WebCodecs path fails for any reason.
+   */
   async trimRecordedVideo(
+    sourceBlob: Blob,
+    startTimeSec: number,
+    endTimeSec: number,
+    callbacks: Mp4ExportCallbacks = {},
+  ): Promise<PreviewRecordingResult> {
+    if (await this.isFastMp4ExportAvailable()) {
+      try {
+        return await this.trimRecordedVideoWithWebCodecs(sourceBlob, startTimeSec, endTimeSec, callbacks);
+      } catch (error) {
+        console.warn('PreviewService: WebCodecs MP4 export failed, falling back to FFmpeg.', error);
+        callbacks.onStatus?.('Switching to the compatibility encoder...');
+        callbacks.onProgress?.(0);
+      }
+    }
+
+    return this.trimRecordedVideoWithFfmpeg(sourceBlob, startTimeSec, endTimeSec, callbacks);
+  }
+
+  /**
+   * Detects whether the browser can encode MP4 (H.264 + AAC) natively through
+   * the WebCodecs API. The result is cached because the capability never
+   * changes within a session.
+   */
+  async isFastMp4ExportAvailable(): Promise<boolean> {
+    if (this._fastMp4ExportSupported !== null) {
+      return this._fastMp4ExportSupported;
+    }
+
+    this._fastMp4ExportSupported = await this.detectFastMp4ExportSupport();
+    return this._fastMp4ExportSupported;
+  }
+
+  private async detectFastMp4ExportSupport(): Promise<boolean> {
+    try {
+      if (!('VideoEncoder' in globalThis) || !('AudioEncoder' in globalThis)) {
+        return false;
+      }
+
+      const { canEncodeVideo, canEncodeAudio } = await import('mediabunny');
+      const [canVideo, canAudio] = await Promise.all([
+        canEncodeVideo('avc'),
+        canEncodeAudio('aac'),
+      ]);
+
+      const supported = canVideo && canAudio;
+      console.debug(`[PreviewService] WebCodecs MP4 export support: avc=${canVideo}, aac=${canAudio} -> ${supported}`);
+      return supported;
+    } catch (error) {
+      console.warn('PreviewService: WebCodecs MP4 export detection failed', error);
+      return false;
+    }
+  }
+
+  private async trimRecordedVideoWithWebCodecs(
+    sourceBlob: Blob,
+    startTimeSec: number,
+    endTimeSec: number,
+    callbacks: Mp4ExportCallbacks = {},
+  ): Promise<PreviewRecordingResult> {
+    const safeStart = Math.max(0, startTimeSec);
+    const safeEnd = Math.max(safeStart + 0.05, endTimeSec);
+    const trimDurationSec = Math.max(0.05, safeEnd - safeStart);
+    const startedAt = Date.now();
+
+    callbacks.onProgress?.(0);
+    callbacks.onStatus?.('Encoding MP4...');
+
+    const {
+      Input,
+      Output,
+      BlobSource,
+      BufferTarget,
+      Mp4OutputFormat,
+      Conversion,
+      ALL_FORMATS,
+      QUALITY_HIGH,
+    } = await import('mediabunny');
+
+    const input = new Input({
+      source: new BlobSource(sourceBlob),
+      formats: ALL_FORMATS,
+    });
+    const output = new Output({
+      format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+      target: new BufferTarget(),
+    });
+
+    const conversion = await Conversion.init({
+      input,
+      output,
+      video: { codec: 'avc', bitrate: QUALITY_HIGH },
+      audio: { codec: 'aac', bitrate: 128_000 },
+      trim: { start: safeStart, end: safeEnd },
+    });
+
+    if (!conversion.isValid) {
+      const discarded = conversion.discardedTracks
+        .map(track => `${track.track.type}:${track.reason}`)
+        .join(', ');
+      throw new Error(`WebCodecs conversion is not valid${discarded ? ` (discarded ${discarded})` : ''}.`);
+    }
+
+    conversion.onProgress = (progress: number) => {
+      if (!Number.isFinite(progress)) {
+        return;
+      }
+      const clamped = Math.min(Math.max(progress, 0), 0.99);
+      callbacks.onProgress?.(clamped);
+      callbacks.onStatus?.(`Encoding MP4... ${Math.round(clamped * 100)}%`);
+    };
+
+    await conversion.execute();
+
+    const buffer = output.target.buffer;
+    if (!buffer || buffer.byteLength === 0) {
+      throw new Error('WebCodecs conversion produced an empty MP4.');
+    }
+
+    callbacks.onStatus?.('Finalizing MP4...');
+    const outputBlob = new Blob([buffer], { type: 'video/mp4' });
+    const metadata = await this.readVideoMetadata(outputBlob);
+
+    callbacks.onProgress?.(1);
+    callbacks.onStatus?.('MP4 export complete.');
+
+    return {
+      blob: outputBlob,
+      mimeType: 'video/mp4',
+      fileExtension: 'mp4',
+      durationMs: metadata.durationMs || Math.round(trimDurationSec * 1000),
+      width: metadata.width,
+      height: metadata.height,
+      startedAt,
+    };
+  }
+
+  private async trimRecordedVideoWithFfmpeg(
     sourceBlob: Blob,
     startTimeSec: number,
     endTimeSec: number,
@@ -1779,10 +1927,19 @@ export class PreviewService {
   }
 
   async prepareMp4Exporter(callbacks: Mp4ExportCallbacks = {}): Promise<void> {
+    callbacks.onProgress?.(0);
+
+    // The WebCodecs path needs no heavyweight runtime, so skip the ~31 MB
+    // FFmpeg core download entirely when native MP4 encoding is available.
+    if (await this.isFastMp4ExportAvailable()) {
+      callbacks.onProgress?.(1);
+      callbacks.onStatus?.('MP4 exporter is ready.');
+      return;
+    }
+
     this._ffmpegStatusCallback = callbacks.onStatus;
     this._ffmpegProgressCallback = callbacks.onProgress;
 
-    callbacks.onProgress?.(0);
     callbacks.onStatus?.(this._ffmpegLoadPromise ? 'Preparing MP4 exporter...' : 'Loading MP4 exporter (~31 MB on first use)...');
 
     try {

@@ -8,6 +8,7 @@
 - **CSS Framework**: Pico CSS 2.x for styling with custom theme overrides
 - **PWA**: Vite PWA plugin for service worker and offline support
 - **Dependencies**: JSZip for archive handling, Pako for compression, Marked for markdown parsing, D3.js for visualizations
+- **Media Encoding**: `mediabunny` (WebCodecs-based MP4 transcode/trim, primary) and `@ffmpeg/*` (FFmpeg.wasm, fallback) for preview gameplay recording export
 
 ## Project Structure
 
@@ -83,7 +84,7 @@ export class MyComponent extends ComponentBase {
 - `PlayablePublishService` - Publishing to 10+ ad networks with platform-specific transformations
 - `ImbaPackerService` - HTML compression with Pako
 - `Base64ConverterService` - File to base64 conversion
-- `PreviewService` - Playable preview functionality with ZIP support
+- `PreviewService` - Playable preview functionality with ZIP support, gameplay recording, and MP4 export (WebCodecs primary, FFmpeg.wasm fallback)
 - `PortfolioService` - GitHub portfolio integration
 - `VersionService` - App version checking and PWA updates
 - `MetadataService` - SEO metadata management
@@ -252,3 +253,11 @@ This approach ensures:
 - Real asset URLs in browser devtools
 - Existing relative path logic works unchanged
 - Perfect fidelity to production deployment environment
+
+### Gameplay Recording & MP4 Export
+The recorder popup (`src/pages/preview/recorder-popup.ts`) captures a playable via `getDisplayMedia` + canvas crop and records WebM through `MediaRecorder`. The trim/export step (`preview-video-modal.ts` → `PreviewService.trimRecordedVideo`) re-encodes to MP4 using a **dual-backend dispatcher**:
+
+- **WebCodecs (primary)**: `mediabunny` `Conversion` API, dynamically imported as a lazy chunk (~163 KB gzip). Demuxes WebM, re-encodes H.264 + AAC with hardware acceleration, applies `trim`. Gated by `isFastMp4ExportAvailable()` (`canEncodeVideo('avc')` && `canEncodeAudio('aac')`).
+- **FFmpeg.wasm (fallback)**: original `libx264 + aac` path. Used on browsers without native avc/aac encoding (e.g. Firefox) or if the WebCodecs path throws. Only then is the ~31 MB FFmpeg core downloaded.
+
+When adding to this area: keep mediabunny as the primary and FFmpeg as fallback-only, do not re-introduce a hand-rolled raw `VideoEncoder`/muxer pipeline, and keep `prepareMp4Exporter()` from downloading the FFmpeg core when the fast path is available. Full details in `docs/PREVIEW_RECORDING_MP4_EXPORT.md`.

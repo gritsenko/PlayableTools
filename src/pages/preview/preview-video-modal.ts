@@ -270,7 +270,7 @@ export class PreviewVideoModal extends ComponentBase {
 
               <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-4 text-sm text-slate-600 dark:text-slate-300">
                 <p>Use the sliders to trim the gameplay range you want to keep.</p>
-                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">All exports are encoded as MP4. First export initializes the encoder core in the browser.</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">All exports are encoded as MP4 directly in your browser. Some browsers download a one-time encoder core on first use.</p>
               </div>
             </div>
 

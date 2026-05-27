@@ -1,7 +1,7 @@
 {
   "name": "playable_tools",
   "private": true,
-  "version": "2.2.2",
+  "version": "2.2.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "jszip": "^3.10.1",
     "lit": "^3.3.0",
     "marked": "^16.0.0",
+    "mediabunny": "^1.45.4",
     "pako": "^2.1.0",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
