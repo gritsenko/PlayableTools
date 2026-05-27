@@ -2222,12 +2222,19 @@ export class PreviewService {
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  private toUint8Array(data: string | Uint8Array): Uint8Array {
-    if (data instanceof Uint8Array) {
-      return data;
+  private toUint8Array(data: string | Uint8Array): Uint8Array<ArrayBuffer> {
+    if (typeof data === 'string') {
+      return new TextEncoder().encode(data);
     }
 
-    return new TextEncoder().encode(data);
+    // ffmpeg.wasm's threaded build can back data with a SharedArrayBuffer, which is
+    // not assignable to BlobPart. Reuse the buffer when it's a plain ArrayBuffer,
+    // otherwise copy into a fresh ArrayBuffer-backed view.
+    if (data.buffer instanceof ArrayBuffer) {
+      return data as Uint8Array<ArrayBuffer>;
+    }
+
+    return new Uint8Array(data);
   }
 
   private async cleanupFfmpegFiles(ffmpeg: BrowserFFmpeg, paths: string[]): Promise<void> {
