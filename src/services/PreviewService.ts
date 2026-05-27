@@ -1538,8 +1538,13 @@ export class PreviewService {
       }
 
       const rect = cropElement.getBoundingClientRect();
-      const viewportWidth = Math.max(window.innerWidth, 1);
-      const viewportHeight = Math.max(window.innerHeight, 1);
+      // Use the document's client box, not window.innerWidth/Height: the latter
+      // include the scrollbar gutter, so when the recorder popup shows a
+      // scrollbar the derived scale is slightly off and the crop drifts a few
+      // pixels — exposing the light popup background as a stripe along the edges.
+      const docEl = document.documentElement;
+      const viewportWidth = Math.max(docEl.clientWidth || window.innerWidth, 1);
+      const viewportHeight = Math.max(docEl.clientHeight || window.innerHeight, 1);
       const scaleX = previewVideo!.videoWidth / viewportWidth;
 
       // Ensure we handle top banner offsets properly if CropTarget isn't supported.

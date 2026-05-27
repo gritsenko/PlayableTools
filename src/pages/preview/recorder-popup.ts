@@ -524,7 +524,9 @@ export class RecorderPopupPage extends ComponentBase {
         html, body {
           margin: 0;
           min-height: 100%;
-          background: #f1f5f9;
+          /* Black surround so any sub-pixel crop drift bleeds black (matching the
+             .iframe-container) into the recording instead of a light window frame. */
+          background: #000;
           overflow: auto;
         }
 
@@ -540,7 +542,7 @@ export class RecorderPopupPage extends ComponentBase {
           padding: 16px;
           display: grid;
           place-items: start center;
-          background: #f1f5f9;
+          background: #000;
         }
 
         .popup-layout {
