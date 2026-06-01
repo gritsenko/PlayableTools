@@ -44,6 +44,7 @@ type PreviewRecordingOptions = {
   includeCursor?: boolean;
   outputScale?: number;
   maxOutputDimension?: number;
+  captureAudio?: boolean;
 };
 
 @injectable()
@@ -1441,6 +1442,97 @@ export class PreviewService {
     }
   }
 
+  private getDisplayCaptureSourceRect(
+    cropElement: HTMLElement,
+    previewVideo: HTMLVideoElement,
+  ): { sourceX: number; sourceY: number; sourceWidth: number; sourceHeight: number } {
+    const rect = cropElement.getBoundingClientRect();
+    const docEl = document.documentElement;
+    const viewportWidth = Math.max(docEl.clientWidth || window.innerWidth, 1);
+    const viewportHeight = Math.max(docEl.clientHeight || window.innerHeight, 1);
+    const scaleX = previewVideo.videoWidth / viewportWidth;
+
+    // Account for the browser chrome captured above the viewport when CropTarget
+    // is unavailable, otherwise the crop drifts vertically.
+    const physicalViewportHeight = viewportHeight * scaleX;
+    const estimatedTopBarHeight = Math.max(0, previewVideo.videoHeight - physicalViewportHeight);
+
+    const sourceX = Math.max(0, Math.round(rect.left * scaleX));
+    const sourceY = Math.max(0, Math.round(rect.top * scaleX) + estimatedTopBarHeight);
+    const sourceWidth = Math.max(1, Math.min(previewVideo.videoWidth - sourceX, Math.round(rect.width * scaleX)));
+    const sourceHeight = Math.max(1, Math.min(previewVideo.videoHeight - sourceY, Math.round(rect.height * scaleX)));
+
+    return { sourceX, sourceY, sourceWidth, sourceHeight };
+  }
+
+  private drawDisplayCaptureFrame(
+    previewVideo: HTMLVideoElement,
+    cropElement: HTMLElement,
+    outputCanvas: HTMLCanvasElement,
+    outputContext: CanvasRenderingContext2D,
+    cropSuccess: boolean,
+  ): void {
+    outputContext.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+    if (cropSuccess) {
+      outputContext.drawImage(
+        previewVideo,
+        0,
+        0,
+        previewVideo.videoWidth,
+        previewVideo.videoHeight,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height,
+      );
+      return;
+    }
+
+    const { sourceX, sourceY, sourceWidth, sourceHeight } = this.getDisplayCaptureSourceRect(cropElement, previewVideo);
+    outputContext.drawImage(
+      previewVideo,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      outputCanvas.width,
+      outputCanvas.height,
+    );
+  }
+
+  private async captureDisplayCaptureScreenshot(
+    previewVideo: HTMLVideoElement,
+    cropElement: HTMLElement,
+    cropSuccess: boolean,
+  ): Promise<Blob> {
+    await this.waitForAnimationFrames(window, 2);
+
+    if (previewVideo.videoWidth === 0 || previewVideo.videoHeight === 0) {
+      throw new Error('Display capture has no video frame available for screenshot export.');
+    }
+
+    const screenshotCanvas = document.createElement('canvas');
+    if (cropSuccess) {
+      screenshotCanvas.width = previewVideo.videoWidth;
+      screenshotCanvas.height = previewVideo.videoHeight;
+    } else {
+      const { sourceWidth, sourceHeight } = this.getDisplayCaptureSourceRect(cropElement, previewVideo);
+      screenshotCanvas.width = sourceWidth;
+      screenshotCanvas.height = sourceHeight;
+    }
+
+    const screenshotContext = screenshotCanvas.getContext('2d');
+    if (!screenshotContext) {
+      throw new Error('Unable to create an off-screen canvas for screenshot export.');
+    }
+
+    this.drawDisplayCaptureFrame(previewVideo, cropElement, screenshotCanvas, screenshotContext, cropSuccess);
+    return this.canvasToBlob(screenshotCanvas, 'image/png');
+  }
+
   async startPreviewRecording(cropElement: HTMLElement, options: PreviewRecordingOptions = {}): Promise<PreviewRecordingController> {
     if (!navigator.mediaDevices?.getDisplayMedia) {
       throw new Error('Display capture is not supported in this browser.');
@@ -1451,6 +1543,7 @@ export class PreviewService {
 
     const frameRate = options.frameRate ?? 30;
     const includeCursor = options.includeCursor ?? true;
+    const captureAudio = options.captureAudio ?? true;
     const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
       frameRate: { ideal: frameRate, max: frameRate },
       displaySurface: 'browser',
@@ -1459,7 +1552,7 @@ export class PreviewService {
 
     const displayMediaOptions: DisplayMediaStreamOptions & Record<string, unknown> = {
       video: videoConstraints,
-      audio: true,
+      audio: captureAudio,
       preferCurrentTab: true,
       selfBrowserSurface: 'include',
       surfaceSwitching: 'exclude',
@@ -1520,55 +1613,7 @@ export class PreviewService {
     const drawFrame = () => {
       resizeOutputCanvas();
 
-      if (cropSuccess) {
-        outputContext!.clearRect(0, 0, outputCanvas!.width, outputCanvas!.height);
-        outputContext!.drawImage(
-          previewVideo!,
-          0,
-          0,
-          previewVideo!.videoWidth,
-          previewVideo!.videoHeight,
-          0,
-          0,
-          outputCanvas!.width,
-          outputCanvas!.height,
-        );
-        animationFrameId = window.requestAnimationFrame(drawFrame);
-        return;
-      }
-
-      const rect = cropElement.getBoundingClientRect();
-      // Use the document's client box, not window.innerWidth/Height: the latter
-      // include the scrollbar gutter, so when the recorder popup shows a
-      // scrollbar the derived scale is slightly off and the crop drifts a few
-      // pixels — exposing the light popup background as a stripe along the edges.
-      const docEl = document.documentElement;
-      const viewportWidth = Math.max(docEl.clientWidth || window.innerWidth, 1);
-      const viewportHeight = Math.max(docEl.clientHeight || window.innerHeight, 1);
-      const scaleX = previewVideo!.videoWidth / viewportWidth;
-
-      // Ensure we handle top banner offsets properly if CropTarget isn't supported.
-      const physicalViewportHeight = viewportHeight * scaleX;
-      const estimatedTopBarHeight = Math.max(0, previewVideo!.videoHeight - physicalViewportHeight);
-
-      const sourceX = Math.max(0, Math.round(rect.left * scaleX));
-      const sourceY = Math.max(0, Math.round(rect.top * scaleX) + estimatedTopBarHeight);
-      const sourceWidth = Math.max(1, Math.min(previewVideo!.videoWidth - sourceX, Math.round(rect.width * scaleX)));
-      const sourceHeight = Math.max(1, Math.min(previewVideo!.videoHeight - sourceY, Math.round(rect.height * scaleX)));
-
-      outputContext!.clearRect(0, 0, outputCanvas!.width, outputCanvas!.height);
-      outputContext!.drawImage(
-        previewVideo!,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        outputCanvas!.width,
-        outputCanvas!.height,
-      );
-
+      this.drawDisplayCaptureFrame(previewVideo!, cropElement, outputCanvas!, outputContext!, cropSuccess);
       animationFrameId = window.requestAnimationFrame(drawFrame);
     };
 
@@ -1580,11 +1625,16 @@ export class PreviewService {
       ...displayStream.getAudioTracks(),
     ]);
     const startedAt = Date.now();
-    const mimeType = this.getPreferredRecordingMimeType();
+    const hasAudioTrack = mixedStream.getAudioTracks().length > 0;
+    const mimeType = this.getPreferredRecordingMimeType(undefined, hasAudioTrack);
     const videoBitsPerSecond = this.getRecommendedRecordingBitrate(outputCanvas.width, outputCanvas.height, frameRate);
-    const recorder = mimeType
-      ? new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond, audioBitsPerSecond: 128_000 })
-      : new MediaRecorder(mixedStream, { videoBitsPerSecond, audioBitsPerSecond: 128_000 });
+    const recorderOptions: MediaRecorderOptions = mimeType
+      ? { mimeType, videoBitsPerSecond }
+      : { videoBitsPerSecond };
+    if (hasAudioTrack) {
+      recorderOptions.audioBitsPerSecond = 128_000;
+    }
+    const recorder = new MediaRecorder(mixedStream, recorderOptions);
     const chunks: BlobPart[] = [];
     let settled = false;
     let discarded = false;
@@ -1680,6 +1730,13 @@ export class PreviewService {
         } catch {
           // Cancellation intentionally discards the clip.
         }
+      },
+      captureScreenshot: async () => {
+        if (cleanedUp || !previewVideo) {
+          throw new Error('Recording capture session is no longer active.');
+        }
+
+        return this.captureDisplayCaptureScreenshot(previewVideo, cropElement, cropSuccess);
       },
     };
   }
@@ -2487,8 +2544,11 @@ export class PreviewService {
     });
   }
 
-  private getPreferredRecordingMimeType(preferredMimeType?: string): string {
-    const candidates = [preferredMimeType, ...PreviewService.recordingMimeTypeCandidates];
+  private getPreferredRecordingMimeType(preferredMimeType?: string, includeAudio: boolean = true): string {
+    const filteredCandidates = includeAudio
+      ? [...PreviewService.recordingMimeTypeCandidates]
+      : PreviewService.recordingMimeTypeCandidates.filter(candidate => !/(opus|mp4a)/i.test(candidate));
+    const candidates = [preferredMimeType, ...filteredCandidates];
     if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
       return preferredMimeType || '';
     }

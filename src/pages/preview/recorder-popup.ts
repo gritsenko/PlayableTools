@@ -52,6 +52,7 @@ export class RecorderPopupPage extends ComponentBase {
   @state() private playableUrl: string = "";
   @state() private isRecording: boolean = false;
   @state() private isStoppingRecording: boolean = false;
+  @state() private isSavingScreenshot: boolean = false;
   @state() private recordingElapsedMs: number = 0;
   private activeRecording?: PreviewRecordingController;
   private recordingStartedAt?: number;
@@ -435,8 +436,76 @@ export class RecorderPopupPage extends ComponentBase {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  private getCaptureSurface(): HTMLElement | null {
+    return this.renderRoot.querySelector('.iframe-container') as HTMLElement | null;
+  }
+
+  private getSelectedViewportSize(): { width: number; height: number } {
+    const device = this.selectedDevice;
+    return {
+      width: (this.isPortrait ? device.width : device.height) || 375,
+      height: (this.isPortrait ? device.height : device.width) || 667,
+    };
+  }
+
+  private buildScreenshotFileName(): string {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `playable-screenshot-${timestamp}.png`;
+  }
+
+  private downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  private async saveScreenshot() {
+    if (this.isStoppingRecording || this.isSavingScreenshot) {
+      return;
+    }
+
+    const captureSurface = this.getCaptureSurface();
+    if (!captureSurface) {
+      alert('Could not find the playable capture area.');
+      return;
+    }
+
+    let temporaryRecording: PreviewRecordingController | undefined;
+
+    try {
+      this.isSavingScreenshot = true;
+
+      const recording = this.activeRecording ?? await (async () => {
+        const { width, height } = this.getSelectedViewportSize();
+        const createdRecording = await this.previewService.startPreviewRecording(captureSurface, {
+          frameRate: this.selectedFrameRate,
+          targetWidth: width,
+          targetHeight: height,
+          includeCursor: this.includeCursor,
+          captureAudio: false,
+        });
+        void createdRecording.result.catch(() => undefined);
+        temporaryRecording = createdRecording;
+        return createdRecording;
+      })();
+
+      const screenshotBlob = await recording.captureScreenshot();
+      this.downloadBlob(screenshotBlob, this.buildScreenshotFileName());
+    } catch (e) {
+      alert('Failed to save screenshot: ' + (e as Error).message);
+    } finally {
+      if (temporaryRecording) {
+        await temporaryRecording.cancel();
+      }
+      this.isSavingScreenshot = false;
+    }
+  }
+
   private async toggleRecording() {
-    if (this.isStoppingRecording) return;
+    if (this.isStoppingRecording || this.isSavingScreenshot) return;
 
     if (this.activeRecording) {
       this.isStoppingRecording = true;
@@ -457,13 +526,11 @@ export class RecorderPopupPage extends ComponentBase {
       await this.updateComplete;
 
       // We explicitly record the exact area of the iframe wrapper
-      const captureSurface = this.renderRoot.querySelector('.iframe-container') as HTMLElement;
+      const captureSurface = this.getCaptureSurface();
       if (!captureSurface) throw new Error("Could not find .iframe-container");
 
-      const device = this.selectedDevice;
       const quality = this.selectedRecordingQuality;
-      const targetWidth = (this.isPortrait ? device.width : device.height) || 375;
-      const targetHeight = (this.isPortrait ? device.height : device.width) || 667;
+      const { width: targetWidth, height: targetHeight } = this.getSelectedViewportSize();
 
       const recording = await this.previewService.startPreviewRecording(captureSurface, {
         frameRate: this.selectedFrameRate,
@@ -832,7 +899,7 @@ export class RecorderPopupPage extends ComponentBase {
             
             <div class="form-group">
               <label>Target Device Size</label>
-              <select @change="${this.handleDeviceChange}" ?disabled="${this.isRecording}">
+              <select @change="${this.handleDeviceChange}" ?disabled="${this.isRecording || this.isSavingScreenshot}">
                 ${this.devices.map((d, i) =>
                   d.disabled
                     ? html`<option disabled> ${d.name} </option>`
@@ -843,7 +910,7 @@ export class RecorderPopupPage extends ComponentBase {
 
             <div class="form-group">
               <label>Recording Quality <span class="info-tip" tabindex="0" data-tip="${this.selectedRecordingQuality.description}"></span></label>
-              <select @change="${this.handleRecordingQualityChange}" ?disabled="${this.isRecording}">
+              <select @change="${this.handleRecordingQualityChange}" ?disabled="${this.isRecording || this.isSavingScreenshot}">
                 ${this.recordingQualityOptions.map(option => html`
                   <option value="${option.id}" ?selected="${option.id === this.selectedRecordingQualityId}">${option.label}</option>
                 `)}
@@ -852,14 +919,14 @@ export class RecorderPopupPage extends ComponentBase {
 
             <div class="form-group">
               <label>Frame Rate <span class="info-tip" tabindex="0" data-tip="${this.selectedRecordingFrameRateOption.description}"></span></label>
-              <select @change="${this.handleFrameRateChange}" ?disabled="${this.isRecording}">
+              <select @change="${this.handleFrameRateChange}" ?disabled="${this.isRecording || this.isSavingScreenshot}">
                 ${this.recordingFrameRateOptions.map(option => html`
                   <option value="${option.value}" ?selected="${option.value === this.selectedFrameRate}">${option.label}</option>
                 `)}
               </select>
             </div>
 
-            <button class="btn-outline mt-2" @click="${this.toggleOrientation}" ?disabled="${this.isRecording}">
+            <button class="btn-outline mt-2" @click="${this.toggleOrientation}" ?disabled="${this.isRecording || this.isSavingScreenshot}">
               <span class="material-icons-outlined" style="font-size: 18px">${this.isPortrait ? 'stay_current_landscape' : 'stay_current_portrait'}</span>
               Switch to ${this.isPortrait ? 'Landscape' : 'Portrait'}
             </button>
@@ -869,16 +936,25 @@ export class RecorderPopupPage extends ComponentBase {
                 type="checkbox"
                 .checked="${this.includeCursor}"
                 @change="${this.handleIncludeCursorChange}"
-                ?disabled="${this.isRecording}"
+                ?disabled="${this.isRecording || this.isSavingScreenshot}"
               />
               <span class="toggle-option-title">Record mouse cursor</span>
               <span class="info-tip" tabindex="0" data-tip="Turn off to try keeping the cursor out of recordings. Chromium only honors this for tab capture — pick &quot;This Tab&quot; in the share dialog. Check the DevTools console after starting a recording to confirm the constraint was applied."></span>
             </label>
+
+            <button
+              class="btn-outline"
+              @click="${this.saveScreenshot}"
+              ?disabled="${this.isStoppingRecording || this.isSavingScreenshot}"
+            >
+              <span class="material-icons-outlined" style="font-size: 18px">photo_camera</span>
+              ${this.isSavingScreenshot ? 'Saving Screenshot...' : 'Save Screenshot (PNG)'}
+            </button>
             
             <button 
               class="btn-primary ${this.isRecording ? 'recording' : ''}" 
               @click="${this.toggleRecording}"
-              ?disabled="${this.isStoppingRecording}"
+              ?disabled="${this.isStoppingRecording || this.isSavingScreenshot}"
             >
               <span class="material-icons-outlined" style="font-size: 20px">${this.isRecording ? 'stop_circle' : 'fiber_manual_record'}</span>
               ${this.isStoppingRecording ? 'Saving...' : this.isRecording ? 'Stop Recording' : 'Start Record'}

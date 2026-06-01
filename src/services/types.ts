@@ -95,4 +95,5 @@ export interface PreviewRecordingController {
   result: Promise<PreviewRecordingResult>;
   stop: () => Promise<PreviewRecordingResult>;
   cancel: () => Promise<void>;
+  captureScreenshot: () => Promise<Blob>;
 }
