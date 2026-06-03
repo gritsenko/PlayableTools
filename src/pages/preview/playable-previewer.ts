@@ -33,7 +33,7 @@ export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
   @inject(VideoStorageService) videoStorageService!: VideoStorageService;
 
-  private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games']);
+  private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games', 'ads-manager']);
 
   @property() fileName: string = "";
 
@@ -56,6 +56,9 @@ export class PlayablePreviewer extends ComponentBase {
   @state() private _sdkEvents: Array<{ event: string; args: any[]; elapsedMs: number }> = [];
   @state() private _iframeLoadMs: number | null = null;
   @state() private _reloadKey: number = 0;
+  @state() private _adOverlay: { id: string; kind: 'rewarded' | 'interstitial'; remaining: number; canClose: boolean } | null = null;
+  @state() private _adBannerVisible: boolean = false;
+  private _adOverlayTimer?: ReturnType<typeof setInterval>;
   private _sdkEventStart: number | null = null;
   private _iframeLoadStart: number | null = null;
   private _onMessageHandler?: (e: MessageEvent) => void;
@@ -99,6 +102,7 @@ export class PlayablePreviewer extends ComponentBase {
         this._sdkEventStart = null;
         this._iframeLoadMs = null;
         this._iframeLoadStart = performance.now();
+        this._resetAdOverlay();
         console.log(`✅ playable-previewer: Content set, loading=false`);
         this.requestUpdate();
       } else {
@@ -110,12 +114,14 @@ export class PlayablePreviewer extends ComponentBase {
         this._sdkEventStart = null;
         this._iframeLoadMs = null;
         this._iframeLoadStart = null;
+        this._resetAdOverlay();
       }
     });
     
     this.presetUnsubscribe = this.previewService.onPresetChange((preset) => {
       this.currentPreset = preset;
       this.isLanguageMenuOpen = false;
+      this._resetAdOverlay();
       this.requestUpdate();
     });
 
@@ -160,6 +166,15 @@ export class PlayablePreviewer extends ComponentBase {
           if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
           const elapsedMs = typeof data.elapsedMs === 'number' ? data.elapsedMs : (Date.now() - this._sdkEventStart);
           this._sdkEvents = [...this._sdkEvents, { event: data.event, args: data.args || [], elapsedMs }];
+          this.requestUpdate();
+        } else if (data.type === 'ads-manager-show' && this.currentPreset?.id === 'ads-manager') {
+          this._startAdOverlay(
+            data.adKind === 'rewarded' ? 'rewarded' : 'interstitial',
+            String(data.id || ''),
+            Math.max(0, Number(data.durationMs) || 0),
+          );
+        } else if (data.type === 'ads-manager-banner' && this.currentPreset?.id === 'ads-manager') {
+          this._adBannerVisible = !!data.visible;
           this.requestUpdate();
         } else if (data.type === 'cta-game-start' || data.type === 'sdk-session-start') {
           if (this._sdkEventStart === null) this._sdkEventStart = Date.now();
@@ -260,6 +275,19 @@ export class PlayablePreviewer extends ComponentBase {
     if (this._onDocumentKeyDown) {
       document.removeEventListener('keydown', this._onDocumentKeyDown);
     }
+    if (this._adOverlayTimer) {
+      clearInterval(this._adOverlayTimer);
+      this._adOverlayTimer = undefined;
+    }
+  }
+
+  private _resetAdOverlay() {
+    if (this._adOverlayTimer) {
+      clearInterval(this._adOverlayTimer);
+      this._adOverlayTimer = undefined;
+    }
+    this._adOverlay = null;
+    this._adBannerVisible = false;
   }
 
   protected override updated(_changedProps: PropertyValues): void {
@@ -278,6 +306,7 @@ export class PlayablePreviewer extends ComponentBase {
     this._sdkEventStart = null;
     this._iframeLoadMs = null;
     this._iframeLoadStart = performance.now();
+    this._resetAdOverlay();
     this.requestUpdate();
   }
 
@@ -335,6 +364,99 @@ export class PlayablePreviewer extends ComponentBase {
   private _getIframeEl(): HTMLIFrameElement | null {
     // ComponentBase renders in light DOM, so query directly
     return (this as unknown as HTMLElement).querySelector('.playable-iframe');
+  }
+
+  // ---- AdsManager ad-stub overlay (rendered on top of the simulator) --------
+  private _startAdOverlay(kind: 'rewarded' | 'interstitial', id: string, durationMs: number) {
+    if (this._adOverlayTimer) {
+      clearInterval(this._adOverlayTimer);
+      this._adOverlayTimer = undefined;
+    }
+
+    const remaining = Math.max(0, Math.ceil(durationMs / 1000));
+    this._adOverlay = { id, kind, remaining, canClose: remaining === 0 };
+    this.requestUpdate();
+
+    if (remaining === 0) return;
+
+    this._adOverlayTimer = setInterval(() => {
+      if (!this._adOverlay) {
+        if (this._adOverlayTimer) clearInterval(this._adOverlayTimer);
+        this._adOverlayTimer = undefined;
+        return;
+      }
+      const next = this._adOverlay.remaining - 1;
+      if (next <= 0) {
+        if (this._adOverlayTimer) clearInterval(this._adOverlayTimer);
+        this._adOverlayTimer = undefined;
+        this._adOverlay = { ...this._adOverlay, remaining: 0, canClose: true };
+      } else {
+        this._adOverlay = { ...this._adOverlay, remaining: next };
+      }
+      this.requestUpdate();
+    }, 1000);
+  }
+
+  private _renderAdOverlay(overlay: { id: string; kind: 'rewarded' | 'interstitial'; remaining: number; canClose: boolean }) {
+    const isRewarded = overlay.kind === 'rewarded';
+    const title = isRewarded ? 'Simulated Rewarded Video' : 'Simulated Interstitial';
+    const subtitle = isRewarded ? 'Watch to the end to earn your reward' : 'This is a full-screen ad';
+    const statusLine = overlay.canClose
+      ? 'Tap ✕ to close'
+      : isRewarded
+        ? `Reward in ${overlay.remaining}s…`
+        : `You can close in ${overlay.remaining}s…`;
+
+    return html`
+      <div class="absolute inset-0 z-[60] flex flex-col items-center justify-center text-center select-none"
+           style="background:#0b1020;color:#fff;">
+        <div class="absolute top-3 left-3 bg-yellow-400 text-black text-[11px] font-bold leading-none px-2 py-1 rounded tracking-wide">Ad</div>
+
+        <button
+          @click=${() => { if (overlay.canClose) this._finishAdOverlay(isRewarded ? 'rewarded' : 'dismissed'); }}
+          ?disabled=${!overlay.canClose}
+          aria-label="Close ad"
+          class="absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center text-base p-0 border-0 ${overlay.canClose ? 'bg-white/30 text-white cursor-pointer opacity-100' : 'bg-white/20 text-white cursor-not-allowed opacity-40'}"
+        >✕</button>
+
+        <div class="text-[18px] font-semibold mb-2.5 opacity-95">${title}</div>
+        <div class="text-[13px] opacity-60 mb-5 max-w-[80%]">${subtitle}</div>
+
+        <div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold border-[3px] ${overlay.canClose ? (isRewarded ? 'border-emerald-400' : 'border-white/55') : 'border-white/25'}">
+          ${overlay.remaining > 0 ? overlay.remaining : '✓'}
+        </div>
+
+        <div class="absolute bottom-[18px] text-xs opacity-55">${statusLine}</div>
+
+        ${isRewarded && !overlay.canClose ? html`
+          <button
+            @click=${() => this._finishAdOverlay('dismissed')}
+            class="absolute bottom-11 border border-white/30 bg-transparent text-white/70 text-xs px-3.5 py-1.5 rounded-md cursor-pointer"
+          >Skip (no reward)</button>
+        ` : null}
+      </div>
+    `;
+  }
+
+  private _finishAdOverlay(status: 'rewarded' | 'dismissed') {
+    const overlay = this._adOverlay;
+    if (!overlay) return;
+
+    if (this._adOverlayTimer) {
+      clearInterval(this._adOverlayTimer);
+      this._adOverlayTimer = undefined;
+    }
+    this._adOverlay = null;
+    this.requestUpdate();
+
+    try {
+      this._getIframeEl()?.contentWindow?.postMessage(
+        { type: 'ads-manager-result', id: overlay.id, status },
+        '*',
+      );
+    } catch (err) {
+      console.warn('playable-previewer: failed to post ad result to iframe', err);
+    }
   }
   
   private _dispatchToIframe(eventName: string, detail?: any) {
@@ -1142,6 +1264,14 @@ export class PlayablePreviewer extends ComponentBase {
                             </div>
                           </div>
                         ` : null}
+
+                        ${this._adBannerVisible && !this._adOverlay ? html`
+                          <div class="absolute left-0 right-0 bottom-0 h-[50px] z-40 flex items-center justify-center bg-slate-800 text-slate-300 text-xs border-t border-white/10">
+                            Ad banner (simulated)
+                          </div>
+                        ` : null}
+
+                        ${this._adOverlay ? this._renderAdOverlay(this._adOverlay) : null}
                       </div>
                     `
                   : html`

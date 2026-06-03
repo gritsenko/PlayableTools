@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Block Chpok</title>
+    <!-- OpenGraph Tags -->
+    <meta property="og:title" content="Block Chpok">
+    <meta property="og:description" content="A playful block puzzle game">
+    <meta property="og:image" content="og.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://gritsenko.biz/block_chpok/">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Platform facade: detects the native ads bridge and lazily loads the
+         Yandex Games SDK only when no native bridge is present. -->
+    <script src="platform.js"></script>
+
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+        (function (m, e, t, r, i, k, a) {
+            m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
+            m[i].l = 1 * new Date();
+            for (var j = 0; j < document.scripts.length; j++) { if (document.scripts[j].src === r) { return; } }
+            k = e.createElement(t), a = e.getElementsByTagName(t)[0], k.async = 1, k.src = r, a.parentNode.insertBefore(k, a);
+        })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+        ym(98653129, "init", {
+            clickmap: true,
+            trackLinks: true,
+            accurateTrackBounce: true
+        });
+    </script>
+    <noscript>
+        <div><img src="https://mc.yandex.ru/watch/98653129" style="position:absolute; left:-9999px;" alt=""></div>
+    </noscript>
+    <!-- /Yandex.Metrika counter -->
+</head>
+<body>
+
+<div class="splash-overlay" id="splash-overlay">
+    <div class="splash-content">
+        <button class="splash-play-btn" id="splash-play-btn" type="button">Play</button>
+    </div>
+</div>
+
+<div class="game-container">
+    <div class="header">
+        <div class="header-banner" aria-hidden="true">
+            <img src="assets/theme/crush_with_branch.png" alt="" class="header-branch-banner header-branch-banner-state active" data-character-state="base">
+            <img src="assets/theme/crush_with_branch_wait.png" alt="" class="header-branch-banner header-branch-banner-state" data-character-state="wait">
+            <img src="assets/theme/crush_with_branch_fire.png" alt="" class="header-branch-banner header-branch-banner-state" data-character-state="fire">
+            <img src="assets/theme/crush_with_branch_sad.png" alt="" class="header-branch-banner header-branch-banner-state" data-character-state="sad">
+        </div>
+        <button class="settings-btn" id="settings-btn" type="button" aria-label="Open settings"></button>
+        <div class="header-stats">
+            <div class="stat-panel score-panel">
+                <div class="stat-panel-ribbon" id="score-label">СЧЁТ:</div>
+                <div class="stat-panel-body score-panel-body">
+                    <span id="score">0</span>
+                </div>
+            </div>
+            <div class="stat-panel crystal-panel">
+                <div class="stat-panel-body crystal-panel-body">
+                    <div class="crystal-panel-text">
+                            <span class="stat-panel-ribbon stat-panel-ribbon-inline" id="crystals-label">BEST SCORE:</span>
+                        <span id="crystal-count">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <span id="best-score" class="visually-hidden">0</span>
+        <span id="main-score" class="visually-hidden">0</span>
+    </div>
+
+    <div class="board-container">
+        <div class="board" id="board"></div>
+        <div id="combo-display" class="combo-text"></div>
+    </div>
+
+    <div class="tray" id="tray">
+        <div class="tray-slot" id="slot-0"></div>
+        <div class="tray-slot" id="slot-1"></div>
+        <div class="tray-slot" id="slot-2"></div>
+    </div>
+
+    <canvas id="particles-canvas" class="particles-canvas"></canvas>
+
+    <div class="game-state-overlay" id="game-state-overlay" aria-hidden="true"></div>
+
+    <div class="modal-overlay" id="settings-modal" aria-hidden="true">
+        <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div class="settings-modal-header">
+                <h2 id="settings-title">Settings</h2>
+                <button class="settings-close-btn" id="settings-close-btn" type="button" aria-label="Close settings">×</button>
+            </div>
+            <label class="settings-option" for="music-toggle">
+                <div class="settings-option-copy">
+                    <span id="music-toggle-label">Sounds</span>
+                    <span class="settings-option-status" id="music-toggle-status">On</span>
+                </div>
+                <span class="toggle-switch">
+                    <input type="checkbox" id="music-toggle" checked>
+                    <span class="toggle-slider"></span>
+                </span>
+            </label>
+        </div>
+    </div>
+
+    <div id="game-over" aria-live="polite">
+        <h2 id="game-over-title">Game Over!</h2>
+        <div class="game-over-stats">
+            <div><span id="game-over-score-label">Score:</span> <strong id="game-over-score">0</strong></div>
+            <div><span id="game-over-best-label">Best:</span> <strong id="game-over-best">0</strong></div>
+        </div>
+        <button class="btn btn-yellow restart-btn" id="restart-btn" type="button">Play Again</button>
+    </div>
+
+    <div id="second-chance-modal" aria-live="polite">
+        <h2 id="second-chance-title">No moves!</h2>
+        <p id="second-chance-text">Watch an ad to get a new set of shapes?</p>
+        <div id="second-chance-shapes" class="reward-shapes-container"></div>
+        <div class="second-chance-actions">
+            <button class="btn btn-yellow second-chance-btn" id="second-chance-ad-btn" type="button">Watch Ad</button>
+            <button class="btn btn-outline second-chance-btn" id="second-chance-skip-btn" type="button">No thanks</button>
+        </div>
+    </div>
+    
+    <button id="debug-gameover-btn" class="btn btn-outline" style="display: none; position: fixed; bottom: 10px; right: 10px; z-index: 9999; padding: 10px; font-size: 12px; background: rgba(0,0,0,0.5); width: auto;">Debug Game Over</button>
+    <button id="debug-lang-btn" class="btn btn-outline" style="display: none; position: fixed; bottom: 10px; left: 10px; z-index: 9999; padding: 10px; font-size: 12px; background: rgba(0,0,0,0.5); width: auto;">Lang: EN</button>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

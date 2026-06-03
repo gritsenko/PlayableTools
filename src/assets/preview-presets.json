@@ -78,6 +78,19 @@
         }
       ],
       "replaceTokens": {}
+    },
+    {
+      "id": "ads-manager",
+      "name": "APK Wrapper (GameAds)",
+      "description": "Preview for playables built for the custom APK wrapper. The game ships its own platform.js (window.GameAds); this preset injects a mock native window.AdsBridge that platform.js routes through, so GameAds.showRewarded/showInterstitial calls show an ad stub overlay with a 3s timer and a close button. Drive outcomes via window.__adsSim. Bridge-level calls and resolved statuses are logged in the SDK Event Log.",
+      "maxFileSizeMB": 10,
+      "injectScripts": [
+        {
+          "source": "/ads-manager.js",
+          "position": "afterHeadStart"
+        }
+      ],
+      "replaceTokens": {}
     }
   ]
 }

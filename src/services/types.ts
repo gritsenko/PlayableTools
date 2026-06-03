@@ -49,7 +49,7 @@ export interface GeneratedPlatformArtifact {
 
 export interface PreviewScript {
   source: string;
-  position: 'beforeHeadEnd' | 'afterBodyStart' | 'beforeBodyEnd';
+  position: 'afterHeadStart' | 'beforeHeadEnd' | 'afterBodyStart' | 'beforeBodyEnd';
 }
 
 export interface PreviewLanguageOption {

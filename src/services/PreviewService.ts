@@ -9,7 +9,7 @@ import html2canvas from "html2canvas";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig, PreviewRecordingController, PreviewRecordingResult } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
-import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, type ValidationContext, type ValidationResult } from "./PreviewServiceValidators";
+import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, AdsManagerValidator, type ValidationContext, type ValidationResult } from "./PreviewServiceValidators";
 
 type ZipAssetPayload = {
   path: string;
@@ -596,6 +596,10 @@ export class PreviewService {
     const scriptTag = `<script>\n${scriptContent}\n</script>`;
     
     switch (position) {
+      case 'afterHeadStart':
+        // Inject at the very start of <head> so the script runs before any other
+        // head script (e.g. the game's platform.js, which captures window.AdsBridge once at load).
+        return html.replace(/<head[^>]*>/i, match => `${match}\n${scriptTag}`);
       case 'beforeHeadEnd':
         return html.replace(/<\/head>/i, `${scriptTag}\n</head>`);
       case 'afterBodyStart':
@@ -1170,15 +1174,19 @@ export class PreviewService {
   private async clearZipSession(sessionId?: string): Promise<void> {
     const targetSession = sessionId || this._zipSessionId;
     if (!targetSession) return;
-    await this.postMessageToZipSw({
-      type: 'ZIP_SESSION_CLEAR',
-      sessionId: targetSession
-    }, [], true);
+    // Clear local session state synchronously (before awaiting the service
+    // worker round-trip) so callers that don't await this method — e.g.
+    // clearUploadedContent() — see hasContent flip to false on the same tick.
+    // Otherwise "Load New Content" needs two clicks for ZIP playables.
     if (!sessionId) {
       this._zipSessionId = null;
       this._zipEntryPath = null;
       this.setZipPreviewUrl(null);
     }
+    await this.postMessageToZipSw({
+      type: 'ZIP_SESSION_CLEAR',
+      sessionId: targetSession
+    }, [], true);
   }
 
   /**
@@ -1231,6 +1239,14 @@ export class PreviewService {
             const yandexResults = yandexGamesValidator.validate(yandexSourceContent, fileSize, validationContext);
             results.categories.push(...yandexResults.categories);
             console.log(`✅ PreviewService: Yandex Games validation complete`);
+            break;
+          }
+          case 'ads-manager': {
+            const adsManagerValidator = new AdsManagerValidator();
+            const adsManagerSourceContent = this._validationSourceContent || this._originalUploadedContent || this._originalGithubContent || content;
+            const adsManagerResults = adsManagerValidator.validate(adsManagerSourceContent, fileSize, validationContext);
+            results.categories.push(...adsManagerResults.categories);
+            console.log(`✅ PreviewService: AdsManager validation complete`);
             break;
           }
           default:
