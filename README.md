@@ -106,6 +106,76 @@ The app now uses clean URLs such as `/publish` and `/base64` instead of hash rou
 
 *Note: Each platform has specific requirements and optimizations built-in. Check the platform-specific options in the publish page for details.*
 
+## 🤖 Headless Packing (CLI + MCP for agents & CI)
+
+The same packing engine behind the web `/publish` page is also a **browser-free
+core** (`@gritsenko/cta-core`) exposed through a **CLI** (`@gritsenko/cta-pack`)
+and an **MCP server** (`@gritsenko/cta-mcp`). Feed it an already-built HTML
+playable (a single `.html` or a folder with `index.html` + relative assets) and
+it produces per-network builds plus a machine-readable validation report — no
+browser, no clicks. This is a universal **post-build packer**, not a bundler.
+
+### Build the tools
+
+```powershell
+npm install
+npm run build:tools     # builds @gritsenko/cta-core, cta-pack, cta-mcp
+```
+
+### CLI
+
+```powershell
+node packages/node/dist/cli.js <source> --networks facebook,google,unity --out ./builds --validate --report json
+```
+
+- `<source>` — a folder (entry `index.html` + relative assets) or a single `.html` file.
+- `--networks a,b,c` — comma list of network ids (omit for all). `--list-networks` prints them.
+- `--validate` — run per-network checks; pair with `--report json` or `--report pretty`.
+- `--compress imba` — inline a pako-compressed loader to shrink the entry HTML.
+- `--android-url` / `--ios-url` — fill the `{{google}}` / `{{apple}}` store tokens.
+- `--name` / `--suffix` — output file naming (default: source name / `EN`).
+- **Exit codes:** `0` ok · `2` built but validation failed · `1` fatal error.
+
+Builds land in `builds/<network>/`. Supported networks (id · max size):
+
+- **single-html:** `facebook` 2MB · `moloco` 5MB · `ironsource` 5MB · `adcolony` 2MB · `unity` 5MB · `applovin` 5MB · `liftoff` 5MB · `chartboost` 3MB
+- **zip:** `facebook_zip` 5MB · `mintegral` 5MB · `vungle` 5MB · `tiktok` 5MB · `google` 5MB
+
+### Report contract (shared by CLI and MCP)
+
+```json
+{
+  "ok": false,
+  "networks": [
+    { "id": "google", "ok": true, "output": "zip", "path": "builds/google/Game_Google_EN.zip", "sizeBytes": 1803 },
+    { "id": "facebook", "ok": false, "output": "single-html", "path": "builds/facebook/Game_Facebook_EN.html", "sizeBytes": 5610000,
+      "issues": [
+        { "code": "SIZE_EXCEEDED", "level": "error", "limit": 2097152, "actual": 5610000,
+          "hint": "compress=imba or reduce inlined assets by ~3.4MB" }
+      ] }
+  ]
+}
+```
+
+Issue codes: `SIZE_EXCEEDED`, `MISSING_STORE_URL`, `NO_CTA_HOOK`, `EXTERNAL_SCRIPT`, `BLOCKED_API`, `MISSING_DOCTYPE`, `INVALID_HTML`.
+
+### MCP server
+
+Register the stdio server in your MCP client:
+
+```json
+{ "mcpServers": { "cta": { "command": "node", "args": ["packages/mcp/dist/server.js"] } } }
+```
+
+Tools:
+
+- `list_networks()` → `[{ id, output, maxBytes, notes }]`
+- `pack_playable({ source, networks?, outDir?, options?, validate? })` → `{ builds, report }`
+- `validate_build({ source, networks? })` → `report`
+
+`source` is a filesystem path **or** base64-encoded HTML, so an agent can pack a
+build inline or from disk. `pack_playable` validates by default.
+
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
@@ -183,7 +253,7 @@ The preview system supports ZIP packages with complete asset extraction:
 
 - **Framework Documentation**: See `AGENTS.md` for detailed architecture and patterns
 - **Service Worker**: Version checking and caching handled via `src/sw-version-handler.js`
-- **Platform Adapters**: Add new platforms by following existing patterns in `src/services/PlayablePublishService.ts`
+- **Platform Adapters**: Add or edit networks in `packages/core/src/networks.ts` (the headless core); the web, CLI and MCP all read this single registry
 - **SEO Route Manifest**: Public/indexable route policy is defined in `src/seo/route-manifest.json`
 
 ## 🤝 Contributing

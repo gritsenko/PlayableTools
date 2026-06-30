@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "vite",
     "build:packages": "npm run build -w @gritsenko/cta-core",
+    "build:tools": "npm run build -w @gritsenko/cta-core && npm run build -w @gritsenko/cta-pack && npm run build -w @gritsenko/cta-mcp",
+    "verify:tools": "npm run build:tools && node packages/core/scripts/verify.mjs && node packages/node/scripts/verify.mjs && node packages/mcp/scripts/verify.mjs",
     "build": "npm run build:packages && tsc && vite build && node scripts/prerender.mjs",
     "preview": "vite preview"
   },
