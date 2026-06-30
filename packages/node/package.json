@@ -1,0 +1,32 @@
+{
+  "name": "@gritsenko/cta-pack",
+  "version": "0.1.0",
+  "description": "Headless CLI + Node API for packing HTML5 playable ads for ad networks (post-build packer + validation).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "cta-pack": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gritsenko/cta-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.13",
+    "typescript": "~5.8.3"
+  }
+}
