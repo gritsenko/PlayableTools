@@ -1,5 +1,5 @@
 import { ComponentBase, customElement, html, route, inject } from "fw";
-import { ImbaPackerService } from "../services/ImbaPackerService";
+import { ImbaPackerService, type ImbaPackerEncoding } from "../services/ImbaPackerService";
 
 /**
  * Imba Packer is a tool designed to optimize and compress HTML files for playable ads and similar use cases.
@@ -19,10 +19,12 @@ import { ImbaPackerService } from "../services/ImbaPackerService";
 export class ImbaPackerPage extends ComponentBase {
   @inject(ImbaPackerService) imbaPackerService!: ImbaPackerService;
   dragActive = false;
+  useBase122 = false;
   loadedFile: File | null = null;
   packedFileName: string | null = null;
   packedHtml: string | null = null;
   packedSize: number | null = null;
+  packedEncoding: ImbaPackerEncoding = "base64";
   compressionInfo: { diff: number; percent: number } | null = null;
 
   render() {
@@ -42,6 +44,18 @@ export class ImbaPackerPage extends ComponentBase {
               <span class="material-icons-outlined text-sm">warning</span>
               Experimental: results may vary depending on input file.
             </span>
+            <label class="mt-6 flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 cursor-pointer">
+              <input
+                type="checkbox"
+                .checked=${this.useBase122}
+                @change=${this._onEncodingToggle}
+                class="mt-1"
+              />
+              <span>
+                <span class="block font-medium text-slate-900 dark:text-white">Encode packed payload with Base122</span>
+                <span class="block text-sm text-slate-500 dark:text-slate-400">Smaller inline payload than base64 in some cases, but with a larger custom decoder.</span>
+              </span>
+            </label>
           </div>
         </div>
         
@@ -106,6 +120,10 @@ export class ImbaPackerPage extends ComponentBase {
                       <div class="text-xl font-mono text-slate-900 dark:text-white">${(this.compressionInfo.diff / 1024).toFixed(2)} KB</div>
                     </div>
                     <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
+                      <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Encoding</div>
+                      <div class="text-xl font-mono text-slate-900 dark:text-white">${this.packedEncoding}</div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-green-100 dark:border-green-900/30">
                       <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Compression Rate</div>
                       <div class="text-xl font-mono text-green-600 dark:text-green-400 font-bold">${this.compressionInfo.percent.toFixed(1)}%</div>
                     </div>
@@ -162,6 +180,12 @@ export class ImbaPackerPage extends ComponentBase {
     }
   }
 
+  _onEncodingToggle(e: Event) {
+    const input = e.target as HTMLInputElement;
+    this.useBase122 = input.checked;
+    this.requestUpdate();
+  }
+
 
   async _processFile(file: File) {
     if (!file.name.match(/\.html?$/i)) {
@@ -172,11 +196,11 @@ export class ImbaPackerPage extends ComponentBase {
     this.packedFileName = null;
     this.packedHtml = null;
     this.packedSize = null;
+    this.packedEncoding = this.useBase122 ? "base122" : "base64";
     this.compressionInfo = null;
     this.requestUpdate();
-    // Call service to pack and generate output
     try {
-      const { fileName, html } = await this.imbaPackerService.pack(file);
+      const { fileName, html } = await this.imbaPackerService.pack(file, this.packedEncoding);
       this.packedFileName = fileName;
       this.packedHtml = html;
       this.packedSize = new Blob([html], { type: 'text/html' }).size;
@@ -210,6 +234,7 @@ export class ImbaPackerPage extends ComponentBase {
     this.packedFileName = null;
     this.packedHtml = null;
     this.packedSize = null;
+    this.packedEncoding = this.useBase122 ? "base122" : "base64";
     this.compressionInfo = null;
     this.requestUpdate();
   }
