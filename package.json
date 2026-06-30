@@ -8,11 +8,13 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/prerender.mjs",
+    "build:packages": "npm run build -w @gritsenko/cta-core",
+    "build": "npm run build:packages && tsc && vite build && node scripts/prerender.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
+    "@gritsenko/cta-core": "*",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@picocss/pico": "^2.1.1",
