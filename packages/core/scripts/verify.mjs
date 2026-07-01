@@ -106,6 +106,14 @@ async function main() {
   const storeIssue = liftoffIssues.find((i) => i.code === "MISSING_STORE_URL");
   check("MISSING_STORE_URL error on mraid w/o store urls", !!storeIssue && storeIssue.level === "error", JSON.stringify(liftoffIssues));
 
+  // name/suffix sanitization prevents path traversal in generated file names.
+  const evil = await packForNetwork(bundle, "facebook", { name: "../../evil", suffix: "../x" });
+  check("malicious name/suffix sanitized (no separators / ..)",
+    !/[\\/]/.test(evil.outputFileName) && !evil.outputFileName.includes(".."), evil.outputFileName);
+  const evilZip = await packForNetwork(bundle, "mintegral", { name: "../../evil" });
+  check("malicious %name% zip sanitized (no separators / ..)",
+    !/[\\/]/.test(evilZip.outputFileName) && !evilZip.outputFileName.includes(".."), evilZip.outputFileName);
+
   console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);
   process.exit(failures === 0 ? 0 : 1);
 }

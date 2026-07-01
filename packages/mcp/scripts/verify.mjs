@@ -84,6 +84,18 @@ async function main() {
     (liftoff.issues ?? []).some((i) => i.code === "MISSING_STORE_URL" && i.level === "error"));
   check("validate_build does not write paths", validated.networks.every((n) => n.path === undefined));
 
+  // Strict source validation: raw HTML and garbage are rejected (not silently base64-decoded).
+  const rawHtml = await client.callTool({
+    name: "validate_build",
+    arguments: { source: "<!DOCTYPE html><html></html>", networks: ["facebook"] },
+  });
+  check("raw HTML source rejected", rawHtml.isError === true, JSON.stringify(rawHtml));
+  const garbage = await client.callTool({
+    name: "validate_build",
+    arguments: { source: "not a path and not base64!!!", networks: ["facebook"] },
+  });
+  check("garbage source rejected", garbage.isError === true, JSON.stringify(garbage));
+
   await client.close();
   await fs.rm(out, { recursive: true, force: true });
   console.log(`\n${failures === 0 ? "ALL MCP CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);

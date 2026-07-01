@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { pack, runPack, validateBuild, getNetworks } from "../dist/index.js";
+import { pack, runPack, validateBuild, getNetworks, writeArtifacts } from "../dist/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
@@ -74,6 +74,31 @@ async function main() {
   check("imba run is ok (exit 0)", imba.ok === true);
 
   check("getNetworks() exported from node API", getNetworks().length === 13);
+
+  // 5) writeArtifacts refuses to escape the output dir (defense-in-depth backstop).
+  let threw = false;
+  try {
+    await writeArtifacts(out, [
+      {
+        network: "x",
+        name: "x",
+        output: "single-html",
+        outputFileName: "../escape.html",
+        entryHtml: "",
+        sourceHtml: "",
+        compressed: false,
+        sizeBytes: 3,
+        files: [{ path: "../escape.html", bytes: new Uint8Array([1, 2, 3]), mime: "text/html" }],
+      },
+    ]);
+  } catch {
+    threw = true;
+  }
+  const escaped = await fs
+    .stat(path.join(out, "escape.html"))
+    .then(() => true)
+    .catch(() => false);
+  check("writeArtifacts refuses ../ traversal", threw && !escaped);
 
   await fs.rm(out, { recursive: true, force: true });
   console.log(`\n${failures === 0 ? "ALL CLI/API CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);

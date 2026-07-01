@@ -19,6 +19,20 @@ function resolveConfig(network: string | NetworkConfig): NetworkConfig {
   return config;
 }
 
+/**
+ * Sanitize a user-supplied file-name segment (playable name / suffix) so it can
+ * never introduce path separators or `..` traversal into a generated file name.
+ * Uses a positive allowlist (alphanumerics, dot, underscore, space, hyphen);
+ * everything else — path separators, control and fs-illegal chars — becomes "_".
+ */
+function sanitizeNameSegment(input: string, fallback: string): string {
+  const cleaned = input
+    .replace(/[^A-Za-z0-9._ -]+/g, "_")
+    .replace(/\.{2,}/g, "_") // collapse .. traversal sequences
+    .replace(/^[.\s]+|[.\s]+$/g, ""); // trim leading/trailing dots/spaces
+  return cleaned || fallback;
+}
+
 // Ported from generateFileName().
 function generateFileName(
   playableName: string,
@@ -86,8 +100,8 @@ export async function packForNetwork(
   options: PackOptions = {}
 ): Promise<PackedArtifact> {
   const config = resolveConfig(network);
-  const name = options.name || "Playable";
-  const suffix = options.suffix || "EN";
+  const name = sanitizeNameSegment(options.name || "Playable", "Playable");
+  const suffix = sanitizeNameSegment(options.suffix || "EN", "EN");
 
   const globalHtml = applyGlobalTokens(bundle.entryHtml);
   const processedHtml = processHtml(globalHtml, config, options);

@@ -13,6 +13,7 @@ import {
   validateBuild,
   bundleFromBase64Html,
   type PackOptions,
+  type PlayableBundle,
   type Report,
 } from "@gritsenko/cta-pack";
 
@@ -48,6 +49,41 @@ async function isPath(source: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function looksBase64(value: string): boolean {
+  const t = value.trim();
+  return t.length >= 8 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
+}
+
+function looksHtml(value: string): boolean {
+  return /<\s*(?:!doctype|html|head|body|div|script|canvas|meta|section|main|a\b|img)/i.test(value);
+}
+
+type ResolvedSource =
+  | { kind: "path"; path: string }
+  | { kind: "bundle"; bundle: PlayableBundle };
+
+/**
+ * Resolve `source` (an existing filesystem path OR base64-encoded HTML) with strict
+ * validation, so arbitrary non-base64 strings are rejected instead of silently
+ * decoded into garbage.
+ */
+async function resolveSource(source: string): Promise<ResolvedSource> {
+  if (await isPath(source)) {
+    return { kind: "path", path: source };
+  }
+  if (looksHtml(source)) {
+    throw new Error("`source` looks like raw HTML; pass it base64-encoded, or a filesystem path.");
+  }
+  if (!looksBase64(source)) {
+    throw new Error("`source` is neither an existing path nor base64-encoded HTML.");
+  }
+  const bundle = bundleFromBase64Html(source);
+  if (!looksHtml(bundle.entryHtml)) {
+    throw new Error("Decoded base64 `source` does not look like HTML.");
+  }
+  return { kind: "bundle", bundle };
 }
 
 function buildsFromReport(report: Report) {
@@ -99,21 +135,16 @@ server.registerTool(
       const out = outDir ?? "builds";
       const doValidate = validate ?? true;
       const opts = (options ?? {}) as PackOptions;
-      let report: Report;
-      if (await isPath(source)) {
-        report = await pack({ source, networks, out, validate: doValidate, options: opts });
-      } else {
-        const bundle = bundleFromBase64Html(source);
-        if (!bundle.entryHtml.includes("<")) {
-          throw new Error("`source` is neither an existing path nor valid base64 HTML.");
-        }
-        report = await runPack(bundle, {
-          networks,
-          out,
-          validate: doValidate,
-          options: { name: "Playable", ...opts },
-        });
-      }
+      const resolved = await resolveSource(source);
+      const report: Report =
+        resolved.kind === "path"
+          ? await pack({ source: resolved.path, networks, out, validate: doValidate, options: opts })
+          : await runPack(resolved.bundle, {
+              networks,
+              out,
+              validate: doValidate,
+              options: { name: "Playable", ...opts },
+            });
       return json({ builds: buildsFromReport(report), report });
     } catch (error) {
       return fail(error);
@@ -137,20 +168,15 @@ server.registerTool(
   async ({ source, networks, options }) => {
     try {
       const opts = (options ?? {}) as PackOptions;
-      let report: Report;
-      if (await isPath(source)) {
-        report = await validateBuild({ source, networks, options: opts });
-      } else {
-        const bundle = bundleFromBase64Html(source);
-        if (!bundle.entryHtml.includes("<")) {
-          throw new Error("`source` is neither an existing path nor valid base64 HTML.");
-        }
-        report = await runPack(bundle, {
-          networks,
-          validate: true,
-          options: { name: "Playable", ...opts },
-        });
-      }
+      const resolved = await resolveSource(source);
+      const report: Report =
+        resolved.kind === "path"
+          ? await validateBuild({ source: resolved.path, networks, options: opts })
+          : await runPack(resolved.bundle, {
+              networks,
+              validate: true,
+              options: { name: "Playable", ...opts },
+            });
       return json(report);
     } catch (error) {
       return fail(error);
