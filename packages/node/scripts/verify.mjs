@@ -59,17 +59,21 @@ async function main() {
   );
   check("google ok (non-mraid)", noStore.networks.find((n) => n.id === "google")?.ok === true);
 
-  // 3) Oversized input -> SIZE_EXCEEDED error (in-memory, no write).
+  // 3) Oversized input -> SIZE_EXCEEDED error (in-memory, no write). adcolony keeps a 2MB limit.
   const bigHtml = "<!DOCTYPE html><html><head><title>x</title></head><body>" + "x".repeat(3 * 1024 * 1024) + "</body></html>";
-  const big = await runPack({ entryHtml: bigHtml, assets: [] }, { networks: ["facebook"], validate: true });
-  const fb = big.networks[0];
-  const sizeIssue = (fb.issues ?? []).find((i) => i.code === "SIZE_EXCEEDED");
-  check("SIZE_EXCEEDED error on >2MB facebook", !!sizeIssue && sizeIssue.level === "error");
+  const big = await runPack({ entryHtml: bigHtml, assets: [] }, { networks: ["adcolony"], validate: true });
+  const ac = big.networks[0];
+  const sizeIssue = (ac.issues ?? []).find((i) => i.code === "SIZE_EXCEEDED");
+  check("SIZE_EXCEEDED error on >2MB adcolony", !!sizeIssue && sizeIssue.level === "error");
   check("SIZE_EXCEEDED has limit+actual", !!sizeIssue && sizeIssue.limit === 2 * 1024 * 1024 && sizeIssue.actual > sizeIssue.limit);
   check("exit code 2 on oversize", exitCodeFor(big) === 2);
 
-  // 4) imba compress option flows through.
-  const imba = await runPack({ entryHtml: bigHtml, assets: [] }, { networks: ["facebook"], validate: true, options: { compress: "imba" } });
+  // facebook now allows 5MB: the same 3MB input must pass (no SIZE_EXCEEDED, exit 0).
+  const fbBig = await runPack({ entryHtml: bigHtml, assets: [] }, { networks: ["facebook"], validate: true });
+  check("facebook (5MB) accepts a 3MB build", fbBig.ok === true && !(fbBig.networks[0].issues ?? []).some((i) => i.code === "SIZE_EXCEEDED"));
+
+  // 4) imba compress option flows through (adcolony's 2MB limit).
+  const imba = await runPack({ entryHtml: bigHtml, assets: [] }, { networks: ["adcolony"], validate: true, options: { compress: "imba" } });
   check("imba shrinks the >2MB input under 2MB", imba.networks[0].sizeBytes < 2 * 1024 * 1024, String(imba.networks[0].sizeBytes));
   check("imba run is ok (exit 0)", imba.ok === true);
 

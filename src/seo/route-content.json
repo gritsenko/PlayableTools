@@ -29,6 +29,16 @@
     ],
     "secondaryText": "The full interactive documentation view replaces this fallback after JavaScript initializes."
   },
+  "/headless-packer": {
+    "h1": "Headless Playable Packer & MCP Server for AI Agents",
+    "intro": "Pack HTML5 playable ads for major ad networks without a browser, using published npm packages: a CLI, a Node API, and an MCP server that lets an AI coding agent build and validate playables automatically.",
+    "highlights": [
+      "Run the same packing engine from the terminal or CI with @gritsenko/cta-pack, or embed @gritsenko/cta-core in your own tooling.",
+      "Let an AI agent do the work: register the @gritsenko/cta-mcp server and paste a short prompt to pack, validate, and fix issues.",
+      "Get a machine-readable report with size limits, CTA checks, and per-network validation so builds pass review the first time."
+    ],
+    "secondaryText": "Once the app loads, this static overview is replaced with the full headless packer and MCP guide."
+  },
   "/validate": {
     "h1": "Technical Requirements for Playable Ad Networks",
     "intro": "Browse validation notes, file-size limits, and testing references for major ad networks that accept HTML5 playable ads.",

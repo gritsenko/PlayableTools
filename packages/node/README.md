@@ -52,7 +52,7 @@ const { builds, report } = await packPlayable({
   "ok": false,
   "networks": [
     { "id": "google", "ok": true, "output": "zip", "path": "builds/google/Game_Google_EN.zip", "sizeBytes": 1803 },
-    { "id": "facebook", "ok": false, "output": "single-html", "path": "builds/facebook/Game_Facebook_EN.html", "sizeBytes": 5610000,
+    { "id": "adcolony", "ok": false, "output": "single-html", "path": "builds/adcolony/Game_AdColony_EN.html", "sizeBytes": 5610000,
       "issues": [
         { "code": "SIZE_EXCEEDED", "level": "error", "limit": 2097152, "actual": 5610000,
           "hint": "compress=imba or reduce inlined assets by ~3.4MB" }

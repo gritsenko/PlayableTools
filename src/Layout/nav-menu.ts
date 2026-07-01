@@ -23,6 +23,7 @@ export class NavMenu extends ComponentBase {
       category: "Manuals",
       items: [
         { label: "CTA SDK", icon: "gamepad", path: "/cta-sdk", disabled: false },
+        { label: "Headless & MCP", icon: "smart_toy", path: "/headless-packer", disabled: false },
         { label: "Guides", icon: "check_circle", path: "/validate", disabled: false },
       ]
     },

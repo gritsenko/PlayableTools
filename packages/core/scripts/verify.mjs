@@ -91,13 +91,22 @@ async function main() {
   const fbImba122 = await packForNetwork(bundle, "facebook", { ...opts, compress: "imba", imbaEncoding: "base122" });
   check("imba base122 loader has data-payload", td.decode(fbImba122.files[0].bytes).includes("imba-packed-payload"));
 
-  // SIZE_EXCEEDED on an oversized input (facebook limit 2MB).
+  // SIZE_EXCEEDED on an oversized input (adcolony limit 2MB).
   const big = { entryHtml: entryHtml + "<!--" + "x".repeat(3 * 1024 * 1024) + "-->", assets: [] };
-  const bigArt = await packForNetwork(big, "facebook", opts);
-  const bigIssues = validateArtifact(bigArt, "facebook");
+  const bigArt = await packForNetwork(big, "adcolony", opts);
+  const bigIssues = validateArtifact(bigArt, "adcolony");
   const sizeIssue = bigIssues.find((i) => i.code === "SIZE_EXCEEDED");
-  check("SIZE_EXCEEDED fires on >2MB facebook", !!sizeIssue && sizeIssue.level === "error", JSON.stringify(sizeIssue));
+  check("SIZE_EXCEEDED fires on >2MB adcolony", !!sizeIssue && sizeIssue.level === "error", JSON.stringify(sizeIssue));
   check("SIZE_EXCEEDED has limit+actual", !!sizeIssue && sizeIssue.limit === 2 * 1024 * 1024 && sizeIssue.actual > sizeIssue.limit);
+
+  // facebook now allows 5MB (Meta raised the HTML/ZIP limit): a 3MB input must NOT trip SIZE_EXCEEDED.
+  const fbBigArt = await packForNetwork(big, "facebook", opts);
+  const fbBigIssues = validateArtifact(fbBigArt, "facebook");
+  check(
+    "facebook (5MB) accepts a 3MB build",
+    !fbBigIssues.some((i) => i.code === "SIZE_EXCEEDED"),
+    JSON.stringify(fbBigIssues.find((i) => i.code === "SIZE_EXCEEDED"))
+  );
 
   // MISSING_STORE_URL on an mraid network with unresolved tokens.
   const mraidBundle = { entryHtml: entryHtml.replace("</body>", '<a href="{{google}}">play</a></body>'), assets: [] };

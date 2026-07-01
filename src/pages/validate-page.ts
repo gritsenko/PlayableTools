@@ -24,7 +24,7 @@ export class ValidatePage extends ComponentBase {
         <div class="space-y-6">
           ${this.renderNetworkCard(
             "Facebook Ads",
-            "2MB (HTML), 5MB (ZIP)",
+            "5MB (HTML), 5MB (ZIP)",
             html`
               <a
                 href="https://developers.facebook.com/tools/playable-preview/"

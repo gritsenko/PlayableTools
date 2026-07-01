@@ -1,6 +1,6 @@
 {
   "name": "@gritsenko/cta-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server exposing the headless playable packer (list_networks / pack_playable / validate_build).",
   "license": "MIT",
   "type": "module",
@@ -19,7 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@gritsenko/cta-pack": "^0.1.0",
+    "@gritsenko/cta-pack": "^0.1.1",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.23.8"
   },

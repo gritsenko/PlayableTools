@@ -18,6 +18,12 @@
     "prerender": true
   },
   {
+    "routePath": "/headless-packer",
+    "canonicalPath": "/headless-packer",
+    "indexable": true,
+    "prerender": true
+  },
+  {
     "routePath": "/validate",
     "canonicalPath": "/validate",
     "indexable": true,

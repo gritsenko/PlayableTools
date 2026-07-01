@@ -138,7 +138,7 @@ node packages/node/dist/cli.js <source> --networks facebook,google,unity --out .
 
 Builds land in `builds/<network>/`. Supported networks (id · max size):
 
-- **single-html:** `facebook` 2MB · `moloco` 5MB · `ironsource` 5MB · `adcolony` 2MB · `unity` 5MB · `applovin` 5MB · `liftoff` 5MB · `chartboost` 3MB
+- **single-html:** `facebook` 5MB · `moloco` 5MB · `ironsource` 5MB · `adcolony` 2MB · `unity` 5MB · `applovin` 5MB · `liftoff` 5MB · `chartboost` 3MB
 - **zip:** `facebook_zip` 5MB · `mintegral` 5MB · `vungle` 5MB · `tiktok` 5MB · `google` 5MB
 
 ### Report contract (shared by CLI and MCP)
@@ -148,7 +148,7 @@ Builds land in `builds/<network>/`. Supported networks (id · max size):
   "ok": false,
   "networks": [
     { "id": "google", "ok": true, "output": "zip", "path": "builds/google/Game_Google_EN.zip", "sizeBytes": 1803 },
-    { "id": "facebook", "ok": false, "output": "single-html", "path": "builds/facebook/Game_Facebook_EN.html", "sizeBytes": 5610000,
+    { "id": "adcolony", "ok": false, "output": "single-html", "path": "builds/adcolony/Game_AdColony_EN.html", "sizeBytes": 5610000,
       "issues": [
         { "code": "SIZE_EXCEEDED", "level": "error", "limit": 2097152, "actual": 5610000,
           "hint": "compress=imba or reduce inlined assets by ~3.4MB" }

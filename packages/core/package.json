@@ -1,6 +1,6 @@
 {
   "name": "@gritsenko/cta-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Headless, browser-free core for packing HTML5 playable ads for ad networks (transforms + per-network validation).",
   "license": "MIT",
   "type": "module",

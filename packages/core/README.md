@@ -34,7 +34,7 @@ for an MCP server, use [`@gritsenko/cta-mcp`](https://www.npmjs.com/package/@gri
 
 ## Supported networks
 
-- **single-html:** `facebook` 2MB · `moloco` 5MB · `ironsource` 5MB · `adcolony` 2MB · `unity` 5MB · `applovin` 5MB · `liftoff` 5MB · `chartboost` 3MB
+- **single-html:** `facebook` 5MB · `moloco` 5MB · `ironsource` 5MB · `adcolony` 2MB · `unity` 5MB · `applovin` 5MB · `liftoff` 5MB · `chartboost` 3MB
 - **zip:** `facebook_zip` 5MB · `mintegral` 5MB · `vungle` 5MB · `tiktok` 5MB · `google` 5MB
 
 The network registry lives in `src/networks.ts` and is the single source of

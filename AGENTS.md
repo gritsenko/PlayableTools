@@ -265,7 +265,7 @@ onProgress: (progress: number, platform?: string) => {
 {
   "id": "facebook",
   "Name": "Facebook",
-  "maxBytes": 2097152,
+  "maxBytes": 5242880,
   "format": "html", // or "zip"
   "replaceTokens": {
     "{{google}}": "https://play.google.com/store/apps/details?id=...",

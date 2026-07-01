@@ -34,10 +34,10 @@ export const NETWORKS: NetworkConfig[] = [
   {
     id: "facebook",
     Name: "Facebook",
-    maxBytes: 2 * MB,
+    maxBytes: 5 * MB,
     InjeectScripts: ["cta.Facebook.js"],
     replaceTokens: { XMLHttpRequest: "_xrq_" },
-    notes: "Single HTML. 2MB (HTML). Blocks XMLHttpRequest/fetch.",
+    notes: "Single HTML. 5MB (HTML/ZIP, per Meta). Blocks XMLHttpRequest/fetch.",
   },
   {
     id: "moloco",
