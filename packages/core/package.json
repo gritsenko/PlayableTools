@@ -1,0 +1,33 @@
+{
+  "name": "@gritsenko/cta-core",
+  "version": "0.1.0",
+  "description": "Headless, browser-free core for packing HTML5 playable ads for ad networks (transforms + per-network validation).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "codegen": "node scripts/embed-assets.mjs",
+    "build": "node scripts/embed-assets.mjs && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "pako": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/jszip": "^3.4.0",
+    "@types/pako": "^2.0.3",
+    "typescript": "~5.8.3"
+  }
+}

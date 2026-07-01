@@ -81,8 +81,8 @@ export class MyComponent extends ComponentBase {
 ```
 
 **Available Services:**
-- `PlayablePublishService` - Publishing to 10+ ad networks with platform-specific transformations
-- `ImbaPackerService` - HTML compression with Pako
+- `PlayablePublishService` - Browser adapter over `@gritsenko/cta-core`: publishes to 13 ad networks with platform-specific transformations (see "Headless Core, CLI & MCP")
+- `ImbaPackerService` - Browser adapter over the core Imba packer (HTML compression with Pako)
 - `Base64ConverterService` - File to base64 conversion
 - `PreviewService` - Playable preview functionality with ZIP support, gameplay recording, and MP4 export (WebCodecs primary, FFmpeg.wasm fallback)
 - `PortfolioService` - GitHub portfolio integration
@@ -144,6 +144,42 @@ src/
 - **PWA**: Auto-update service worker with version checking. The `VersionService` fetches `/version.json` to detect new builds and prompt the user to update.
 - **ZIP Preview System**: Dedicated service worker (`/zip-preview-sw.js`) for serving ZIP contents at virtual URLs
 - **SEO Output**: build generates prerendered HTML for selected public routes, plus `dist/404.html`, `dist/sitemap.xml`, and `dist/robots.txt`
+
+## Headless Core, CLI & MCP (monorepo)
+
+The repo is an npm-workspaces monorepo. The web app stays at the repo root (so the
+GitHub Pages build/deploy in `.github/workflows/static.yml` is unchanged); the
+packing engine lives in `packages/`:
+
+- `packages/core` — `@gritsenko/cta-core`: pure, **browser-free and node-fs-free**
+  packing engine (global/network token replace, script injection, ZIP via JSZip's
+  universal `uint8array` type, Imba via Pako, and per-network `validate`). It ships
+  its own copy of the injected scripts, embedded at build time by
+  `scripts/embed-assets.mjs` from `packages/core/assets/publish-data/` into
+  `src/generated/publish-assets.ts`.
+- `packages/node` — `@gritsenko/cta-pack`: Node CLI (`cta-pack`) + API
+  (`pack` / `runPack` / `validateBuild`) with the fs source reader and artifact writer.
+- `packages/mcp` — `@gritsenko/cta-mcp`: stdio MCP server (`list_networks`,
+  `pack_playable`, `validate_build`) over the Node API.
+
+The web `PlayablePublishService` / `ImbaPackerService` are **thin browser adapters**
+that delegate to `@gritsenko/cta-core` and only handle browser I/O (Blob wrapping,
+download anchor, File System Access). `npm run build` builds the core first
+(`build:packages`) then the web; `npm run build:tools` builds all three packages and
+`npm run verify:tools` runs their smoke tests. Exit codes for the CLI: `0` ok, `2`
+built-but-validation-failed, `1` fatal. The JSON report contract is documented in
+`README.md`.
+
+### Adding / editing a network
+
+Networks are defined in **`packages/core/src/networks.ts`** (the old
+`src/assets/platforms-config.json` has been removed). Each entry keeps the legacy
+fields (`Name`, `format`, `InjeectScripts`, `ExtractScripts`, `OutputIndexHtmlName`,
+`ExtraFiles`, `replaceTokens`) plus a stable lowercase `id` and a `maxBytes`
+constraint (sourced from `src/pages/validate-page.ts`). Injected `cta.*.js` scripts
+and `ExtraFiles` live in `packages/core/assets/publish-data/`; after adding one,
+rebuild the core so the codegen re-embeds it. The web, CLI and MCP all read this
+single registry.
 
 ## README / Landing page guidelines
 This repository doubles as a small landing page for users who come to the project looking for tools to run locally. To keep the README helpful and welcoming to non-developers, follow these guidelines when editing `README.md`:
@@ -225,9 +261,11 @@ onProgress: (progress: number, platform?: string) => {
 
 ### Platform Publishing Patterns
 ```typescript
-// Platform-specific configuration in platforms-config.json
+// Platform-specific configuration in packages/core/src/networks.ts (NetworkConfig)
 {
+  "id": "facebook",
   "Name": "Facebook",
+  "maxBytes": 2097152,
   "format": "html", // or "zip"
   "replaceTokens": {
     "{{google}}": "https://play.google.com/store/apps/details?id=...",

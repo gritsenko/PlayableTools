@@ -3,13 +3,20 @@
   "private": true,
   "version": "2.2.8",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/prerender.mjs",
+    "build:packages": "npm run build -w @gritsenko/cta-core",
+    "build:tools": "npm run build -w @gritsenko/cta-core && npm run build -w @gritsenko/cta-pack && npm run build -w @gritsenko/cta-mcp",
+    "verify:tools": "npm run build:tools && node packages/core/scripts/verify.mjs && node packages/node/scripts/verify.mjs && node packages/mcp/scripts/verify.mjs",
+    "build": "npm run build:packages && tsc && vite build && node scripts/prerender.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
+    "@gritsenko/cta-core": "*",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@picocss/pico": "^2.1.1",
