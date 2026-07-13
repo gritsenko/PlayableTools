@@ -422,14 +422,20 @@ async handleSavePlayable() {
   }
 
   handleCancel() {
-    this.dispatchEvent(new CustomEvent("editor-closed", { bubbles: true }));
+    navigate("/portfolio");
   }
 
   async handleDeletePlayable() {
     if (!this.existingPlayable) return;
 
+    const creativeId = this.existingPlayable.creativeId;
+    if (creativeId == null) {
+      this.errorMessage = "Cannot delete playable: missing creative id";
+      return;
+    }
+
     const confirmed = confirm(
-      `Are you sure you want to delete "${this.existingPlayable.name}"? This action cannot be undone.`
+      `Are you sure you want to delete "${this.existingPlayable.name}"? This will delete the playable and all its variations. This action cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -438,10 +444,12 @@ async handleSavePlayable() {
     this.errorMessage = "";
 
     try {
-      await this.portfolioService.deletePlayable(this.existingPlayable.id);
+      // Delete the whole creative (including all variations and files),
+      // not just a single variation — otherwise an empty card is left behind.
+      await this.portfolioService.deleteCreative(creativeId);
       this.successMessage = "Playable deleted successfully!";
       setTimeout(() => {
-        this.dispatchEvent(new CustomEvent("playable-deleted", { bubbles: true }));
+        navigate("/portfolio");
       }, 1000);
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : "Failed to delete playable";

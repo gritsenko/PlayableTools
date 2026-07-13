@@ -364,11 +364,11 @@ export class PortfolioPage extends ComponentBase {
 
     return html`
       <div
-        class="group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col"
+        class="group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col ${this.openMenuId === creative.id ? "z-30" : ""}"
       >
         <!-- Card Cover / Screenshot -->
         <div
-          class="aspect-square w-full bg-slate-100 dark:bg-slate-800 relative cursor-pointer overflow-hidden"
+          class="aspect-square w-full bg-slate-100 dark:bg-slate-800 relative cursor-pointer overflow-hidden rounded-t-xl"
           @click=${() => this.handlePreviewCreative(creative)}
         >
           ${screenshotUrl
@@ -405,7 +405,7 @@ export class PortfolioPage extends ComponentBase {
         </div>
 
         <!-- Card Content -->
-        <div class="p-4 flex-1 flex flex-col">
+        <div class="p-4 flex-1 flex flex-col rounded-b-xl">
           <div class="flex justify-between items-start mb-2">
             <h4 class="font-bold text-slate-900 dark:text-white line-clamp-1 flex-1" title="${creative.title}">
               ${creative.title}
