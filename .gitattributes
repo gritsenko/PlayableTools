@@ -1,0 +1,31 @@
+# Normalize line endings: store as LF in the repo and check out as LF
+# on every platform. Kills the "LF will be replaced by CRLF" warnings on
+# Windows regardless of each machine's core.autocrlf setting.
+* text=auto eol=lf
+
+# Binary assets — never touch their bytes.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.svg   text eol=lf
+*.mp3   binary
+*.m4a   binary
+*.aac   binary
+*.wav   binary
+*.ogg   binary
+*.mp4   binary
+*.webm  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+*.wasm  binary
+*.zip   binary
+*.pdf   binary
+
+# Scripts that must stay LF even on Windows tooling.
+*.sh    text eol=lf
