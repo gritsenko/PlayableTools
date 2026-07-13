@@ -33,7 +33,7 @@ export class PlayablePreviewer extends ComponentBase {
   @inject(PreviewService) previewService!: PreviewService;
   @inject(VideoStorageService) videoStorageService!: VideoStorageService;
 
-  private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games', 'ads-manager']);
+  private static readonly sdkEventPresetIds = new Set(['preview-cta', 'yandex-games', 'ads-manager', 'applovin']);
 
   @property() fileName: string = "";
 

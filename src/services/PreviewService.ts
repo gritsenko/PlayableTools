@@ -9,7 +9,7 @@ import html2canvas from "html2canvas";
 import pako from "pako";
 import type { PreviewPreset, PreviewPresetsConfig, PreviewRecordingController, PreviewRecordingResult } from "./types";
 import previewPresetsConfig from "../assets/preview-presets.json";
-import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, AdsManagerValidator, type ValidationContext, type ValidationResult } from "./PreviewServiceValidators";
+import { GeneralValidator, FacebookValidator, MraidValidator, CtaSdkValidator, YandexGamesValidator, AdsManagerValidator, AppLovinValidator, type ValidationContext, type ValidationResult } from "./PreviewServiceValidators";
 
 type ZipAssetPayload = {
   path: string;
@@ -1239,6 +1239,14 @@ export class PreviewService {
             const yandexResults = yandexGamesValidator.validate(yandexSourceContent, fileSize, validationContext);
             results.categories.push(...yandexResults.categories);
             console.log(`✅ PreviewService: Yandex Games validation complete`);
+            break;
+          }
+          case 'applovin': {
+            const appLovinValidator = new AppLovinValidator();
+            const appLovinSourceContent = this._validationSourceContent || this._originalUploadedContent || this._originalGithubContent || content;
+            const appLovinResults = appLovinValidator.validate(appLovinSourceContent, fileSize, validationContext);
+            results.categories.push(...appLovinResults.categories);
+            console.log(`✅ PreviewService: AppLovin validation complete`);
             break;
           }
           case 'ads-manager': {

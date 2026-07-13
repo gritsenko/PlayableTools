@@ -80,6 +80,19 @@
       "replaceTokens": {}
     },
     {
+      "id": "applovin",
+      "name": "AppLovin MAX",
+      "description": "Preview configured for AppLovin MAX playables. Renders the creative inside an MRAID container stub (ready/viewableChange/open lifecycle) and logs the AppLovin MAX analytics stream (impression, engagement, CTA click, etc.) in the SDK Event Log. Enforces AppLovin's single self-contained HTML requirement and 5MB limit. Drive events manually via window.__applovinSimulate.",
+      "maxFileSizeMB": 5,
+      "injectScripts": [
+        {
+          "source": "/applovin.js",
+          "position": "afterBodyStart"
+        }
+      ],
+      "replaceTokens": {}
+    },
+    {
       "id": "ads-manager",
       "name": "APK Wrapper (GameAds)",
       "description": "Preview for playables built for the custom APK wrapper. The game ships its own platform.js (window.GameAds); this preset injects a mock native window.AdsBridge that platform.js routes through, so GameAds.showRewarded/showInterstitial calls show an ad stub overlay with a 3s timer and a close button. Drive outcomes via window.__adsSim. Bridge-level calls and resolved statuses are logged in the SDK Event Log.",
