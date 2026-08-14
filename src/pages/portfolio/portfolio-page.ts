@@ -4,6 +4,10 @@ import { PreviewService } from "../../services/PreviewService";
 import { AuthenticationService } from "../../services/AuthenticationService";
 import { PlayablePublishService } from "../../services/PlayablePublishService";
 import "./project-manager";
+import "./portfolio-share-modal";
+import type { PortfolioShareModal } from "./portfolio-share-modal";
+
+type PublicViewState = "loading" | "ok" | "closed" | "notFound" | "error";
 
 @customElement("portfolio-page")
 @route("/portfolio", {
@@ -34,6 +38,16 @@ export class PortfolioPage extends ComponentBase {
   @state()
   private openMenuId: number | null = null;
 
+  /** Login from `?u=` — when present the page shows somebody's shared portfolio instead of your own */
+  @state()
+  private publicLogin: string | null = null;
+
+  @state()
+  private publicViewState: PublicViewState = "loading";
+
+  @state()
+  private publicOwnerName = "";
+
   private _onWindowClick = () => {
     if (this.openMenuId !== null) {
       this.openMenuId = null;
@@ -43,9 +57,18 @@ export class PortfolioPage extends ComponentBase {
 
   connectedCallback() {
     super.connectedCallback();
+
+    const requestedLogin = new URLSearchParams(window.location.search).get("u");
+    this.publicLogin = requestedLogin && requestedLogin.trim() ? requestedLogin.trim() : null;
+
+    if (this.publicLogin) {
+      this.loadPublicPortfolio(this.publicLogin);
+      return;
+    }
+
     this.checkAuthentication();
     window.addEventListener("click", this._onWindowClick);
-    
+
     // Subscribe to logout events (e.g., when 401 happens)
     this._unsubscribeAuth = this.authService.subscribe((reason?: string) => {
       console.log("Session expired:", reason);
@@ -84,9 +107,32 @@ export class PortfolioPage extends ComponentBase {
     }
   }
 
+  async loadPublicPortfolio(login: string) {
+    this.publicViewState = "loading";
+    this.errorMessage = "";
+
+    try {
+      const result = await this.portfolioService.getPublicPortfolio(login);
+
+      if (result.status !== "ok") {
+        this.publicViewState = result.status;
+        return;
+      }
+
+      this.publicOwnerName = result.displayName;
+      this.projects = result.projects;
+      this.creatives = result.creatives;
+      this.publicViewState = "ok";
+    } catch (error) {
+      console.error("Failed to load public portfolio:", error);
+      this.errorMessage = error instanceof Error ? error.message : "Failed to load portfolio";
+      this.publicViewState = "error";
+    }
+  }
+
   updated(changedProperties: Map<string, any>) {
     super.updated(changedProperties);
-    if (!this.isAuthenticated && !this.isLoading) {
+    if (!this.publicLogin && !this.isAuthenticated && !this.isLoading) {
       this.renderGoogleButton();
     }
   }
@@ -319,6 +365,11 @@ export class PortfolioPage extends ComponentBase {
     navigate("/projects");
   };
 
+  handleShowShareSettings = () => {
+    const modal = this.querySelector("portfolio-share-modal") as PortfolioShareModal | null;
+    modal?.show();
+  };
+
   getScreenshotUrl = (screenshotStorageName: string): string => {
     return `${this.portfolioService.getApiBaseUrl()}/api/files/${screenshotStorageName}`;
   };
@@ -355,7 +406,7 @@ export class PortfolioPage extends ComponentBase {
     `;
   }
 
-  private renderCreativeCard(creative: CreativeWithVariations) {
+  private renderCreativeCard(creative: CreativeWithVariations, readOnly = false) {
     const latestVariation = creative.variations[creative.variations.length - 1];
     const hasScreenshot = latestVariation?.screenshotFile;
     const screenshotUrl = hasScreenshot
@@ -412,6 +463,7 @@ export class PortfolioPage extends ComponentBase {
             </h4>
 
             <!-- Actions Menu -->
+            ${readOnly ? "" : html`
             <div class="relative ml-2">
               <button
                 @click=${(e: Event) => this.toggleMenu(creative.id, e)}
@@ -454,6 +506,7 @@ export class PortfolioPage extends ComponentBase {
                   `
                 : ""}
             </div>
+            `}
           </div>
 
           <p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-4 flex-1">
@@ -484,7 +537,77 @@ export class PortfolioPage extends ComponentBase {
     `;
   }
 
+  private renderPublicMessage(icon: string, title: string, message: string) {
+    return html`
+      <div class="max-w-xl mx-auto py-20 flex flex-col items-center text-center">
+        <div
+          class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4"
+        >
+          <span class="material-icons-outlined text-3xl text-slate-400 dark:text-slate-500">${icon}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">${title}</h1>
+        <p class="text-slate-500 dark:text-slate-400">${message}</p>
+      </div>
+    `;
+  }
+
+  private renderPublicView() {
+    switch (this.publicViewState) {
+      case "loading":
+        return html`
+          <div class="flex flex-col items-center justify-center py-20">
+            <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-slate-500 dark:text-slate-400">Loading portfolio...</p>
+          </div>
+        `;
+
+      case "closed":
+        return this.renderPublicMessage(
+          "lock",
+          "Access closed",
+          "The owner of this portfolio has turned off link sharing."
+        );
+
+      case "notFound":
+        return this.renderPublicMessage(
+          "search_off",
+          "Portfolio not found",
+          `There is no portfolio for "${this.publicLogin}".`
+        );
+
+      case "error":
+        return this.renderPublicMessage(
+          "error_outline",
+          "Failed to load portfolio",
+          this.errorMessage || "Please try again later."
+        );
+    }
+
+    return html`
+      <div class="max-w-7xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-slate-900 dark:text-white">${this.publicOwnerName}</h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1">Shared portfolio</p>
+        </div>
+
+        ${this.creatives.length === 0
+          ? this.renderPublicMessage("inbox", "Nothing here yet", "This portfolio has no playables.")
+          : html`
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                ${[...this.creatives]
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((creative) => this.renderCreativeCard(creative, true))}
+              </div>
+            `}
+      </div>
+    `;
+  }
+
   render() {
+    if (this.publicLogin) {
+      return this.renderPublicView();
+    }
+
     if (!this.isAuthenticated) {
       return html`
         <div class="max-w-4xl mx-auto">
@@ -522,6 +645,12 @@ export class PortfolioPage extends ComponentBase {
           </div>
           <div class="flex gap-3">
             <button
+              @click=${this.handleShowShareSettings}
+              class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-medium flex items-center gap-2"
+            >
+              <span class="material-icons-outlined">share</span> Share
+            </button>
+            <button
               @click=${this.handleShowProjects}
               class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium flex items-center gap-2"
             >
@@ -558,6 +687,8 @@ export class PortfolioPage extends ComponentBase {
                 ${this.renderGhostCard()} ${[...this.creatives].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((creative) => this.renderCreativeCard(creative))}
               </div>
             `}
+
+        <portfolio-share-modal></portfolio-share-modal>
       </div>
     `;
   }

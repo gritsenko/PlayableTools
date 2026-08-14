@@ -1,5 +1,14 @@
 import { injectable, ServiceLifetime, inject } from "fw";
-import { ApiClient, type Creative, type Variation, type FileMeta, type Project } from "./ApiClient";
+import {
+  ApiClient,
+  type Creative,
+  type Variation,
+  type FileMeta,
+  type Project,
+  type PortfolioShareMode,
+  type PortfolioShareSettings,
+  type PublicPortfolio,
+} from "./ApiClient";
 
 export interface PlayableAdData {
   id: string;
@@ -478,6 +487,74 @@ export class PortfolioService {
     const variationId = parseInt(match[2], 10);
     
     await this.apiClient.deleteVariation(creativeId, variationId);
+  }
+
+  // === PORTFOLIO SHARING ===
+
+  async getShareSettings(): Promise<PortfolioShareSettings> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.getPortfolioShareSettings();
+  }
+
+  async setShareMode(shareMode: PortfolioShareMode): Promise<PortfolioShareSettings> {
+    if (!this.isAuthenticated()) throw new Error("Not authenticated");
+    return this.apiClient.updatePortfolioShareSettings(shareMode);
+  }
+
+  /**
+   * Builds the public portfolio URL for a login, e.g. https://tools.gritsenko.biz/portfolio?u=igor.gritsenko
+   */
+  buildPortfolioShareUrl(login: string): string {
+    return `${window.location.origin}/portfolio?u=${encodeURIComponent(login)}`;
+  }
+
+  /**
+   * Loads a public portfolio by login. Returns "closed" when the owner disabled link sharing
+   * and "notFound" when there is no such login.
+   */
+  async getPublicPortfolio(login: string): Promise<
+    | { status: "ok"; displayName: string; creatives: CreativeWithVariations[]; projects: Project[] }
+    | { status: "closed" }
+    | { status: "notFound" }
+  > {
+    const result = await this.apiClient.getPublicPortfolio(login);
+    if (result.status !== "ok") return result;
+
+    return {
+      status: "ok",
+      displayName: result.portfolio.displayName,
+      creatives: result.portfolio.creatives.map((c) => this.toCreativeWithVariations(c)),
+      projects: result.portfolio.projects as Project[],
+    };
+  }
+
+  private toCreativeWithVariations(creative: PublicPortfolio["creatives"][number]): CreativeWithVariations {
+    return {
+      id: creative.id,
+      title: creative.title,
+      details: creative.details,
+      project: creative.project,
+      tags: creative.tags ?? [],
+      createdAt: new Date(creative.createdAt).getTime(),
+      variations: (creative.variations ?? []).map((v) => ({
+        id: v.id,
+        title: v.title,
+        createdAt: new Date(v.createdAt).getTime(),
+        file: v.file
+          ? {
+              storageName: v.file.storageName,
+              originalName: v.file.originalName,
+              contentType: v.file.contentType,
+            }
+          : undefined,
+        screenshotFile: v.screenshotFile
+          ? {
+              storageName: v.screenshotFile.storageName,
+              originalName: v.screenshotFile.originalName,
+            }
+          : undefined,
+      })),
+    };
   }
 
   async getPlayableByShortLink(shortLink: string): Promise<PlayableAdData | null> {

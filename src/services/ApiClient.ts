@@ -325,6 +325,45 @@ export class ApiClient {
     await this.handleResponse(response);
   }
 
+  // === PORTFOLIO SHARING ===
+  async getPortfolioShareSettings(): Promise<PortfolioShareSettings> {
+    if (!this.token) throw new Error("Not authenticated");
+    const response = await fetch(`${this.baseUrl}/api/portfolio/share`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async updatePortfolioShareSettings(shareMode: PortfolioShareMode): Promise<PortfolioShareSettings> {
+    if (!this.token) throw new Error("Not authenticated");
+    const response = await fetch(`${this.baseUrl}/api/portfolio/share`, {
+      method: "PUT",
+      headers: this.getHeaders(),
+      body: JSON.stringify({ shareMode })
+    });
+    return this.handleResponse(response);
+  }
+
+  /**
+   * Loads someone's portfolio by public login. Anonymous request:
+   * the backend answers 403 when the owner keeps the portfolio closed and 404 when the login is unknown.
+   */
+  async getPublicPortfolio(login: string): Promise<PublicPortfolioResult> {
+    const response = await fetch(`${this.baseUrl}/api/portfolio/public/${encodeURIComponent(login)}`, {
+      headers: this.getHeaders(false)
+    });
+
+    if (response.status === 403) return { status: "closed" };
+    if (response.status === 404) return { status: "notFound" };
+    if (!response.ok) {
+      const error = await response.text().catch(() => "");
+      throw new Error(error || `HTTP ${response.status}`);
+    }
+
+    const data = await this.parseSuccessfulResponse<PublicPortfolio>(response);
+    return { status: "ok", portfolio: data };
+  }
+
   /**
    * Generates a temporary shareable link for a file stored on the backend.
    * The link is stateless (HMAC-signed, 24h expiry) and requires no authentication.
@@ -412,3 +451,42 @@ export interface UpdateProjectRequest {
   appStore?: string;
   googlePlay?: string;
 }
+
+/** "closed" - portfolio is private, "link" - anyone with the link can view it */
+export type PortfolioShareMode = "closed" | "link";
+
+export interface PortfolioShareSettings {
+  login: string;
+  shareMode: PortfolioShareMode;
+}
+
+/** Variation as exposed by the public portfolio endpoint (no ids of owner-scoped file records) */
+export interface PublicVariation {
+  id: number;
+  title: string;
+  createdAt: string;
+  file?: { storageName: string; originalName: string; contentType: string } | null;
+  screenshotFile?: { storageName: string; originalName: string } | null;
+}
+
+export interface PublicCreative {
+  id: number;
+  title: string;
+  details: string;
+  project: string;
+  tags: string[];
+  createdAt: string;
+  variations: PublicVariation[];
+}
+
+export interface PublicPortfolio {
+  login: string;
+  displayName: string;
+  creatives: PublicCreative[];
+  projects: Omit<Project, "ownerUserId">[];
+}
+
+export type PublicPortfolioResult =
+  | { status: "ok"; portfolio: PublicPortfolio }
+  | { status: "closed" }
+  | { status: "notFound" };
